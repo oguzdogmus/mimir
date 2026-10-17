@@ -51,8 +51,12 @@ Every question shown carries exactly one label:
 - Session start reads only: `<root>/.state/profile.md`, `<course>/.state/save.md`, and `<course>/INDEX.md` (if long, only the needed section).
 - Everything else (`<course>/.state/mastery.md`, `fingerprint.md`, `forecast.md`, course files) is reached through `INDEX.md` or a targeted lookup.
 - `<course>/.state/logs/` is append-only and never auto-loaded; read it only when the student asks.
-- Caps: profile ≤50 lines (rung hints ≤~5, forecast record 1 line); `save.md` ≤30 lines; fingerprint ≤60 lines, rewrite it shorter when over; mastery one line per topic; forecast one block per forecast; `INDEX.md` one line per file or topic.
+- Caps: profile ≤50 lines (rung hints ≤~5, forecast record 1 line); `save.md` ≤30 lines; fingerprint ≤60 lines, rewritten shorter through `fingerprint.py write` when over; mastery one line per topic; forecast one block per forecast; `INDEX.md` one line per file or topic.
 - Keep each file in its template's shape and column order. Rewrite a file shorter before it passes its cap.
+- `fingerprint.md` changes only through `${CLAUDE_PLUGIN_ROOT}/scripts/fingerprint.py` (`write` for entries, `retake` for `professor:` and `prior_term:`), never by hand. Its `(tentative)`, `(prior term)`, `label:` and frequencies are computed there.
+- A `(tentative)` fingerprint line comes from photos or scans only: whenever you use it, say so ("from a photo/scan, may be off").
+- `<course>/.state/prior-term/` is the prior term's memory, read-only: never write, move or delete through it, and never copy its mastery or gaps into this course. Consult it per topic only, when that topic comes up; no bulk gap lists. Never follow its own `prior-term` link (no chains) and never read its `logs/`. Its mastery evidence is stale: one recheck question before relying on it.
+- When `prior_term:` says `another professor's papers`, that term's papers rank below this professor's materials (outline, slides, this term's papers) and are labelled as another professor's when quoted.
 
 ## Local and offline
 - Use only the local learning folder. No cloud connectors, no telemetry, nothing leaves the machine automatically.
