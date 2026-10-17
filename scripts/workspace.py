@@ -520,43 +520,53 @@ COMMANDS = {
 }
 
 
-def _fail(message: str, code: int = 2) -> int:
-    sys.stderr.write(f"workspace.py: {message}\n")
+def _fail(prog: str, message: str, code: int = 2) -> int:
+    sys.stderr.write(f"{prog}: {message}\n")
     return code
 
 
 class _Parser(argparse.ArgumentParser):
-    """Usage errors print one ``workspace.py: <msg>`` line and exit 2."""
+    """Usage errors print one ``<script>: <msg>`` line and exit 2."""
 
     def error(self, message: str):
-        sys.stderr.write(f"workspace.py: {message}\n")
+        sys.stderr.write(f"{self.prog.split()[0]}: {message}\n")
         sys.exit(2)
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = _Parser(
-        prog="workspace.py",
-        description=("Mimir workspace builder. Subcommands: root, init, course, file, relocate. "
-                     "Reads one JSON object on stdin and prints one JSON object on stdout."),
-    )
-    sub = parser.add_subparsers(dest="command", required=True, metavar="{root,init,course,file,relocate}")
-    for name, (_, help_text) in COMMANDS.items():
+def run_cli(prog: str, description: str, commands: dict, argv: list[str] | None = None) -> int:
+    """Shared runner: one subcommand, one JSON object in, one JSON object out.
+
+    ``commands`` maps a name to ``(handler, help)``; a handler takes the input
+    dict and returns the output dict. ``InputError`` and ``OSError`` exit 2,
+    anything else exits 1 as an internal error; never a traceback.
+    """
+    parser = _Parser(prog=prog, description=description)
+    names = ",".join(commands)
+    sub = parser.add_subparsers(dest="command", required=True, metavar=f"{{{names}}}")
+    for name, (_, help_text) in commands.items():
         sub.add_parser(name, help=help_text)
     args = parser.parse_args(argv)
     try:
-        result = COMMANDS[args.command][0](read_input(sys.stdin.buffer.read()))
+        result = commands[args.command][0](read_input(sys.stdin.buffer.read()))
         output = (json.dumps(result, ensure_ascii=False) + "\n").encode("utf-8")
     except InputError as exc:
-        return _fail(str(exc))
+        return _fail(prog, str(exc))
     except OSError as exc:
         detail = exc.strerror or type(exc).__name__
         where = f": {exc.filename}" if exc.filename else ""
-        return _fail(f"filesystem error ({detail}){where}")
+        return _fail(prog, f"filesystem error ({detail}){where}")
     except Exception as exc:  # a bug, not bad input; still never a traceback
-        return _fail(f"internal error ({type(exc).__name__})", code=1)
+        return _fail(prog, f"internal error ({type(exc).__name__})", code=1)
     sys.stdout.buffer.write(output)
     sys.stdout.buffer.flush()
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    return run_cli("workspace.py",
+                   ("Mimir workspace builder. Subcommands: root, init, course, file, relocate. "
+                    "Reads one JSON object on stdin and prints one JSON object on stdout."),
+                   COMMANDS, argv)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@
   },
   "skills": [
     "./skills/core-rules",
-    "./skills/setup"
+    "./skills/setup",
+    "./skills/ingest"
   ]
 }
