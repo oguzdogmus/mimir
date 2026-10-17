@@ -6,6 +6,7 @@
     "name": "Oguz Dogmus"
   },
   "skills": [
-    "./skills/core-rules"
+    "./skills/core-rules",
+    "./skills/setup"
   ]
 }
