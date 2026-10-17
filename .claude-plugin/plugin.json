@@ -1,0 +1,11 @@
+{
+  "name": "mimir",
+  "version": "0.1.0",
+  "description": "Mimir: Wisdom from the well, brought to your terminal. A study companion that teaches college students for their exams and remembers them across sessions.",
+  "author": {
+    "name": "Oguz Dogmus"
+  },
+  "skills": [
+    "./skills/core-rules"
+  ]
+}
