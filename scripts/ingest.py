@@ -599,6 +599,39 @@ def _section_table(lines: list[str], section: tuple[str, tuple[str, ...]]) -> tu
     return first, end
 
 
+def read_text(path: Path) -> str | None:
+    """UTF-8 text of a file, None when absent; a non-UTF-8 file is refused."""
+    if not path.is_file():
+        return None
+    try:
+        return path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
+        raise InputError(f"{path} is not valid UTF-8; fix or remove it, nothing was changed") from None
+
+
+def registry(index: Path) -> dict[str, tuple[str, int | None, str]]:
+    """Registry rows of an INDEX.md as {path: (role, pages, fidelity)}; the file is never changed.
+
+    ``path`` is the course-relative path with ``\\|`` unescaped, ``role`` and
+    ``fidelity`` lowercase, ``pages`` an int >= 1 (None when the cell is blank,
+    ``0`` or anything else that is not a positive whole number). A
+    missing INDEX.md has no rows; a non-UTF-8 one is refused (``InputError``).
+    """
+    text = read_text(index)
+    if text is None:
+        return {}
+    copy = text.splitlines()
+    first, end = _section_table(copy, _REGISTRY)  # repairs only the copy
+    rows = {}
+    for row in copy[first:end]:
+        cells = _split_row(row) + [""] * 5
+        pages = cells[3].strip()
+        rows[_unescape(cells[0])] = (cells[2].strip().lower(),
+                                     int(pages) if re.fullmatch(r"[1-9][0-9]*", pages) else None,
+                                     cells[4].strip().lower())
+    return rows
+
+
 def _write_atomic(index: Path, text: str) -> None:
     fd, tmp = tempfile.mkstemp(prefix=f".{index.name}.", suffix=".tmp", dir=index.parent)
     try:

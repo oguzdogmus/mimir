@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="{{CSP}}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>{{TITLE}}</title>
+<style>{{KATEX_CSS}}</style>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1b1b1b;
+  --muted: #4d4d4d;
+  --link: #0b57d0;
+  --rule: #767676;
+  --error: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --fg: #ececec;
+    --muted: #c7c7c7;
+    --link: #a8c7fa;
+    --rule: #8f8f8f;
+    --error: #ffb4ab;
+  }
+}
+*, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 1.0625rem/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+h1 { font-size: 1.6rem; line-height: 1.3; margin: 0 0 1.5rem; }
+h2 { font-size: 1.25rem; line-height: 1.3; margin: 2rem 0 0.75rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--rule); }
+p { margin: 0.75rem 0; }
+.mimir-display { margin: 1rem 0; overflow-x: auto; overflow-y: hidden; }
+.original { margin: 1rem 0; }
+.original img { display: block; max-width: 100%; height: auto; border: 1px solid var(--rule); }
+.original figcaption, .original-link { color: var(--muted); font-size: 0.95rem; }
+a { color: var(--link); text-decoration: underline; }
+a:focus-visible { outline: 3px solid var(--link); outline-offset: 2px; }
+.katex-error { color: var(--error) !important; text-decoration: underline wavy; }
+</style>
+</head>
+<body>
+<main>
+<h1>{{TITLE}}</h1>
+{{BLOCKS}}
+</main>
+<script>{{KATEX_JS}}</script>
+<script>{{AUTO_RENDER_JS}}</script>
+<script>
+(function () {
+  "use strict";
+  var base = {output: "htmlAndMathml", throwOnError: false, trust: false};
+  var blocks = document.querySelectorAll(".mimir-display");
+  for (var i = 0; i < blocks.length; i++) {
+    var source = blocks[i].textContent;
+    try {
+      katex.render(source, blocks[i], {output: base.output, throwOnError: base.throwOnError,
+                                       trust: base.trust, displayMode: true});
+    } catch (error) {
+      blocks[i].textContent = source;
+    }
+  }
+  renderMathInElement(document.querySelector("main"), {
+    output: base.output, throwOnError: base.throwOnError, trust: base.trust,
+    delimiters: [{left: "\\(", right: "\\)", display: false},
+                 {left: "\\[", right: "\\]", display: true}],
+    ignoredClasses: ["mimir-display"]
+  });
+})();
+</script>
+</body>
+</html>

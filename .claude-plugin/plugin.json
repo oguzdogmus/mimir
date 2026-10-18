@@ -8,6 +8,12 @@
   "skills": [
     "./skills/core-rules",
     "./skills/setup",
-    "./skills/ingest"
+    "./skills/ingest",
+    "./skills/quiz",
+    "./skills/notation"
+  ],
+  "agents": [
+    "./agents/verifier.md",
+    "./agents/visual-builder.md"
   ]
 }
