@@ -186,12 +186,7 @@ def _parse_prior(value: str | None) -> tuple[str, str, bool, bool] | None:
     return m.group(1), m.group(2), m.group(3).startswith("same"), m.group(3).endswith("(assumed)")
 
 
-def _course(root: Path, term: str, course: str, what: str = "course") -> Path:
-    term_dir, course_dir = root / term, root / term / course
-    for folder, kind in ((term_dir, "term"), (course_dir, what), (course_dir / ".state", f"{what} .state")):
-        if folder.is_symlink():
-            raise InputError(f"{kind} folder {folder} is a symlink; refusing to work through it")
-    return course_dir
+_course = workspace.course_folder
 
 
 def _template_comment() -> list[str]:

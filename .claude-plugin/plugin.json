@@ -10,7 +10,8 @@
     "./skills/setup",
     "./skills/ingest",
     "./skills/quiz",
-    "./skills/notation"
+    "./skills/notation",
+    "./skills/study"
   ],
   "agents": [
     "./agents/verifier.md",
