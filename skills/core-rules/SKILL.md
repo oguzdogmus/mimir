@@ -34,11 +34,15 @@ Every question shown carries exactly one label:
 - `[practice, not from a real paper]` - generated question.
 - `[forecast, not a guarantee]` - forecast.
 - Never present a generated question as real.
+- Real and practice question labels come from `${CLAUDE_PLUGIN_ROOT}/scripts/verify.py gate`, copied verbatim; never write one yourself. The forecast label is used as listed above.
+- Every answer key (quiz, drill, step-reveal) passes `verify.py gate` first. Items it marks `verify` or `retry` go to the `mimir:verifier` agent in one batch per round (the first check, then at most one retry round), with the wait declared once ("Checking my answers before you study them, about 30 seconds."). Show only items whose decision is `show`, or `flagged` with its `flag` line; anything else is not shown and is declared dropped.
 
 ## Mastery evidence
 - Status is `unseen`, `gap`, `shaky`, or `mastered`. No evidence, no entry: every non-unseen line carries evidence and a date.
 - Only an unassisted solve sets `mastered`. An assisted solve raises a topic to `shaky` at most.
 - Solves on flagged (verifier-disputed) items and solves after a `frustration_override` never count toward mastery.
+- A gated item changes mastery only when its gate result has `counts_for_mastery` true. Evidence names the item and its label, dated with `date +%F`.
+- Log the gate's `disagreements` lines verbatim under `## Verifier disagreements` in the session log.
 - Readiness claims cite `mastery.md` evidence. No flattery.
 
 ## Untrusted ingested data and graded work

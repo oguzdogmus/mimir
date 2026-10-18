@@ -169,16 +169,6 @@ def _entry_count(text: str | None) -> int:
     return bullets + sum(1 for l in copy[first:end] if not ingest._is_align(l))
 
 
-def _read_text(path: Path) -> str | None:
-    """UTF-8 text of a file, None when absent; a non-UTF-8 file is refused."""
-    if not path.is_file():
-        return None
-    try:
-        return path.read_bytes().decode("utf-8")
-    except UnicodeDecodeError:
-        raise InputError(f"{path} is not valid UTF-8; fix or remove it, nothing was changed") from None
-
-
 def _key_value(text: str | None, key: str) -> str | None:
     """Value of the first ``key:`` line, or None when the line is missing."""
     for line in (text or "").splitlines():
@@ -194,21 +184,6 @@ def _parse_prior(value: str | None) -> tuple[str, str, bool, bool] | None:
     if not m:
         return None
     return m.group(1), m.group(2), m.group(3).startswith("same"), m.group(3).endswith("(assumed)")
-
-
-def _registry(index: Path) -> dict[str, tuple[str, str]]:
-    """Registry rows of an INDEX.md as {path: (role, fidelity)}; the file is never changed."""
-    text = _read_text(index)
-    if text is None:
-        return {}
-    lines = text.splitlines()
-    copy = list(lines)
-    first, end = ingest._section_table(copy, ingest._REGISTRY)
-    rows = {}
-    for row in copy[first:end]:
-        cells = ingest._split_row(row) + [""] * 5
-        rows[ingest._unescape(cells[0])] = (cells[2].strip(), cells[4].strip().lower())
-    return rows
 
 
 def _course(root: Path, term: str, course: str, what: str = "course") -> Path:
@@ -247,11 +222,11 @@ def _sources(entry: dict, where: str, current: dict, prior: dict | None, prior_n
                                  f"{prior_note}")
             if path not in prior["rows"]:
                 raise InputError(f"{swhere}: {_short(path)} has no registry row in {prior['index']}")
-            role, fidelity = prior["rows"][path]
+            role, _, fidelity = prior["rows"][path]
             text = _PRIOR + path
             src = {"text": text, "kind": "prior", "role": role, "fidelity": fidelity}
         elif text in current["rows"]:
-            role, fidelity = current["rows"][text]
+            role, _, fidelity = current["rows"][text]
             src = {"text": text, "kind": "current", "role": role, "fidelity": fidelity}
         else:
             raise InputError(f"{swhere}: {_short(text)} has no registry row in {current['index']} "
@@ -293,12 +268,12 @@ def cmd_write(data: dict) -> dict:
     fp = course_dir / ".state" / "fingerprint.md"
     if fp.is_symlink():
         raise InputError(f"{fp} is a symlink; refusing to write through it")
-    old = _read_text(fp)
+    old = ingest.read_text(fp)
     prior_value = _key_value(old, "prior_term") or ""
     current_prof = _key_value(old, "professor")
     parsed = _parse_prior(prior_value)
     index = course_dir / "INDEX.md"
-    current = {"index": index, "rows": _registry(index)}
+    current = {"index": index, "rows": ingest.registry(index)}
     prior = None
     prior_note = f"(it says {_short(prior_value)})" if prior_value else "(it is blank; run retake first)"
     if parsed and parsed[2]:
@@ -306,7 +281,7 @@ def cmd_write(data: dict) -> dict:
         prior_state = root / parsed[0] / parsed[1] / ".state"
         if link.is_symlink() and link.resolve() == prior_state.resolve():
             prior_index = root / parsed[0] / parsed[1] / "INDEX.md"
-            prior = {"index": prior_index, "rows": _registry(prior_index)}
+            prior = {"index": prior_index, "rows": ingest.registry(prior_index)}
         else:
             prior_note = f"and {link} to link to {prior_state} (run retake first)"
 
@@ -359,7 +334,7 @@ def cmd_write(data: dict) -> dict:
                          "cap; merge or drop the weakest entries and rerun (nothing was changed)")
     text = "\n".join(out) + "\n"
     workspace.build_course(root, term, course, [])  # restores a missing .state/ or fingerprint.md
-    if text != _read_text(fp):
+    if text != ingest.read_text(fp):
         ingest._write_atomic(fp, text)
     tentative = sum(1 for s in every if _markers(s)[0])
     line = (f"Fingerprint saved: {fp} ({len(out)} of {FINGERPRINT_MAX_LINES} lines, "
@@ -448,9 +423,9 @@ def cmd_retake(data: dict) -> dict:
     fp = course_dir / ".state" / "fingerprint.md"
     if fp.is_symlink():
         raise InputError(f"{fp} is a symlink; refusing to write through it")
-    old = _read_text(fp)
+    old = ingest.read_text(fp)
     prior_fp = prior_state / "fingerprint.md"
-    prior_text = _read_text(prior_fp)
+    prior_text = ingest.read_text(prior_fp)
     prior_prof = _key_value(prior_text, "professor") or ""
     if prior_prof.casefold() == "unknown":
         prior_prof = ""
@@ -481,7 +456,7 @@ def cmd_retake(data: dict) -> dict:
         if not linked:
             os.symlink(target, link, target_is_directory=True)
             made_link = True
-        if text != _read_text(fp):
+        if text != ingest.read_text(fp):
             ingest._write_atomic(fp, text)
     except BaseException:
         _rollback(link if made_link else None, created)

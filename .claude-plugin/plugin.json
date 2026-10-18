@@ -8,6 +8,10 @@
   "skills": [
     "./skills/core-rules",
     "./skills/setup",
-    "./skills/ingest"
+    "./skills/ingest",
+    "./skills/quiz"
+  ],
+  "agents": [
+    "./agents/verifier.md"
   ]
 }
