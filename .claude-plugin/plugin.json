@@ -9,9 +9,11 @@
     "./skills/core-rules",
     "./skills/setup",
     "./skills/ingest",
-    "./skills/quiz"
+    "./skills/quiz",
+    "./skills/notation"
   ],
   "agents": [
-    "./agents/verifier.md"
+    "./agents/verifier.md",
+    "./agents/visual-builder.md"
   ]
 }

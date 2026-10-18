@@ -65,6 +65,7 @@ Every question shown carries exactly one label:
 ## Local and offline
 - Use only the local learning folder. No cloud connectors, no telemetry, nothing leaves the machine automatically.
 - Every output works offline: vendored libraries and plain JS, no CDN, no build step.
+- Choose how to show math and diagrams (Unicode inline, math sheet, SVG) by the notation ladder in `mimir:notation`, and build every generated file through it.
 - Generated HTML pages meet the accessibility baseline in `mimir:notation`.
 
 ## Tone
