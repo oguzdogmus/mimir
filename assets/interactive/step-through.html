@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="{{CSP}}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>{{TITLE}}</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1b1b1b;
+  --muted: #4d4d4d;
+  --link: #0b57d0;
+  --rule: #767676;
+  --button-bg: #0b57d0;
+  --button-fg: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --fg: #ececec;
+    --muted: #c7c7c7;
+    --link: #a8c7fa;
+    --rule: #8f8f8f;
+    --button-bg: #a8c7fa;
+    --button-fg: #0b1d3a;
+  }
+}
+*, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 1.0625rem/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 52rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+h1 { font-size: 1.6rem; line-height: 1.3; margin: 0 0 1.5rem; }
+h2 { font-size: 1.25rem; line-height: 1.3; margin: 2rem 0 0.75rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--rule); }
+p { margin: 0.75rem 0; }
+.diagram { margin: 1rem 0; }
+.diagram svg { display: block; max-width: 100%; height: auto; }
+#mimir-diagram .mimir-current:not(text):not(tspan), #mimir-diagram .mimir-current :not(text):not(tspan) { stroke-width: 4px !important; stroke-dasharray: none !important; }
+label { font-weight: 600; margin-right: 0.5rem; }
+input[type="text"] { font: inherit; font-family: ui-monospace, monospace; padding: 0.4rem; border: 2px solid var(--rule); background: var(--bg); color: var(--fg); width: 16rem; max-width: 100%; }
+button { font: inherit; padding: 0.4rem 0.9rem; margin: 0.5rem 0.5rem 0 0; border: 2px solid var(--button-bg); border-radius: 0.25rem; background: var(--bg); color: var(--fg); cursor: pointer; }
+#mimir-start { background: var(--button-bg); color: var(--button-fg); }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--link); outline-offset: 2px; }
+.hint { color: var(--muted); font-size: 0.95rem; }
+#mimir-status { font-weight: 600; }
+table { border-collapse: collapse; margin: 0.75rem 0; }
+th, td { border: 1px solid var(--rule); padding: 0.25rem 0.6rem; text-align: left; font-family: ui-monospace, monospace; }
+th { font-family: inherit; }
+</style>
+</head>
+<body>
+<main>
+<h1>{{TITLE}}</h1>
+<figure class="diagram" id="mimir-diagram">{{SVG}}</figure>
+<section id="mimir-controls" hidden>
+<h2>Feed an input</h2>
+<p><label for="mimir-input">Input</label><input type="text" id="mimir-input" value="{{EXAMPLE}}" autocomplete="off" spellcheck="false" aria-describedby="mimir-input-hint"></p>
+<p class="hint" id="mimir-input-hint">One symbol per character; spaces are ignored. At most {{MAX_SYMBOLS}} symbols.</p>
+<p><button type="button" id="mimir-start">Start</button><button type="button" id="mimir-next">Next symbol</button><button type="button" id="mimir-back">Back</button></p>
+<p class="hint">Enter in the input field starts; outside it, the right arrow reads the next symbol and the left arrow goes back. Current states get a thick outline in the diagram.</p>
+<p id="mimir-status" role="status" aria-live="polite"></p>
+<h2>Steps so far</h2>
+<ol id="mimir-history"></ol>
+</section>
+<h2>The machine</h2>
+{{MACHINE}}
+</main>
+<script type="application/json" id="mimir-machine">{{DATA}}</script>
+<script>
+var MimirSim = (function () {
+  "use strict";
+  function key(config) {
+    return config.state + "\u0000" + config.stack;
+  }
+  function moves(machine, config, symbol) {
+    var out = [];
+    for (var i = 0; i < machine.transitions.length; i++) {
+      var t = machine.transitions[i];
+      if (t.from !== config.state || t.read !== symbol) {
+        continue;
+      }
+      if (machine.kind === "pda") {
+        if (t.pop !== "" && config.stack.charAt(0) !== t.pop) {
+          continue;
+        }
+        out.push({state: t.to, stack: t.push + config.stack.slice(t.pop.length)});
+      } else {
+        out.push({state: t.to, stack: ""});
+      }
+    }
+    return out;
+  }
+  function closure(machine, configs) {
+    var seen = {}, out = [], queue = configs.slice(), limited = false;
+    while (queue.length) {
+      var config = queue.shift();
+      if (Object.prototype.hasOwnProperty.call(seen, key(config))) {
+        continue;
+      }
+      if (config.stack.length > machine.max_stack) {
+        limited = true;
+        continue;
+      }
+      if (out.length >= machine.max_configs) {
+        limited = true;
+        break;
+      }
+      seen[key(config)] = true;
+      out.push(config);
+      queue = queue.concat(moves(machine, config, ""));
+    }
+    return {configs: out, limited: limited};
+  }
+  function symbols(text) {
+    return Array.from(text.replace(/\s+/g, ""));
+  }
+  function run(machine, text) {
+    var input = symbols(text);
+    var first = closure(machine, [{state: machine.start, stack: machine.kind === "pda" ? machine.stack_start : ""}]);
+    var frames = [{read: 0, symbol: null, configs: first.configs, limited: first.limited}];
+    for (var i = 0; i < input.length; i++) {
+      var current = frames[frames.length - 1];
+      if (!current.configs.length) {
+        break;
+      }
+      var next = [];
+      for (var j = 0; j < current.configs.length; j++) {
+        next = next.concat(moves(machine, current.configs[j], input[i]));
+      }
+      var step = closure(machine, next);
+      frames.push({read: i + 1, symbol: input[i], configs: step.configs,
+                   limited: current.limited || step.limited});
+    }
+    return {input: input, frames: frames};
+  }
+  function verdict(machine, result) {
+    var last = result.frames[result.frames.length - 1];
+    if (!last.configs.length) {
+      return {result: "stuck", symbol: last.symbol, read: last.read};
+    }
+    for (var i = 0; i < last.configs.length; i++) {
+      if (machine.accept.indexOf(last.configs[i].state) >= 0) {
+        return {result: "accepted"};
+      }
+    }
+    return {result: "rejected"};
+  }
+  return {run: run, verdict: verdict, symbols: symbols};
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  var machine = JSON.parse(document.getElementById("mimir-machine").textContent);
+  var input = document.getElementById("mimir-input");
+  var status = document.getElementById("mimir-status");
+  var history = document.getElementById("mimir-history");
+  var result = null, at = 0;
+
+  function where(frame) {
+    if (!frame.configs.length) {
+      return "no state";
+    }
+    var parts = [], seen = {};
+    for (var i = 0; i < frame.configs.length; i++) {
+      var c = frame.configs[i];
+      var text = machine.kind === "pda" ? c.state + " (stack " + (c.stack || "empty") + ")" : c.state;
+      if (!Object.prototype.hasOwnProperty.call(seen, text)) {
+        seen[text] = true;
+        parts.push(text);
+      }
+    }
+    return (parts.length > 1 ? "in states " : "in ") + parts.join(", ");
+  }
+  function describe(index) {
+    var frame = result.frames[index], total = result.input.length;
+    var rest = result.input.slice(frame.read).join("");
+    var text;
+    if (index === 0) {
+      text = "Start: " + where(frame) + ".";
+    } else {
+      text = "Read '" + frame.symbol + "' (" + frame.read + " of " + total + "): " + where(frame) + ".";
+    }
+    if (frame.configs.length) {
+      text += rest ? " Remaining: " + rest + "." : " Input fully read.";
+    }
+    if (index === result.frames.length - 1) {
+      var v = MimirSim.verdict(machine, result);
+      if (v.result === "accepted") {
+        text += " Accepted: the whole input was read and an accepting state was reached.";
+      } else if (frame.limited) {
+        text += " No verdict: the search was cut, so an accepting path may have been missed.";
+      } else if (v.result === "rejected") {
+        text += " Rejected: the whole input was read, but no accepting state was reached.";
+      } else {
+        text += " Stuck on '" + v.symbol + "': no move from the previous state, so the input is rejected.";
+      }
+    }
+    if (frame.limited) {
+      text += " Search limit reached: some paths were not followed.";
+    }
+    return text;
+  }
+  function highlight(frame) {
+    var current = {};
+    if (frame) {
+      for (var i = 0; i < frame.configs.length; i++) {
+        current[frame.configs[i].state] = true;
+      }
+    }
+    for (var s = 0; s < machine.states.length; s++) {
+      var node = document.getElementById("state-" + (s + 1));
+      if (node) {
+        if (Object.prototype.hasOwnProperty.call(current, machine.states[s])) {
+          node.classList.add("mimir-current");
+        } else {
+          node.classList.remove("mimir-current");
+        }
+      }
+    }
+  }
+  function show() {
+    while (history.firstChild) {
+      history.removeChild(history.firstChild);
+    }
+    for (var i = 0; i <= at; i++) {
+      var item = document.createElement("li");
+      item.textContent = describe(i);
+      history.appendChild(item);
+    }
+    highlight(result.frames[at]);
+    status.textContent = describe(at);
+  }
+  function start() {
+    if (MimirSim.symbols(input.value).length > machine.max_symbols) {
+      result = null;
+      highlight(null);
+      status.textContent = "Use at most " + machine.max_symbols + " symbols.";
+      return;
+    }
+    result = MimirSim.run(machine, input.value);
+    at = 0;
+    show();
+  }
+  function next() {
+    if (!result) {
+      start();
+      return;
+    }
+    if (at >= result.frames.length - 1) {
+      status.textContent = "Done. " + describe(at);
+      return;
+    }
+    at += 1;
+    show();
+  }
+  function back() {
+    if (!result || at === 0) {
+      status.textContent = result ? "Already at the start. " + describe(0) : "Press Start first.";
+      return;
+    }
+    at -= 1;
+    show();
+  }
+  document.getElementById("mimir-start").addEventListener("click", start);
+  document.getElementById("mimir-next").addEventListener("click", next);
+  document.getElementById("mimir-back").addEventListener("click", back);
+  input.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      start();
+    }
+  });
+  input.addEventListener("input", function () {
+    result = null;
+    highlight(null);
+    while (history.firstChild) {
+      history.removeChild(history.firstChild);
+    }
+    status.textContent = "Press Start to run the new input.";
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.target === input || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+      return;
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      next();
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      back();
+    }
+  });
+  document.getElementById("mimir-controls").hidden = false;
+  status.textContent = "Type an input and press Start.";
+})();
+</script>
+</body>
+</html>
