@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Mimir planning engine: delivery class, cost of delay, cram bill, first-contact summary.
+"""Mimir planning engine: delivery class, cost of delay, cram bill, first-contact summary, urgent triage.
 
 Deterministic, standard library only, Python 3.11+. Run as::
 
-    python3 plan.py <class|delay|debrief|summary>  < input.json
+    python3 plan.py <class|delay|debrief|summary|triage>  < input.json
 
 Each subcommand reads ONE JSON object on stdin and prints ONE JSON object on
 stdout: structured data plus a ready-to-print ``line``. "Now" is an input
@@ -15,7 +15,7 @@ extended ISO 8601 datetime with ``T``, e.g. "2026-11-05T09:00:00+02:00";
 other ISO forms such as "20261105" or "2026-W45-4" are rejected)
 --------------------------------------------------------------------------
 now            datetime with time, e.g. "2026-10-17T09:00:00+03:00".
-               Required by ``class`` and ``delay``; optional elsewhere.
+               Required by ``class``, ``delay`` and ``triage``; optional elsewhere.
 exam           datetime, date-only, or null (date unknown). Optional, null if
                missing.
 topics         list of {"name": str, "weight": 1..3} -- the remaining route.
@@ -28,6 +28,11 @@ sessions       list of {"start": datetime, "end": datetime} (debrief, summary;
 first_contact  datetime or date-only. Required by debrief and summary.
 course,
 exam_name      optional strings for the summary label ("CS201", "final").
+types          triage only, required (use [] for none): list of {"name": str,
+               "marks": number >= 0 or null, "seen": int >= 0, "papers":
+               int >= 0, "status": unseen|gap|shaky|mastered}. ``seen`` and
+               ``papers`` default to 0, ``status`` to unseen; seen <= papers.
+basis          triage only: "papers" (default) or "outline".
 
 Date rules
 ----------
@@ -107,6 +112,34 @@ summary -- one shareable first-contact line.
     A missing or empty sessions list drops the hours clause; exam null gives
     "<label>: exam date unknown."; no course or exam_name gives label "Exam".
 
+triage -- urgent triage: rank question types by points per hour, drill or skip.
+    in : {"now": "2026-11-04T21:00:00+02:00", "exam": "2026-11-05T09:00:00+02:00",
+          "basis": "papers", "types": [
+            {"name": "Pumping lemma proof", "marks": 20, "seen": 2, "papers": 2, "status": "gap"},
+            {"name": "DFA construction", "marks": 10, "seen": 1, "papers": 2, "status": "unseen"},
+            {"name": "Regex", "marks": 5, "seen": 2, "papers": 2, "status": "mastered"}]}
+    out: {"drill": [{"name": "Pumping lemma proof", "marks": 20, "frequency": 1,
+          "weight": 3, "minutes": 75, "pph": 16}, {"name": "DFA construction",
+          ..., "minutes": 50, "pph": 6}], "skip": [{"name": "Regex", "reason":
+          "mastered"}], "budget_minutes": 240, "basis": "papers", "line":
+          "Drilling: Pumping lemma proof, DFA construction. Skipping: Regex
+          (mastered)."}
+    Per type: ``marks`` null = mean of the known marks, else 1; frequency =
+    seen/papers when papers > 0, else 1; weight = ceil(3 x marks / max marks)
+    clamped WEIGHT_MIN..WEIGHT_MAX (1 when every mark is 0); minutes =
+    EPISODE_MINUTES x weight, x SHAKY_TIME_FACTOR when ``shaky``; pph = marks x
+    frequency / (minutes / 60). ``mastered`` types are skipped (``mastered``).
+    The rest are ranked by pph, highest first, ties in input order. Budget =
+    hours_to_exam x 60 x URGENT_STUDY_SHARE: types are drilled in rank order
+    while the cumulative minutes fit, always at least one. Drilling stops at
+    the first type that does not fit: no smaller later type is packed into
+    the remaining budget. The rest are skipped (``lower yield``). Type names
+    must be unique (ignoring case and repeated spaces). Exam null: every non-mastered type is drilled
+    (budget_minutes null). Date-only exam today: only the top type
+    (budget_minutes null). ``basis`` "outline" appends "No past papers, so the
+    forecast is weaker." to ``line``. ``drill`` is in rank order; ``skip``
+    lists lower-yield types in rank order, then mastered ones in input order.
+
 Exit codes: invalid input exits 2 with one line on stderr
 (``plan.py: <message>``) and nothing on stdout. An unexpected internal error
 (a bug, not bad input) exits 1 with ``plan.py: internal error (<Type>)`` and
@@ -133,6 +166,10 @@ COLD_START_SPREAD = Fraction(1, 2)   # cold-start range: ±50 %
 CALIBRATION_THRESHOLD = 3            # timed topics needed before using logged times
 WEIGHT_MIN, WEIGHT_MAX = 1, 3        # mark-share weight ×1–×3
 MAX_HORIZON_DAYS = 366               # reject exams further away than this
+URGENT_STUDY_SHARE = Fraction(1, 3)  # share of the hours to the exam spent drilling (triage budget)
+SHAKY_TIME_FACTOR = Fraction(1, 2)   # a shaky type takes half the minutes of an unseen one
+TRIAGE_STATUSES = ("unseen", "gap", "shaky", "mastered")
+TRIAGE_BASES = ("papers", "outline")
 
 _DATE_ONLY = re.compile(r"\d{4}-\d{2}-\d{2}")
 _DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T.+")
@@ -585,11 +622,114 @@ def summary(data: dict) -> dict:
     }
 
 
+def _whole(value, field: str) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise InputError(f"{field} must be a whole number >= 0")
+    return value
+
+
+def parse_types(data: dict) -> list[dict]:
+    types = []
+    seen_names: set[str] = set()
+    for i, item in enumerate(_object_list(data, "types", required=True)):
+        name = item.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise InputError(f"types[{i}].name must be a non-empty string")
+        key = " ".join(name.split()).casefold()
+        if key in seen_names:
+            raise InputError(f"types[{i}].name repeats an earlier type name")
+        seen_names.add(key)
+        marks = item.get("marks")
+        if marks is not None:
+            marks = parse_number(marks, f"types[{i}].marks")
+            if marks < 0:
+                raise InputError(f"types[{i}].marks must be >= 0 or null")
+        seen = _whole(item.get("seen"), f"types[{i}].seen")
+        papers = _whole(item.get("papers"), f"types[{i}].papers")
+        if seen > papers:
+            raise InputError(f"types[{i}].seen must not exceed types[{i}].papers")
+        status = item.get("status")
+        status = "unseen" if status is None else status
+        if status not in TRIAGE_STATUSES:
+            raise InputError(f"types[{i}].status must be one of {', '.join(TRIAGE_STATUSES)}")
+        types.append({"name": " ".join(name.split()), "marks": marks, "status": status,
+                      "frequency": Fraction(seen, papers) if papers > 0 else Fraction(1)})
+    return types
+
+
+def triage(data: dict) -> dict:
+    now = required_moment(data, "now", need_time=True)
+    exam = optional_moment(data, "exam")
+    types = parse_types(data)
+    basis = data.get("basis")
+    basis = "papers" if basis is None else basis
+    if basis not in TRIAGE_BASES:
+        raise InputError(f"basis must be one of {', '.join(TRIAGE_BASES)}")
+    clock = Clock(now, exam)
+    hours = None
+    today_only = False
+    if exam is not None:
+        _, _, hours = exam_window(clock, now, exam)
+        today_only = hours is None
+
+    known = [t["marks"] for t in types if t["marks"] is not None]
+    fill = sum(known, Fraction(0)) / len(known) if known else Fraction(1)
+    for t in types:
+        if t["marks"] is None:
+            t["marks"] = fill
+    top = max((t["marks"] for t in types), default=Fraction(0))
+    for t in types:
+        weight = math.ceil(3 * t["marks"] / top) if top > 0 else WEIGHT_MIN
+        t["weight"] = min(WEIGHT_MAX, max(WEIGHT_MIN, weight))
+        t["minutes"] = EPISODE_MINUTES * t["weight"] * (SHAKY_TIME_FACTOR if t["status"] == "shaky" else 1)
+        t["pph"] = t["marks"] * t["frequency"] / (t["minutes"] / 60)
+
+    mastered = [t for t in types if t["status"] == "mastered"]
+    ranked = sorted((t for t in types if t["status"] != "mastered"), key=lambda t: -t["pph"])
+    budget = None if hours is None else hours * 60 * URGENT_STUDY_SHARE
+    drill, lower = [], []
+    for t in ranked:
+        if not drill:
+            fits = True
+        elif today_only:
+            fits = False
+        elif budget is None:
+            fits = True
+        else:
+            fits = not lower and sum((d["minutes"] for d in drill), t["minutes"]) <= budget
+        (drill if fits else lower).append(t)
+
+    skip = [{"name": t["name"], "reason": "lower yield"} for t in lower]
+    skip += [{"name": t["name"], "reason": "mastered"} for t in mastered]
+    if drill:
+        parts = ["Drilling: " + ", ".join(t["name"] for t in drill) + "."]
+    elif types:
+        parts = ["Nothing to drill: every question type is mastered."]
+    else:
+        parts = ["Nothing to drill: no question types."]
+    if skip:
+        parts.append("Skipping: " + ", ".join(f"{s['name']} ({s['reason']})" for s in skip) + ".")
+    if basis == "outline":
+        parts.append("No past papers, so the forecast is weaker.")
+    return {
+        "drill": [{"name": t["name"], "marks": num(t["marks"]), "frequency": num(t["frequency"]),
+                   "weight": t["weight"], "minutes": num(t["minutes"]), "pph": num(t["pph"])}
+                  for t in drill],
+        "skip": skip,
+        "budget_minutes": None if budget is None else num(budget),
+        "basis": basis,
+        "line": " ".join(parts),
+    }
+
+
 COMMANDS = {
     "class": (delivery_class, "delivery class (Standard/Urgent) with its reason"),
     "delay": (cost_of_delay, "cost of delay: start today vs later start days"),
     "debrief": (debrief, "cram bill: actual hours vs the counterfactual for the full route"),
     "summary": (summary, "one shareable first-contact summary line"),
+    "triage": (triage, "urgent triage: question types to drill or skip, by points per hour"),
 }
 
 
@@ -602,10 +742,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="plan.py",
         description=("Mimir planning engine. Subcommands: class (delivery class), delay (cost of "
-                     "delay), debrief (cram bill), summary (first-contact line). Reads one JSON "
+                     "delay), debrief (cram bill), summary (first-contact line), triage (urgent "
+                     "drill/skip by points per hour). Reads one JSON "
                      "object on stdin and prints one JSON object on stdout."),
     )
-    sub = parser.add_subparsers(dest="command", required=True, metavar="{class,delay,debrief,summary}")
+    sub = parser.add_subparsers(dest="command", required=True, metavar="{class,delay,debrief,summary,triage}")
     for name, (_, help_text) in COMMANDS.items():
         sub.add_parser(name, help=help_text)
     args = parser.parse_args(argv)

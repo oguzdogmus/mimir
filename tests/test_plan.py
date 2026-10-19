@@ -459,3 +459,163 @@ def test_internal_error_exits_1_without_traceback(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == "plan.py: internal error (ZeroDivisionError)\n"
+
+
+# --- I/O matrix: triage ---------------------------------------------------------
+
+def qtype(name, marks=10, seen=1, papers=1, status="unseen"):
+    return {"name": name, "marks": marks, "seen": seen, "papers": papers, "status": status}
+
+
+def in_hours(h):
+    return f"2026-10-17T{9 + h:02d}:00:00+03:00"
+
+
+def names(out, key="drill"):
+    return [t["name"] for t in out[key]]
+
+
+def test_triage_rank():
+    out = ok("triage", {"now": NOW, "exam": None,
+                        "types": [qtype("B", 10, 1, 2), qtype("A", 20, 2, 2)]})
+    assert names(out) == ["A", "B"]
+    a, b = out["drill"]
+    assert (a["weight"], a["minutes"], a["frequency"], a["pph"]) == (3, 75, 1, 16)
+    assert (b["weight"], b["minutes"], b["frequency"], b["pph"]) == (2, 50, 0.5, 6)
+    assert set(out) == {"drill", "skip", "budget_minutes", "basis", "line"}
+
+
+def test_triage_shaky_ranks_first_with_half_minutes():
+    out = ok("triage", {"now": NOW, "exam": None,
+                        "types": [qtype("A"), qtype("B", status="shaky")]})
+    assert names(out) == ["B", "A"]
+    assert out["drill"][0]["minutes"] == 37.5
+
+
+def test_triage_mastered_is_skipped():
+    out = ok("triage", {"now": NOW, "exam": None,
+                        "types": [qtype("A", status="mastered"), qtype("B")]})
+    assert names(out) == ["B"]
+    assert out["skip"] == [{"name": "A", "reason": "mastered"}]
+    assert out["line"] == "Drilling: B. Skipping: A (mastered)."
+
+
+def test_triage_budget():
+    out = ok("triage", {"now": NOW, "exam": in_hours(8),
+                        "types": [qtype("A"), qtype("B"), qtype("C")]})
+    assert out["budget_minutes"] == 160
+    assert [t["minutes"] for t in out["drill"]] == [75, 75]
+    assert names(out) == ["A", "B"]
+    assert out["skip"] == [{"name": "C", "reason": "lower yield"}]
+    assert out["line"] == "Drilling: A, B. Skipping: C (lower yield)."
+
+
+def test_triage_floor_one():
+    out = ok("triage", {"now": NOW, "exam": in_hours(3), "types": [qtype("A"), qtype("B")]})
+    assert out["budget_minutes"] == 60
+    assert names(out) == ["A"]
+    assert out["skip"] == [{"name": "B", "reason": "lower yield"}]
+
+
+def test_triage_stops_at_first_type_that_does_not_fit():
+    # Budget 180: A 75 and B 75 fit (150); C would make 225, so drilling stops there.
+    # D (weight 1, 25 min, lowest pph) would fit the remaining 30 min but is not packed in.
+    types = [qtype("A", 30), qtype("B", 30), qtype("C", 30), qtype("D", 1)]
+    out = ok("triage", {"now": NOW, "exam": in_hours(9), "types": types})
+    assert out["budget_minutes"] == 180
+    assert [t["minutes"] for t in out["drill"]] == [75, 75]
+    assert names(out) == ["A", "B"]
+    assert names(out, "skip") == ["C", "D"]
+
+
+def test_triage_zero_marks_type():
+    out = ok("triage", {"now": NOW, "exam": None, "types": [qtype("A", 10), qtype("B", 0)]})
+    b = {t["name"]: t for t in out["drill"]}["B"]
+    assert (b["weight"], b["minutes"], b["pph"]) == (1, 25, 0)
+    assert names(out) == ["A", "B"]
+
+
+def test_triage_skip_order():
+    types = [qtype("M1", status="mastered"), qtype("A", 30), qtype("B", 15),
+             qtype("M2", status="mastered"), qtype("C", 25)]
+    # pph: A 24 (75 min), C 20 (75 min), B 18 (50 min); budget 60 -> only A.
+    out = ok("triage", {"now": NOW, "exam": in_hours(3), "types": types})
+    assert names(out) == ["A"]
+    assert out["skip"] == [{"name": "C", "reason": "lower yield"}, {"name": "B", "reason": "lower yield"},
+                           {"name": "M1", "reason": "mastered"}, {"name": "M2", "reason": "mastered"}]
+    assert out["line"] == ("Drilling: A. Skipping: C (lower yield), B (lower yield), "
+                           "M1 (mastered), M2 (mastered).")
+
+
+def test_triage_no_papers_outline():
+    out = ok("triage", {"now": NOW, "exam": None, "basis": "outline",
+                        "types": [qtype("A", None, 0, 0), qtype("B", None, 0, 0)]})
+    assert [(t["marks"], t["weight"], t["frequency"]) for t in out["drill"]] == [(1, 3, 1), (1, 3, 1)]
+    assert names(out) == ["A", "B"]
+    assert out["line"] == "Drilling: A, B. No past papers, so the forecast is weaker."
+    assert out["basis"] == "outline"
+
+
+def test_triage_null_marks_take_mean_of_known():
+    out = ok("triage", {"now": NOW, "exam": None,
+                        "types": [qtype("A", 20), qtype("B", None), qtype("C", 10)]})
+    assert {t["name"]: t["marks"] for t in out["drill"]}["B"] == 15
+
+
+def test_triage_exam_null_drills_all_non_mastered():
+    types = [qtype(n) for n in "ABCDEFG"] + [qtype("M", status="mastered")]
+    out = ok("triage", {"now": NOW, "exam": None, "types": types})
+    assert names(out) == list("ABCDEFG")
+    assert out["budget_minutes"] is None
+    assert out["skip"] == [{"name": "M", "reason": "mastered"}]
+
+
+def test_triage_date_only_exam_today_drills_top_only():
+    out = ok("triage", {"now": "2026-11-05T07:00:00+02:00", "exam": "2026-11-05",
+                        "types": [qtype("A", 5), qtype("B", 20)]})
+    assert names(out) == ["B"]
+    assert out["budget_minutes"] is None
+    assert out["skip"] == [{"name": "A", "reason": "lower yield"}]
+
+
+def test_triage_edge_cases():
+    out = ok("triage", {"now": NOW, "exam": None, "types": []})
+    assert out["drill"] == [] and out["line"] == "Nothing to drill: no question types."
+    out = ok("triage", {"now": NOW, "exam": None, "types": [qtype("A", status="mastered")]})
+    assert out["drill"] == []
+    assert out["line"] == "Nothing to drill: every question type is mastered. Skipping: A (mastered)."
+    out = ok("triage", {"now": NOW, "exam": None, "types": [qtype("A", 0), qtype("B", 0)]})
+    assert [t["weight"] for t in out["drill"]] == [1, 1]
+    assert ok("triage", {"now": NOW, "exam": None, "types": [{"name": "A"}]})["drill"][0]["frequency"] == 1
+
+
+def test_triage_is_deterministic():
+    payload = {"now": NOW, "exam": in_hours(8), "types": [qtype("A", 7, 1, 3), qtype("B", 3, 2, 3)]}
+    assert run("triage", payload).stdout == run("triage", payload).stdout
+
+
+TRIAGE = {"now": NOW, "exam": None}
+
+
+@pytest.mark.parametrize("payload, message", [
+    ({**TRIAGE, "types": [qtype("A", status="done")]}, "types[0].status must be one of"),
+    ({**TRIAGE, "types": [qtype("A", -1)]}, "types[0].marks must be >= 0"),
+    ({**TRIAGE, "types": [qtype("A"), qtype("B", seen=3, papers=2)]}, "types[1].seen must not exceed"),
+    ({**TRIAGE, "types": [qtype("A", seen=1, papers=0)]}, "types[0].seen must not exceed"),
+    ({**TRIAGE, "types": [qtype("A", seen=1.5, papers=2)]}, "types[0].seen must be a whole number"),
+    ({**TRIAGE, "types": [qtype("A", papers=-1)]}, "types[0].papers must be a whole number"),
+    ({**TRIAGE, "types": [qtype("A", "10")]}, "types[0].marks must be a number"),
+    ({**TRIAGE, "types": [qtype("")]}, "types[0].name must be a non-empty string"),
+    ({**TRIAGE, "types": [qtype("Heaps"), qtype(" heaps  ")]}, "types[1].name repeats"),
+    ({**TRIAGE, "types": ["A"]}, "types[0] must be an object"),
+    ({**TRIAGE}, "types is required"),
+    ({**TRIAGE, "types": [], "basis": "slides"}, "basis must be one of"),
+    ({"exam": None, "types": []}, "now is required"),
+    ({"now": NOW, "exam": "2026-10-16", "types": []}, "exam is not in the future"),
+])
+def test_triage_invalid_input_exits_2(payload, message):
+    proc = run("triage", payload)
+    assert proc.returncode == 2
+    assert proc.stdout == b""
+    err = proc.stderr.decode()
+    assert err.startswith("plan.py: ") and err.count("\n") == 1 and message in err, err

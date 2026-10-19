@@ -258,6 +258,15 @@ def has_tree(root: Path) -> bool:
     return (root / ".state" / "profile.md").is_file()
 
 
+def course_folder(root: Path, term: str, course: str, what: str = "course") -> Path:
+    """``<root>/<term>/<course>``; refuses a symlinked term, course or course ``.state`` folder."""
+    term_dir, course_dir = root / term, root / term / course
+    for folder, kind in ((term_dir, "term"), (course_dir, what), (course_dir / ".state", f"{what} .state")):
+        if folder.is_symlink():
+            raise InputError(f"{kind} folder {folder} is a symlink; refusing to work through it")
+    return course_dir
+
+
 def read_setup_done(root: Path) -> str | None:
     profile = root / ".state" / "profile.md"
     if not profile.is_file():
