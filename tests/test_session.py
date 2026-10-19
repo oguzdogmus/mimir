@@ -115,7 +115,7 @@ def test_calm(home, root):
     assert out["inferred"] is True and out["first_contact"] is None
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
                         "exam_name", "q0", "remaining", "class", "delay_line", "topic",
-                        "first_contact", "line"}
+                        "first_contact", "debrief", "line"}
 
 
 def test_near_exam_is_urgent_floor(home, root):
@@ -489,6 +489,214 @@ def test_future_evidence_date_is_stale(home, root):
     by = {x["name"]: x for x in got["topics"]}
     assert by["Heaps"]["stale"] is True and by["Today"]["stale"] is False
     assert by["Bad"]["evidence_date"] is None and by["Bad"]["stale"] is True
+
+
+# --- debrief -----------------------------------------------------------------------
+
+DUE_NOW = "2026-11-12T10:00:00+02:00"
+DAY = "2026-11-12"
+
+
+def log(cdir: Path, name: str, text: str) -> None:
+    (cdir / ".state" / "logs" / f"{name}.md").write_text(text, encoding="utf-8")
+
+
+def session_log(start: str, end: str | None = None, extra: str = "") -> str:
+    return f"## Session\nstarted: {start}\nclass: Standard (calm)\n" + (f"ended: {end}\n" if end else "") + extra
+
+
+def due_course(home, root, *, pending="2026-11-05 final", exams=(("CS201", "final", "2026-11-05"),), **kw):
+    cdir = course(home, mastery=TWO_LEFT, save={"last_session": "2026-11-04 21:00",
+                                                "pending_debrief": pending}, **kw)
+    profile(root, exams=exams)
+    return cdir
+
+
+@pytest.mark.parametrize("pending", ["no", "", "soon", "2026-13-01 final", "<no | YYYY-MM-DD exam name>"])
+def test_debrief_none_pending(home, root, pending):
+    due_course(home, root, pending=pending)
+    assert ok(home, "start", {"now": DUE_NOW})["debrief"] is None
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["debrief"] is None and out["line"] == "No debrief pending for CS201 Theory."
+    assert out["cram"] is None and out["disagreements"] is None and out["offer_next_course"] is None
+
+
+def test_debrief_not_yet_on_exam_day(home, root):
+    due_course(home, root, pending="2026-11-12 final", exams=[("CS201", "final", "2026-11-12")])
+    st = ok(home, "start", {"now": DUE_NOW})
+    assert st["debrief"] == {"exam": "2026-11-12", "exam_name": "final", "due": False, "deferred": False}
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["line"] == "Debrief opens after your final on 2026-11-12."
+    assert out["cram"] is None and out["offer_next_course"] is None
+
+
+def test_debrief_due_yesterday(home, root):
+    cdir = due_course(home, root, pending="2026-11-11 midterm",
+                      exams=[("CS201", "midterm", "2026-11-11"), ("CS201", "final", "2027-01-20")])
+    log(cdir, "2026-11-01-2000", "first_contact: 2026-11-01T20:00:00+02:00\n"
+        + session_log("2026-11-01T20:00:00+02:00", "2026-11-01T21:30:00+02:00"))
+    st = ok(home, "start", {"now": DUE_NOW})
+    assert st["class"]["class"] == "Standard"
+    assert st["debrief"] == {"exam": "2026-11-11", "exam_name": "midterm", "due": True, "deferred": False}
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["debrief"]["due"] is True
+    assert out["cram"]["session_count"] == 1 and out["cram"]["actual_minutes"] == 90
+    assert out["cram"]["days_before_exam"] == 10
+    assert out["line"] == out["cram"]["line"] and "First contact: 10 days before the exam." in out["line"]
+    assert out["disagreements"] == [] and out["offer_next_course"] is True
+    assert set(out) == {"term", "course", "course_dir", "code", "inferred", "debrief", "cram",
+                        "disagreements", "offer_next_course", "line"}
+
+
+def test_debrief_deferred_writes_nothing(home, root):
+    due_course(home, root, pending="2026-11-11 midterm",
+               exams=[("CS201", "midterm", "2026-11-11"), ("CS201", "final", "2026-11-13")])
+    st = ok(home, "start", {"now": DUE_NOW})
+    assert st["class"]["class"] == "Urgent"
+    assert st["debrief"] == {"exam": "2026-11-11", "exam_name": "midterm", "due": False, "deferred": True}
+    before = snapshot(home)
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["line"] == "Debrief waits until after your final: today is for that."
+    assert out["cram"] is None and out["disagreements"] is None
+    assert snapshot(home) == before
+
+
+def test_debrief_superseded_by_later_passed_exam(home, root):
+    due_course(home, root, pending="2026-10-20 midterm",
+               exams=[("CS201", "midterm", "2026-10-20"), ("CS201", "final", "2026-11-10"),
+                      ("CS201", "quiz", "2026-11-12"), ("MATH1", "final", "2026-11-11")])
+    st = ok(home, "start", {"now": DUE_NOW})
+    assert st["debrief"] == {"exam": "2026-11-10", "exam_name": "final", "due": False, "deferred": True}
+    st = ok(home, "start", {"now": "2026-11-13T10:00:00+02:00"})  # quiz passed too
+    assert st["debrief"]["exam"] == "2026-11-12" and st["debrief"]["exam_name"] == "quiz"
+    assert st["debrief"]["due"] is True
+
+
+def test_debrief_superseded_window_uses_target(home, root):
+    cdir = due_course(home, root, pending="2026-10-20 midterm",
+                      exams=[("CS201", "midterm", "2026-10-20"), ("CS201", "final", "2026-11-10")])
+    log(cdir, "2026-10-01-0900", "first_contact: 2026-10-01T09:00:00+03:00\n"
+        + session_log("2026-10-01T09:00:00+03:00", "2026-10-01T10:00:00+03:00",
+                      "## Verifier disagreements\n- before the midterm\n"))
+    log(cdir, "2026-10-20-0700", session_log("2026-10-20T07:00:00+03:00", "2026-10-20T08:00:00+03:00",
+                                            "## Verifier disagreements\n- midterm day\n"))
+    log(cdir, "2026-10-25-0900", session_log("2026-10-25T09:00:00+03:00", "2026-10-25T09:30:00+03:00",
+                                            "## Verifier disagreements\n- between the exams\n"))
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["debrief"] == {"exam": "2026-11-10", "exam_name": "final", "due": True, "deferred": False}
+    assert out["cram"]["session_count"] == 1 and out["cram"]["actual_minutes"] == 30
+    assert out["cram"]["days_before_exam"] == 40  # counted to the final
+    assert out["disagreements"] == ["- between the exams"]
+
+
+def test_debrief_naive_first_contact_with_aware_now(home, root):
+    cdir = due_course(home, root)
+    log(cdir, "2026-10-20-0900", "first_contact: 2026-10-20T09:00:00\n"
+        + session_log("2026-10-20T09:00:00+03:00", "2026-10-20T10:00:00+03:00"))
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["cram"] is None and out["line"] == "Cram bill: no study sessions logged."
+
+
+def test_debrief_unnamed_exam_not_yet(home, root):
+    due_course(home, root, pending="2026-11-12", exams=[])
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["debrief"]["exam_name"] is None
+    assert out["line"] == "Debrief opens after your exam on 2026-11-12."
+
+
+def test_debrief_disagreements_section_ends_at_any_heading(home, root):
+    cdir = due_course(home, root)
+    log(cdir, "2026-10-20-0900-2", "## Verifier disagreements\n- kept\n- \n-   \n### Notes\n- not one\n"
+        "## Verifier disagreements\n- kept again\n# Other\n- no\n")
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["disagreements"] == ["- kept", "- kept again"]
+
+
+def test_debrief_name_from_row_when_pending_has_none(home, root):
+    due_course(home, root, pending="2026-11-05")
+    assert ok(home, "start", {"now": DUE_NOW})["debrief"]["exam_name"] == "final"
+
+
+def test_debrief_session_window(home, root):
+    cdir = due_course(home, root, pending="2026-11-05 final",
+                      exams=[("CS201", "midterm", "2026-10-10"), ("CS201", "final", "2026-11-05")])
+    log(cdir, "2026-10-01-0900", "first_contact: 2026-10-01\n"
+        + session_log("2026-10-01T09:00:00+03:00", "2026-10-01T10:00:00+03:00"))  # before the midterm
+    log(cdir, "2026-10-10-0900", session_log("2026-10-10T09:00:00+03:00", "2026-10-10T10:00:00+03:00"))  # midterm day
+    log(cdir, "2026-10-20-0900", session_log("2026-10-20T09:00:00+03:00", "2026-10-20T09:30:00+03:00")
+        + session_log("2026-10-20T09:10:00+03:00", "2026-10-20T09:20:00+03:00")  # overlaps: dropped
+        + session_log("2026-10-20T12:00:00+03:00", "2026-10-20T11:00:00+03:00")  # ends before start
+        + session_log("2026-10-20T13:00:00+03:00")  # unended, then a real pair
+        + session_log("2026-10-20T14:00:00+03:00", "2026-10-20T14:45:00+03:00"))
+    log(cdir, "2026-10-21-0900", session_log("2026-10-21T09:00:00", "2026-10-21T10:00:00"))  # no offset
+    log(cdir, "2026-11-05-0700", session_log("2026-11-05T07:00:00+02:00", "2026-11-05T08:00:00+02:00"))
+    log(cdir, "2026-11-06-0900", session_log("2026-11-06T09:00:00+02:00", "2026-11-06T10:00:00+02:00"))  # after
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["cram"]["session_count"] == 3 and out["cram"]["actual_minutes"] == 30 + 45 + 60
+    assert out["cram"]["counterfactual_minutes"]["point"] == 75  # all 3 mastery rows, weight 1
+    assert out["cram"]["days_before_exam"] == 35
+
+
+def test_debrief_disagreements_in_window_distinct(home, root):
+    cdir = due_course(home, root, exams=[("CS201", "midterm", "2026-10-10"), ("CS201", "final", "2026-11-05")])
+    log(cdir, "2026-10-01-0900", "first_contact: 2026-10-01\n## Verifier disagreements\n- old one\n")
+    log(cdir, "2026-10-20-0900", "## Verifier disagreements\n- item 2: key says 4, checker 5\n"
+        "not a bullet\n- item 3: ambiguous\n## Results\n- Heaps practice: wrong\n")
+    log(cdir, "2026-10-22-0900", "## Verifier disagreements\n- item 2: key says 4, checker 5\n- item 9: x\n")
+    log(cdir, "2026-11-06-0900", "## Verifier disagreements\n- after the exam\n")
+    log(cdir, "notes", "## Verifier disagreements\n- unnamed log\n")
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["disagreements"] == ["- item 2: key says 4, checker 5", "- item 3: ambiguous", "- item 9: x"]
+
+
+def test_debrief_offer_once_per_term(home, root):
+    cdir = due_course(home, root)
+    log(cdir, "2026-10-01-0900", "first_contact: 2026-10-01\n")
+    other = course(home, "OLD1 Thing", term="2026-Spring")
+    log(other, "2026-05-01-0900", "## Debrief\nnext_course_offer: no\n")
+    assert ok(home, "debrief", {"now": DUE_NOW})["offer_next_course"] is True
+    same = course(home, "MATH101 Calculus")
+    log(same, "2026-10-30-0900", "## Debrief\nnext_course_offer: yes\n")
+    out = ok(home, "debrief", {"now": DUE_NOW, "term": TERM, "course": "CS201 Theory"})
+    assert out["offer_next_course"] is False
+
+
+def test_debrief_no_first_contact(home, root):
+    due_course(home, root)
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["debrief"]["due"] is True
+    assert out["cram"] is None and out["line"] == "Cram bill: no study sessions logged."
+    assert out["disagreements"] == [] and out["offer_next_course"] is True
+
+
+def test_debrief_first_contact_after_target(home, root):
+    cdir = due_course(home, root)
+    log(cdir, "2026-11-08-0900", "first_contact: 2026-11-08T09:00:00+02:00\n")
+    assert ok(home, "debrief", {"now": DUE_NOW})["cram"] is None
+
+
+def test_debrief_bad_inputs(home, root):
+    due_course(home, root)
+    fails(home, "debrief", {"now": DUE_NOW, "course": "NOPE1 X"}, "course 'NOPE1 X'")
+    fails(home, "debrief", {"now": "yesterday"}, "now")
+    fails(home, "debrief", {"now": DAY}, "now must include a time")
+    fails(home, "debrief", {"now": DUE_NOW, "x": 1}, "unknown field 'x'")
+
+
+def test_debrief_no_course(home, root):
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["course"] is None and out["debrief"] is None and "/mimir:setup" in out["line"]
+
+
+def test_debrief_due_writes_nothing(home, root):
+    cdir = due_course(home, root)
+    log(cdir, "2026-10-20-0900", "first_contact: 2026-10-20T09:00:00+03:00\n"
+        + session_log("2026-10-20T09:00:00+03:00", "2026-10-20T10:00:00+03:00",
+                      "## Verifier disagreements\n- item 1: x\n"))
+    before = snapshot(home)
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["cram"]["session_count"] == 1 and out["disagreements"] == ["- item 1: x"]
+    assert snapshot(home) == before
 
 
 def test_stdlib_only_and_no_clock():

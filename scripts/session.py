@@ -4,7 +4,7 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <start|check|clock>  < input.json
+    python3 session.py <start|check|clock|debrief>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -21,7 +21,8 @@ Files read (all inside the learning root, see ``workspace.py``)
   (date ``YYYY-MM-DD`` or ``unknown``) and ``## Active courses`` rows
   ``| CODE | YYYY-Term/CODE Name |``.
 * ``<course>/.state/save.md``: ``last_session:`` (``YYYY-MM-DD HH:MM`` or
-  ``YYYY-MM-DD``) and ``next_topic:``.
+  ``YYYY-MM-DD``), ``next_topic:`` and ``pending_debrief:`` (``YYYY-MM-DD
+  <exam name>``; ``no``, empty or anything else means none pending).
 * ``<course>/.state/mastery.md``: the table ``| topic | status | evidence |
   evidence_date | last_check | assisted | unassisted | frustration_override |``.
   Columns are found by header name (topic, status, evidence_date, assisted,
@@ -29,7 +30,10 @@ Files read (all inside the learning root, see ``workspace.py``)
   or mastered counts as unseen; a count that is not a whole number counts as
   0; an ``evidence_date`` that is not a valid date is reported as null.
 * ``<course>/.state/logs/*.md`` (name order): the first ``first_contact:``
-  line whose value is a date or datetime (``plan.py`` rules).
+  line whose value is a date or datetime (``plan.py`` rules); for ``debrief``
+  also ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
+  disagreements``, and ``next_course_offer:`` lines in every course of the
+  term. Symlinked, unreadable or non-UTF-8 logs are skipped.
 * A ``save.md`` or ``mastery.md`` that is itself a symlink reads as empty.
   Unreadable or non-UTF-8 files of courses other than the chosen one, and
   unreadable logs, are skipped. A course whose term, course or ``.state``
@@ -67,7 +71,15 @@ start -- pick the course, the exam and the class for a new session.
     whose ``line`` is ``delay_line`` for Standard only, else null). ``topic``:
     ``save.md`` ``next_topic`` when it is remaining, else the first remaining
     topic, null when none is left; its ``attempt_first`` is as in ``check``.
-    ``line`` is the class line. A workspace with no course folder gives
+    ``line`` is the class line. ``debrief``: null when ``pending_debrief:``
+    holds no valid date P; else {"exam", "exam_name", "due", "deferred"}.
+    P today or later: P with the pending name, due and deferred false (a
+    date-only exam is past only from the next day, as in ``plan.py``). P
+    before today: the target exam is the latest ``## Exam dates`` row of
+    ``code`` dated after P and before today (a later passed exam supersedes;
+    debriefs never stack), else P (named by the pending value, else by a row
+    dated P); ``deferred`` = the class is Urgent, ``due`` = not deferred.
+    A workspace with no course folder gives
     ``course`` null, every course field null, and the line "No course yet:
     run /mimir:setup, then /mimir:ingest."
 
@@ -92,6 +104,36 @@ clock -- where an episode stands.
     ``elapsed_minutes`` is whole minutes, rounded down. ``phase``: ``teach``
     under EPISODE_MIN_MINUTES, ``wrap`` from it to under EPISODE_MAX_MINUTES,
     ``over`` from EPISODE_MAX_MINUTES. ``now`` before ``start`` exits 2.
+
+debrief -- what the post-exam debrief needs. Read-only, like the rest.
+    in : as ``start`` ({"now": ..., optional "term" and "course"}).
+    out: {"term": "2026-Fall", "course": "CS201 Theory", "course_dir": "...",
+          "code": "CS201", "inferred": false, "debrief": {"exam":
+          "2026-11-05", "exam_name": "final", "due": true, "deferred": false},
+          "cram": {<plan.py debrief output>}, "disagreements": ["- item 2:
+          ..."], "offer_next_course": true, "line": "Cram bill: ..."}
+    ``debrief`` is ``start``'s. Not due: ``cram``, ``disagreements`` and
+    ``offer_next_course`` are null and ``line`` says why ("No debrief
+    pending for <course>.", "Debrief opens after your <name, else exam> on
+    <date>.", "Debrief waits until after your <next exam name, else exam>:
+    today is for that.", or, with no next exam, "Debrief waits for a calmer
+    session: today is for your exam."; no course: ``start``'s line). Due,
+    with target T and previous exam B (the latest row of ``code`` dated
+    before T, none when there is none):
+    * ``cram``: ``plan.py debrief`` with ``first_contact`` (as in ``start``),
+      ``exam`` T, every ``mastery.md`` row weight 1, ``timed`` [] and the
+      sessions: each log's ``started:`` and the next ``ended:`` after it,
+      kept when the start's own calendar date is after B and on or before T;
+      a pair that ends before it starts, overlaps an earlier kept pair or
+      mixes offset/no-offset with ``now`` is dropped. ``cram`` is null (line
+      "Cram bill: no study sessions logged.") when ``first_contact`` is null,
+      after T, or not comparable with ``now``. ``line`` is ``cram.line``.
+    * ``disagreements``: distinct non-empty ``- `` lines under ``## Verifier
+      disagreements`` (up to the next line starting with ``#``) in logs named
+      ``YYYY-MM-DD-HHMM[-suffix].md`` whose date is after B and on or before
+      T, in name order.
+    * ``offer_next_course``: false when any log of any course in the same
+      term has a ``next_course_offer:`` line, else true.
 
 Exit codes: invalid input (bad field, unknown course, no workspace) exits 2
 with one line on stderr (``session.py: <message>``) naming the field, and
@@ -259,21 +301,29 @@ def _last_session(course_dir: Path) -> str | None:
     return f"{m.group(1)} {clock}" if hh < 24 and mm < 60 else None
 
 
-def _first_contact(course_dir: Path) -> str | None:
+def _logs(course_dir: Path) -> list[tuple[str, str]]:
+    """(name, text) of each readable ``.state/logs/*.md`` in name order; symlinks,
+    unreadable and non-UTF-8 logs are skipped."""
     logs = course_dir / ".state" / "logs"
     try:
         if logs.is_symlink() or not logs.is_dir():
-            return None
+            return []
         names = sorted(p for p in logs.iterdir() if p.suffix == ".md")
     except OSError:
-        return None
+        return []
+    out = []
     for log in names:
         try:
             if log.is_symlink() or not log.is_file():
                 continue
-            text = _text(log)
+            out.append((log.name, _text(log)))
         except (InputError, OSError):
             continue
+    return out
+
+
+def _first_contact(course_dir: Path) -> str | None:
+    for _, text in _logs(course_dir):
         for line in text.splitlines():
             m = re.fullmatch(r"first_contact:(.*)", line.strip())
             if m and _valid_moment(m.group(1).strip()):
@@ -340,6 +390,145 @@ def _exam(profile: str, code: str, today: date) -> tuple[str | None, str | None,
     return None, None, not unknown
 
 
+# --- Debrief ------------------------------------------------------------------------
+
+_PENDING = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\s+(.*))?")
+_LOG_NAME = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})-[0-9]{4}(?:-[^/]*)?\.md")
+_NO_CRAM_LINE = "Cram bill: no study sessions logged."
+
+
+def _code_exams(profile: str, code: str) -> list[tuple[date, str]]:
+    """Dated ``## Exam dates`` rows of a course code, in file order."""
+    out = []
+    for course, exam, when in _section_rows(profile, _EXAM_TABLE):
+        day = _valid_date(when.strip())
+        if course.strip().casefold() == code.casefold() and day is not None:
+            out.append((day, " ".join(exam.split())))
+    return out
+
+
+def _pending(save: str) -> tuple[date, str | None] | None:
+    """``pending_debrief: YYYY-MM-DD <name>`` as (date, name); None when no, empty or malformed."""
+    m = _PENDING.fullmatch(_key(save, "pending_debrief"))
+    day = _valid_date(m.group(1)) if m else None
+    if day is None:
+        return None
+    return day, " ".join((m.group(2) or "").split()) or None
+
+
+def _debrief_target(profile: str, code: str, pending: date, pending_name: str | None,
+                    today: date) -> tuple[date, str | None, date | None]:
+    """(target exam date, its name, previous exam date or None).
+
+    Target: the latest row of the code dated from the day after ``pending``
+    to yesterday (a later passed exam supersedes; ties: the first such row),
+    else ``pending`` itself, named by ``pending_name``, else by the first named
+    row dated ``pending``. Previous: the latest row of the code dated before
+    the target."""
+    rows = _code_exams(profile, code)
+    passed = [(day, exam) for day, exam in rows if pending < day < today]
+    target, name = pending, pending_name
+    if passed:
+        target = max(day for day, _ in passed)
+        name = next(exam for day, exam in passed if day == target) or None
+    elif name is None:
+        name = next((exam for day, exam in rows if day == pending and exam), None)
+    before = [day for day, _ in rows if day < target]
+    return target, name, max(before) if before else None
+
+
+def debrief_state(profile: str, save: str, code: str, today: date,
+                  klass: str | None) -> tuple[dict | None, tuple[date, date | None] | None]:
+    """(``start``'s ``debrief``, the due window (target, previous exam) or None).
+    The state is null with no valid pending value."""
+    pending = _pending(save)
+    if pending is None:
+        return None, None
+    day, name = pending
+    if day >= today:  # a date-only exam is past only from the next day
+        return {"exam": day.isoformat(), "exam_name": name, "due": False, "deferred": False}, None
+    target, target_name, previous = _debrief_target(profile, code, day, name, today)
+    deferred = klass == "Urgent"
+    state = {"exam": target.isoformat(), "exam_name": target_name, "due": not deferred,
+             "deferred": deferred}
+    return state, None if deferred else (target, previous)
+
+
+def _sessions(logs: list[tuple[str, str]], after: date | None, until: date,
+              aware: bool) -> list[dict]:
+    """Logged ``started:``/next ``ended:`` pairs that started in (after, until]."""
+    kept: list[tuple[datetime, datetime]] = []
+    for _, text in logs:
+        start = None
+        for line in text.splitlines():
+            m = re.fullmatch(r"(started|ended):(.*)", line.strip())
+            if not m:
+                continue
+            try:
+                moment = plan.parse_moment(m.group(2).strip(), m.group(1), need_time=True)
+            except plan.InputError:
+                if m.group(1) == "started":
+                    start = None
+                continue
+            if m.group(1) == "started":
+                start = moment
+                continue
+            if start is None:
+                continue
+            begin, end, start = start, moment, None
+            if (begin.tzinfo is not None) != aware or (end.tzinfo is not None) != aware:
+                continue
+            if end < begin or begin.date() > until or (after is not None and begin.date() <= after):
+                continue
+            if any(begin < k_end and k_begin < end for k_begin, k_end in kept):
+                continue
+            kept.append((begin, end))
+    return [{"start": b.isoformat(), "end": e.isoformat()} for b, e in kept]
+
+
+def _disagreements(logs: list[tuple[str, str]], after: date | None, until: date) -> list[str]:
+    out: list[str] = []
+    for name, text in logs:
+        m = _LOG_NAME.fullmatch(name)
+        day = _valid_date(m.group(1)) if m else None
+        if day is None or day > until or (after is not None and day <= after):
+            continue
+        inside = False
+        for line in text.splitlines():
+            if line.startswith("#"):
+                inside = line.rstrip() == "## Verifier disagreements"
+            elif inside and line.startswith("- ") and line[2:].strip() and line.strip() not in out:
+                out.append(line.strip())
+    return out
+
+
+def _offer_next_course(root: Path, term: str) -> bool:
+    for course in ingest._courses(root):
+        if course["term"] != term or not _usable(root, course):
+            continue
+        for _, text in _logs(Path(course["course_dir"])):
+            if any(re.fullmatch(r"next_course_offer:.*", row.strip()) for row in text.splitlines()):
+                return False
+    return True
+
+
+def _cram(course_dir: Path, logs, first_contact: str | None, target: date,
+          previous: date | None, now: datetime) -> dict | None:
+    if first_contact is None:
+        return None
+    contact = plan.parse_moment(first_contact, "first_contact")
+    aware = now.tzinfo is not None
+    if not plan.is_date_only(contact) and (contact.tzinfo is not None) != aware:
+        return None  # cannot be compared with the logged sessions
+    contact_day = contact if plan.is_date_only(contact) else contact.date()
+    if contact_day > target:
+        return None
+    payload = {"first_contact": first_contact, "exam": target.isoformat(),
+               "topics": [{"name": r["name"], "weight": 1} for r in mastery(course_dir)],
+               "timed": [], "sessions": _sessions(logs, previous, target, aware)}
+    return _plan(plan.debrief, payload)
+
+
 # --- Subcommands ----------------------------------------------------------------------
 
 def plan_payload(now: str, exam: str | None, remaining: list[dict]) -> dict:
@@ -349,6 +538,11 @@ def plan_payload(now: str, exam: str | None, remaining: list[dict]) -> dict:
 
 
 def cmd_start(data: dict) -> dict:
+    return _start(data)[0]
+
+
+def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
+    """``start``'s output and the due debrief window (see ``debrief_state``)."""
     _check_keys(data, {"now", "term", "course"})
     now = _moment(data, "now")
     term = parse_term(data) if data.get("term") is not None else None
@@ -362,7 +556,8 @@ def cmd_start(data: dict) -> dict:
     empty = {"root": str(root), "courses": courses, "term": None, "course": None, "course_dir": None,
              "code": None, "inferred": None, "exam": None, "exam_name": None, "q0": None,
              "remaining": [], "class": None, "delay_line": None, "topic": None,
-             "first_contact": None, "line": "No course yet: run /mimir:setup, then /mimir:ingest."}
+             "first_contact": None, "debrief": None,
+             "line": "No course yet: run /mimir:setup, then /mimir:ingest."}
     if given is not None:
         hits = [c for c in pool if c["course"] == given]
         if not hits:
@@ -374,7 +569,7 @@ def cmd_start(data: dict) -> dict:
     elif term is not None and not pool:
         raise InputError(f"term {_short(term)} has no course folder with an INDEX.md")
     elif not pool:
-        return empty
+        return empty, None
     else:
         chosen, inferred = _pick(pool, profile), True
 
@@ -387,9 +582,11 @@ def cmd_start(data: dict) -> dict:
     payload = plan_payload(data["now"], exam, remaining)
     klass = _plan(plan.delivery_class, payload)
     delay_line = _plan(plan.cost_of_delay, payload)["line"] if klass["class"] == "Standard" else None
-    next_topic = _norm(_key(_memory(course_dir, "save.md"), "next_topic"))
+    save = _memory(course_dir, "save.md")
+    next_topic = _norm(_key(save, "next_topic"))
     pick = next((r for r in remaining if next_topic and _norm(r["name"]) == next_topic),
                 remaining[0] if remaining else None)
+    debrief, window = debrief_state(profile, save, code, today, klass["class"])
     topic = None
     if pick is not None:
         state = topic_state(pick, pick["name"], today)
@@ -399,7 +596,36 @@ def cmd_start(data: dict) -> dict:
             "exam_name": exam_name, "q0": q0,
             "remaining": [{"name": r["name"], "status": r["status"]} for r in remaining],
             "class": klass, "delay_line": delay_line, "topic": topic,
-            "first_contact": _first_contact(course_dir), "line": klass["line"]}
+            "first_contact": _first_contact(course_dir),
+            "debrief": debrief, "line": klass["line"]}, window
+
+
+def cmd_debrief(data: dict) -> dict:
+    st, window = _start(data)
+    out = {"term": st["term"], "course": st["course"], "course_dir": st["course_dir"],
+           "code": st["code"], "inferred": st["inferred"], "debrief": st["debrief"],
+           "cram": None, "disagreements": None, "offer_next_course": None}
+    state = st["debrief"]
+    if st["course"] is None:
+        return {**out, "line": st["line"]}
+    if state is None:
+        return {**out, "line": f"No debrief pending for {st['course']}."}
+    if state["deferred"]:
+        if st["exam"] is None:
+            return {**out, "line": "Debrief waits for a calmer session: today is for your exam."}
+        upcoming = st["exam_name"] or "exam"
+        return {**out, "line": f"Debrief waits until after your {upcoming}: today is for that."}
+    if window is None:
+        return {**out, "line": f"Debrief opens after your {state['exam_name'] or 'exam'} on {state['exam']}."}
+    now = _moment(data, "now")
+    root = Path(st["root"])
+    course_dir = Path(st["course_dir"])
+    target, previous = window
+    logs = _logs(course_dir)
+    cram = _cram(course_dir, logs, st["first_contact"], target, previous, now)
+    return {**out, "cram": cram, "disagreements": _disagreements(logs, previous, target),
+            "offer_next_course": _offer_next_course(root, st["term"]),
+            "line": cram["line"] if cram else _NO_CRAM_LINE}
 
 
 def cmd_check(data: dict) -> dict:
@@ -447,12 +673,13 @@ COMMANDS = {
     "start": (cmd_start, "pick the course, exam, delivery class and first topic for a session"),
     "check": (cmd_check, "status, counts and staleness for named topics"),
     "clock": (cmd_clock, "elapsed episode minutes and phase (teach, wrap, over)"),
+    "debrief": (cmd_debrief, "post-exam debrief state, cram bill, verifier disagreements and next-course flag"),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
-                             ("Mimir session runner. Subcommands: start, check, clock. Reads one JSON "
+                             ("Mimir session runner. Subcommands: start, check, clock, debrief. Reads one JSON "
                               "object on stdin and prints one JSON object on stdout. Writes nothing."),
                              COMMANDS, argv)
 
