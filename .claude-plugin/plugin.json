@@ -15,7 +15,8 @@
     "./skills/past-questions",
     "./skills/plan",
     "./skills/forecast",
-    "./skills/debrief"
+    "./skills/debrief",
+    "./skills/progress"
   ],
   "agents": [
     "./agents/verifier.md",
