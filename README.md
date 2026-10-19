@@ -14,12 +14,23 @@ Mimir aims for **understanding that survives the professor's disguises, on a rou
 - **The professor's material comes first.** Mimir learns how your professor writes and disguises questions. It drills you on variants in that style and labels every question with where it came from.
 - **Your files stay local.** Everything lives in one folder (default `~/learning/`). Generated pages work offline, and Mimir sends no telemetry and uses no cloud storage. Claude Code itself still talks to the model as usual.
 
-## Install (local development)
+## Install
+
+Inside Claude Code:
+
+```
+/plugin install mimir --marketplace oguzdogmus/mimir
+```
+
+Or from a local clone, so `/mimir:` commands show up in every session:
 
 ```sh
 git clone https://github.com/oguzdogmus/mimir.git ~/mimir
-claude --plugin-dir ~/mimir
+claude plugin marketplace add ~/mimir
+claude plugin install mimir@mimir
 ```
+
+For one session only, without installing: `claude --plugin-dir ~/mimir`.
 
 Skills are invoked as `/mimir:<name>`. Not sure which one? Run `/mimir:help`.
 
