@@ -50,7 +50,8 @@ start -- pick the course, the exam and the class for a new session.
           "status": "gap"}, {"name": "Graphs", "status": "unseen"}],
           "class": {<plan.py class output>}, "delay_line": "Start today: ...",
           "topic": {"name": "Graphs", "status": "unseen", "evidence_date":
-          null, "stale": false}, "first_contact": "2026-10-10T20:00:00+03:00",
+          null, "stale": false, "attempt_first": false}, "first_contact":
+          "2026-10-10T20:00:00+03:00",
           "line": "Standard delivery: exam in 19 days"}
     Course: the given one (``inferred`` false); else the latest ``save.md``
     ``last_session:`` (ties: first by course name); else the first ``##
@@ -65,20 +66,25 @@ start -- pick the course, the exam and the class for a new session.
     ``mastered``, weight 1 each, sent to ``plan.py class`` (and ``delay``,
     whose ``line`` is ``delay_line`` for Standard only, else null). ``topic``:
     ``save.md`` ``next_topic`` when it is remaining, else the first remaining
-    topic, null when none is left. ``line`` is the class line. A workspace
-    with no course folder gives ``course`` null, every course field null, and
-    the line "No course yet: run /mimir:setup, then /mimir:ingest."
+    topic, null when none is left; its ``attempt_first`` is as in ``check``.
+    ``line`` is the class line. A workspace with no course folder gives
+    ``course`` null, every course field null, and the line "No course yet:
+    run /mimir:setup, then /mimir:ingest."
 
 check -- staleness and counts for named topics.
     in : {"now": "...", "term": "2026-Fall", "course": "CS201 Theory",
           "topics": ["Heaps"]}
     out: {"course_dir": "...", "topics": [{"name": "Heaps", "status": "gap",
           "evidence_date": "2026-10-01", "assisted": 1, "unassisted": 0,
-          "stale": true}], "line": "1 topic checked, 1 stale: Heaps."}
+          "stale": true, "attempt_first": false}],
+          "line": "1 topic checked, 1 stale: Heaps."}
     Topic names match ``mastery.md`` ignoring case and repeated spaces; an
     absent topic is ``unseen``. ``stale`` = status not ``unseen`` and (no valid
     ``evidence_date``, an evidence date in the future, or evidence older than
-    STALE_DAYS days).
+    STALE_DAYS days). ``attempt_first`` = status not ``unseen``, ``assisted``
+    at least ATTEMPT_FIRST_ASSISTED and ``unassisted`` 0 (false for an absent
+    topic or one whose status reads as ``unseen``):
+    the student tries a practice item before any hint or explanation.
 
 clock -- where an episode stands.
     in : {"start": "2026-10-17T09:00:00+03:00", "now": "2026-10-17T09:21:30+03:00"}
@@ -108,6 +114,7 @@ from workspace import InputError, _check_keys, _has_control, _short, parse_segme
 STALE_DAYS = 14
 EPISODE_MIN_MINUTES = 20
 EPISODE_MAX_MINUTES = 25
+ATTEMPT_FIRST_ASSISTED = 3
 
 STATUSES = ("unseen", "gap", "shaky", "mastered")
 _SEASONS = ("spring", "summer", "fall")
@@ -229,12 +236,14 @@ def _mastery_row(cells: list[str], cols: dict[str, int]) -> dict:
 def topic_state(row: dict | None, name: str, today: date) -> dict:
     if row is None:
         return {"name": name, "status": "unseen", "evidence_date": None,
-                "assisted": 0, "unassisted": 0, "stale": False}
+                "assisted": 0, "unassisted": 0, "stale": False, "attempt_first": False}
     evidence = _valid_date(row["evidence_date"] or "")
     stale = row["status"] != "unseen" and (
         evidence is None or evidence > today or (today - evidence).days > STALE_DAYS)
     return {"name": row["name"], "status": row["status"], "evidence_date": row["evidence_date"],
-            "assisted": row["assisted"], "unassisted": row["unassisted"], "stale": stale}
+            "assisted": row["assisted"], "unassisted": row["unassisted"], "stale": stale,
+            "attempt_first": (row["status"] != "unseen" and row["assisted"] >= ATTEMPT_FIRST_ASSISTED
+                              and row["unassisted"] == 0)}
 
 
 def _last_session(course_dir: Path) -> str | None:
@@ -379,7 +388,7 @@ def cmd_start(data: dict) -> dict:
     topic = None
     if pick is not None:
         state = topic_state(pick, pick["name"], today)
-        topic = {k: state[k] for k in ("name", "status", "evidence_date", "stale")}
+        topic = {k: state[k] for k in ("name", "status", "evidence_date", "stale", "attempt_first")}
     return {"root": str(root), "courses": courses, "term": chosen["term"], "course": chosen["course"],
             "course_dir": str(course_dir), "code": code, "inferred": inferred, "exam": exam,
             "exam_name": exam_name, "q0": q0,

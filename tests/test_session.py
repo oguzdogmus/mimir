@@ -107,7 +107,8 @@ def test_calm(home, root):
     assert out["class"]["days_to_exam"] == 19
     assert out["line"] == out["class"]["line"] == "Standard delivery: exam in 19 days"
     assert out["delay_line"].startswith("Start today: 19 days")
-    assert out["topic"] == {"name": "Sorting", "status": "unseen", "evidence_date": None, "stale": False}
+    assert out["topic"] == {"name": "Sorting", "status": "unseen", "evidence_date": None, "stale": False,
+                            "attempt_first": False}
     assert out["remaining"] == [{"name": "Graphs", "status": "gap"}, {"name": "Sorting", "status": "unseen"}]
     assert out["class"]["route_minutes"]["point"] == 50  # weight 1 each, 2 topics
     assert (out["exam"], out["exam_name"], out["q0"], out["code"]) == ("2026-11-05", "final", False, "CS201")
@@ -242,6 +243,11 @@ def test_topic_stale_flag(home, root):
     assert ok(home, "start", {"now": NOW})["topic"]["stale"] is True
 
 
+def test_start_topic_attempt_first(home, root):
+    course(home, mastery=[("Graphs", "shaky", "2026-10-10", 3, 0)])
+    assert ok(home, "start", {"now": NOW})["topic"]["attempt_first"] is True
+
+
 def test_first_contact_from_logs(home, root):
     cdir = course(home)
     logs = cdir / ".state" / "logs"
@@ -269,6 +275,27 @@ def test_no_workspace(home):
 
 # --- check -------------------------------------------------------------------------
 
+def test_check_attempt_first(home, root):
+    course(home, mastery=[("On", "shaky", "2026-10-10", 3, 0), ("Below", "shaky", "2026-10-10", 2, 0),
+                          ("Solved", "shaky", "2026-10-10", 5, 1)])
+    out = ok(home, "check", {"now": NOW, "term": TERM, "course": "CS201 Theory",
+                             "topics": ["On", "Below", "Solved", "Absent"]})
+    by = {t["name"]: t for t in out["topics"]}
+    assert by["On"]["attempt_first"] is True
+    assert by["Below"]["attempt_first"] is False
+    assert by["Solved"]["attempt_first"] is False
+    assert by["Absent"]["attempt_first"] is False and by["Absent"]["status"] == "unseen"
+
+
+def test_check_attempt_first_needs_known_status(home, root):
+    course(home, mastery=[("Weird", "bogus", "2026-10-10", 3, 0), ("Four", "gap", "2026-10-10", 4, 0)])
+    out = ok(home, "check", {"now": NOW, "term": TERM, "course": "CS201 Theory",
+                             "topics": ["Weird", "Four"]})
+    by = {t["name"]: t for t in out["topics"]}
+    assert by["Weird"]["status"] == "unseen" and by["Weird"]["attempt_first"] is False
+    assert by["Four"]["attempt_first"] is True
+
+
 def test_check_stale_boundary(home, root):
     course(home, mastery=[("Old", "shaky", "2026-10-02", 2, 1), ("Edge", "mastered", "2026-10-03", 0, 3),
                           ("Nodate", "gap", "", 0, 0), ("Baddate", "gap", "soon", 0, 0),
@@ -277,13 +304,15 @@ def test_check_stale_boundary(home, root):
                              "topics": ["old", "Edge", "Nodate", "Baddate", "Fresh", "Missing", "Odd"]})
     by = {t["name"]: t for t in out["topics"]}
     assert by["Old"] == {"name": "Old", "status": "shaky", "evidence_date": "2026-10-02",
-                         "assisted": 2, "unassisted": 1, "stale": True}  # 15 days
+                         "assisted": 2, "unassisted": 1, "stale": True,
+                         "attempt_first": False}  # 15 days
     assert by["Edge"]["stale"] is False  # exactly 14 days
     assert by["Nodate"]["stale"] is True and by["Baddate"]["stale"] is True
     assert by["Baddate"]["evidence_date"] is None
     assert by["Fresh"]["stale"] is False
     assert by["Missing"] == {"name": "Missing", "status": "unseen", "evidence_date": None,
-                             "assisted": 0, "unassisted": 0, "stale": False}
+                             "assisted": 0, "unassisted": 0, "stale": False,
+                             "attempt_first": False}
     assert by["Odd"]["status"] == "unseen" and by["Odd"]["assisted"] == 0
     assert out["line"] == "7 topics checked, 3 stale: Old, Nodate, Baddate."
 
@@ -402,7 +431,8 @@ def test_mastery_columns_by_header_name(home, root):
         "| shaky | 2 | Heaps | 2026-10-01 | 3 |\n", encoding="utf-8")
     got = ok(home, "check", {"now": NOW, "term": TERM, "course": "CS201 Theory", "topics": ["Heaps"]})
     assert got["topics"][0] == {"name": "Heaps", "status": "shaky", "evidence_date": "2026-10-01",
-                                "assisted": 3, "unassisted": 2, "stale": True}
+                                "assisted": 3, "unassisted": 2, "stale": True,
+                                "attempt_first": False}
 
 
 def test_non_utf8_save_in_other_course(home, root):
