@@ -504,12 +504,15 @@ def delivery_class(data: dict) -> dict:
     }
 
 
-def cost_of_delay(data: dict) -> dict:
+def delay_rows(data: dict) -> tuple[list[dict], dict, bool]:
+    """Rows of the cost-of-delay plan as exact values: (rows, estimate, has_route).
+
+    One row {start, days, low, high} per start day from today to the exam eve;
+    no rows when the exam is null.
+    """
     now, exam, clock, est, has_route = _planning_inputs(data)
     rows: list[dict] = []
-    if exam is None:
-        line = "Cost of delay: exam date unknown."
-    else:
+    if exam is not None:
         today, exam_day, _ = exam_window(clock, now, exam)
         last = max(today, exam_day - _ONE_DAY)
         start = today
@@ -518,17 +521,24 @@ def cost_of_delay(data: dict) -> dict:
             rows.append({"start": start, "days": days,
                          "low": est["low"] / days, "high": est["high"] / days})
             start += _ONE_DAY
-        if not has_route:
-            line = "Cost of delay: no topics left on the route."
-        else:
-            picks = sorted({0, len(rows) // 2, len(rows) - 1})
-            parts = []
-            for index in picks:
-                row = rows[index]
-                when = "today" if index == 0 else day_label(row["start"])
-                parts.append(f"Start {when}: {count(row['days'], 'day')} × "
-                             f"{fmt_range(row['low'], row['high'])}.")
-            line = " ".join(parts) + f" ({est['confidence']})"
+    return rows, est, has_route
+
+
+def delay_phrase(row: dict, first: bool) -> str:
+    """One start day as said in the cost-of-delay line, e.g. "Start Mon Oct 26: 10 days × 3–8 min."."""
+    when = "today" if first else day_label(row["start"])
+    return f"Start {when}: {count(row['days'], 'day')} × {fmt_range(row['low'], row['high'])}."
+
+
+def cost_of_delay(data: dict) -> dict:
+    rows, est, has_route = delay_rows(data)
+    if not rows:
+        line = "Cost of delay: exam date unknown."
+    elif not has_route:
+        line = "Cost of delay: no topics left on the route."
+    else:
+        picks = sorted({0, len(rows) // 2, len(rows) - 1})
+        line = " ".join(delay_phrase(rows[i], i == 0) for i in picks) + f" ({est['confidence']})"
     return {
         "rows": [{"start": r["start"].isoformat(), "days": r["days"],
                   "minutes_per_day": {"low": num(r["low"]), "high": num(r["high"])}} for r in rows],

@@ -342,6 +342,12 @@ def _exam(profile: str, code: str, today: date) -> tuple[str | None, str | None,
 
 # --- Subcommands ----------------------------------------------------------------------
 
+def plan_payload(now: str, exam: str | None, remaining: list[dict]) -> dict:
+    """The ``plan.py`` class/delay input for a route: each remaining topic weighs 1."""
+    return {"now": now, "exam": exam, "topics": [{"name": r["name"], "weight": 1} for r in remaining],
+            "timed": []}
+
+
 def cmd_start(data: dict) -> dict:
     _check_keys(data, {"now", "term", "course"})
     now = _moment(data, "now")
@@ -378,8 +384,7 @@ def cmd_start(data: dict) -> dict:
     exam, exam_name, q0 = _exam(profile, code, today)
     rows = mastery(course_dir)
     remaining = [r for r in rows if r["status"] != "mastered"]
-    payload = {"now": data["now"], "exam": exam,
-               "topics": [{"name": r["name"], "weight": 1} for r in remaining], "timed": []}
+    payload = plan_payload(data["now"], exam, remaining)
     klass = _plan(plan.delivery_class, payload)
     delay_line = _plan(plan.cost_of_delay, payload)["line"] if klass["class"] == "Standard" else None
     next_topic = _norm(_key(_memory(course_dir, "save.md"), "next_topic"))
