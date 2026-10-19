@@ -11,7 +11,8 @@
     "./skills/ingest",
     "./skills/quiz",
     "./skills/notation",
-    "./skills/study"
+    "./skills/study",
+    "./skills/past-questions"
   ],
   "agents": [
     "./agents/verifier.md",
