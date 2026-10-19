@@ -4,7 +4,7 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <start|check|clock|debrief>  < input.json
+    python3 session.py <start|check|clock|debrief|progress>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -25,10 +25,12 @@ Files read (all inside the learning root, see ``workspace.py``)
   <exam name>``; ``no``, empty or anything else means none pending).
 * ``<course>/.state/mastery.md``: the table ``| topic | status | evidence |
   evidence_date | last_check | assisted | unassisted | frustration_override |``.
-  Columns are found by header name (topic, status, evidence_date, assisted,
-  unassisted); the first row of a topic wins. A status other than gap, shaky
-  or mastered counts as unseen; a count that is not a whole number counts as
-  0; an ``evidence_date`` that is not a valid date is reported as null.
+  Columns are found by header name (topic, status, evidence, evidence_date,
+  last_check, assisted, unassisted, frustration_override); the first row of a
+  topic wins. A status other than gap, shaky or mastered counts as unseen; a
+  count that is not a whole number counts as 0; an ``evidence_date`` or
+  ``last_check`` that is not a valid date is reported as null; ``evidence``
+  and ``frustration_override`` are the cell text, trimmed.
 * ``<course>/.state/logs/*.md`` (name order): the first ``first_contact:``
   line whose value is a date or datetime (``plan.py`` rules); for ``debrief``
   also ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
@@ -135,6 +137,27 @@ debrief -- what the post-exam debrief needs. Read-only, like the rest.
     * ``offer_next_course``: false when any log of any course in the same
       term has a ``next_course_offer:`` line, else true.
 
+progress -- what Mimir believes the student knows. Read-only; never calls plan.py.
+    in : as ``start`` ({"now": ..., optional "term" and "course"}).
+    out: {"courses": [<as start>], "term": "2026-Fall", "course": "CS201 Theory",
+          "course_dir": "...", "code": "CS201", "inferred": true, "topics": [{"name": "Heaps",
+          "status": "mastered", "evidence": "solved heap sort alone",
+          "evidence_date": "2026-10-01", "last_check": "2026-10-01",
+          "assisted": 0, "unassisted": 1, "frustration_override": "",
+          "stale": true}], "counts": {"unseen": 0, "gap": 0, "shaky": 0,
+          "mastered": 1}, "table": "| Topic | Status | ...",
+          "line": "CS201 Theory: 1 of 1 topics mastered, 0 shaky, 0 gap,
+          0 unseen; 1 due a recheck."}
+    Course pick, ``inferred`` and errors are ``start``'s. ``topics``: every
+    ``mastery.md`` row in route order; ``stale`` as in ``check``. ``table``:
+    ``| Topic | Status | Evidence | Evidence date | Solved alone / with help |
+    Recheck |``, one row per topic, ``-`` for empty evidence or a null date,
+    Recheck ``due`` when stale, cells escaped as ``INDEX.md`` cells. ``line``
+    ends "; none due a recheck." when no topic is stale. No rows: ``topics``
+    [], ``table`` null, line "No topics on the route yet: drop the outline
+    into `_inbox/` and run /mimir:ingest." No course: ``start``'s line,
+    ``courses`` as ``start``'s, every other field null.
+
 Exit codes: invalid input (bad field, unknown course, no workspace) exits 2
 with one line on stderr (``session.py: <message>``) naming the field, and
 nothing on stdout. An unexpected internal error exits 1 with ``session.py:
@@ -165,7 +188,8 @@ _ACTIVE_TABLE = ("Active courses", ("course", "path"))
 _DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 _LAST_SESSION = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})(?: ([0-9]{2}:[0-9]{2}))?")
 _COUNT = re.compile(r"[0-9]+")
-_MASTERY_COLUMNS = ("topic", "status", "evidence_date", "assisted", "unassisted")
+_MASTERY_COLUMNS = ("topic", "status", "evidence", "evidence_date", "last_check", "assisted", "unassisted",
+                    "frustration_override")
 
 
 # --- Inputs ------------------------------------------------------------------------
@@ -267,12 +291,16 @@ def _mastery_row(cells: list[str], cols: dict[str, int]) -> dict:
     def count(name: str) -> int:
         return int(cell(name)) if _COUNT.fullmatch(cell(name)) else 0
 
+    def day(name: str) -> str | None:
+        value = _valid_date(cell(name))
+        return value.isoformat() if value else None
+
     status = cell("status").lower()
-    evidence = _valid_date(cell("evidence_date"))
     return {"name": " ".join(cell("topic").split()),
             "status": status if status in STATUSES else "unseen",
-            "evidence_date": evidence.isoformat() if evidence else None,
-            "assisted": count("assisted"), "unassisted": count("unassisted")}
+            "evidence": cell("evidence"), "evidence_date": day("evidence_date"),
+            "last_check": day("last_check"), "assisted": count("assisted"),
+            "unassisted": count("unassisted"), "frustration_override": cell("frustration_override")}
 
 
 def topic_state(row: dict | None, name: str, today: date) -> dict:
@@ -395,6 +423,7 @@ def _exam(profile: str, code: str, today: date) -> tuple[str | None, str | None,
 _PENDING = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\s+(.*))?")
 _LOG_NAME = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})-[0-9]{4}(?:-[^/]*)?\.md")
 _NO_CRAM_LINE = "Cram bill: no study sessions logged."
+NO_COURSE_LINE = "No course yet: run /mimir:setup, then /mimir:ingest."
 
 
 def _code_exams(profile: str, code: str) -> list[tuple[date, str]]:
@@ -541,8 +570,10 @@ def cmd_start(data: dict) -> dict:
     return _start(data)[0]
 
 
-def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
-    """``start``'s output and the due debrief window (see ``debrief_state``)."""
+def _course_pick(data: dict) -> tuple[datetime, Path, str, list[dict], dict | None, bool | None,
+                                      Path | None]:
+    """(now, root, profile text, courses, chosen course or None, inferred, its folder) for
+    ``start``'s input; the course pick and its errors are ``start``'s."""
     _check_keys(data, {"now", "term", "course"})
     now = _moment(data, "now")
     term = parse_term(data) if data.get("term") is not None else None
@@ -553,11 +584,6 @@ def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
     pool = [c for c in courses if term is None or c["term"] == term]
     if given is None:  # a refused (symlinked) candidate is skipped; a given one exits 2 below
         pool = [c for c in pool if _usable(root, c)]
-    empty = {"root": str(root), "courses": courses, "term": None, "course": None, "course_dir": None,
-             "code": None, "inferred": None, "exam": None, "exam_name": None, "q0": None,
-             "remaining": [], "class": None, "delay_line": None, "topic": None,
-             "first_contact": None, "debrief": None,
-             "line": "No course yet: run /mimir:setup, then /mimir:ingest."}
     if given is not None:
         hits = [c for c in pool if c["course"] == given]
         if not hits:
@@ -569,11 +595,21 @@ def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
     elif term is not None and not pool:
         raise InputError(f"term {_short(term)} has no course folder with an INDEX.md")
     elif not pool:
-        return empty, None
+        return now, root, profile, courses, None, None, None
     else:
         chosen, inferred = _pick(pool, profile), True
-
     course_dir = workspace.course_folder(root, chosen["term"], chosen["course"])
+    return now, root, profile, courses, chosen, inferred, course_dir
+
+
+def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
+    """``start``'s output and the due debrief window (see ``debrief_state``)."""
+    now, root, profile, courses, chosen, inferred, course_dir = _course_pick(data)
+    if chosen is None:
+        return {"root": str(root), "courses": courses, "term": None, "course": None, "course_dir": None,
+                "code": None, "inferred": None, "exam": None, "exam_name": None, "q0": None,
+                "remaining": [], "class": None, "delay_line": None, "topic": None,
+                "first_contact": None, "debrief": None, "line": NO_COURSE_LINE}, None
     code = chosen["course"].split()[0]
     today = now.date()
     exam, exam_name, q0 = _exam(profile, code, today)
@@ -628,6 +664,42 @@ def cmd_debrief(data: dict) -> dict:
             "line": cram["line"] if cram else _NO_CRAM_LINE}
 
 
+_PROGRESS_HEAD = ("| Topic | Status | Evidence | Evidence date | Solved alone / with help | Recheck |\n"
+                  "|---|---|---|---|---|---|")
+NO_ROUTE_LINE = "No topics on the route yet: drop the outline into `_inbox/` and run /mimir:ingest."
+
+
+def cmd_progress(data: dict) -> dict:
+    now, _, _, courses, chosen, inferred, course_dir = _course_pick(data)
+    if chosen is None:
+        return {"courses": courses, "term": None, "course": None, "course_dir": None, "code": None,
+                "inferred": None, "topics": None, "counts": None, "table": None, "line": NO_COURSE_LINE}
+    today = now.date()
+    topics = []
+    for row in mastery(course_dir):
+        state = topic_state(row, row["name"], today)
+        topics.append({"name": row["name"], "status": row["status"], "evidence": row["evidence"],
+                       "evidence_date": row["evidence_date"], "last_check": row["last_check"],
+                       "assisted": row["assisted"], "unassisted": row["unassisted"],
+                       "frustration_override": row["frustration_override"], "stale": state["stale"]})
+    counts = {s: sum(1 for t in topics if t["status"] == s) for s in STATUSES}
+    out = {"courses": courses, "term": chosen["term"], "course": chosen["course"],
+           "course_dir": str(course_dir),
+           "code": chosen["course"].split()[0], "inferred": inferred, "topics": topics, "counts": counts}
+    if not topics:
+        return {**out, "table": None, "line": NO_ROUTE_LINE}
+    rows = [_PROGRESS_HEAD] + [
+        "| " + " | ".join(ingest._cell(c) for c in (
+            t["name"], t["status"], t["evidence"] or "-", t["evidence_date"] or "-",
+            f"{t['unassisted']} / {t['assisted']}", "due" if t["stale"] else "")) + " |"
+        for t in topics]
+    due = sum(1 for t in topics if t["stale"])
+    line = (f"{chosen['course']}: {counts['mastered']} of {len(topics)} topics mastered, "
+            f"{counts['shaky']} shaky, {counts['gap']} gap, {counts['unseen']} unseen; "
+            + (f"{due} due a recheck." if due else "none due a recheck."))
+    return {**out, "table": "\n".join(rows), "line": line}
+
+
 def cmd_check(data: dict) -> dict:
     _check_keys(data, {"now", "term", "course", "topics"})
     now = _moment(data, "now")
@@ -674,12 +746,13 @@ COMMANDS = {
     "check": (cmd_check, "status, counts and staleness for named topics"),
     "clock": (cmd_clock, "elapsed episode minutes and phase (teach, wrap, over)"),
     "debrief": (cmd_debrief, "post-exam debrief state, cram bill, verifier disagreements and next-course flag"),
+    "progress": (cmd_progress, "every mastery row with its evidence, counts and staleness, as a table"),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
-                             ("Mimir session runner. Subcommands: start, check, clock, debrief. Reads one JSON "
+                             ("Mimir session runner. Subcommands: start, check, clock, debrief, progress. Reads one JSON "
                               "object on stdin and prints one JSON object on stdout. Writes nothing."),
                              COMMANDS, argv)
 

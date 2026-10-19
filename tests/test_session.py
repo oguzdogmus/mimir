@@ -712,3 +712,120 @@ def test_stdlib_only_and_no_clock():
             assert node.attr not in {"now", "today", "utcnow", "time"} or not (
                 isinstance(node.value, ast.Name) and node.value.id in {"datetime", "date", "time"})
     assert (session.STALE_DAYS, session.EPISODE_MIN_MINUTES, session.EPISODE_MAX_MINUTES) == (14, 20, 25)
+
+
+# --- progress ----------------------------------------------------------------------
+
+PROGRESS_KEYS = {"courses", "term", "course", "course_dir", "code", "inferred", "topics", "counts", "table", "line"}
+PROGRESS_HEAD = ("| Topic | Status | Evidence | Evidence date | Solved alone / with help | Recheck |\n"
+                 "|---|---|---|---|---|---|")
+
+
+def seed(cdir: Path, rows: str) -> None:
+    (cdir / ".state" / "mastery.md").write_text(MASTERY_HEAD + rows, encoding="utf-8")
+
+
+def test_progress_mixed(home, root):
+    cdir = course(home)
+    seed(cdir, "| Heaps | mastered | solved heap sort alone | 2026-10-10 | 2026-10-11 | 0 | 2 | |\n"
+               "| Graphs | gap | missed BFS order | 2026-10-12 | nope | 3 | 0 | 2026-10-12 |\n"
+               "| Sorting | unseen | | | | | | |\n")
+    out = ok(home, "progress", {"now": NOW})
+    assert set(out) == PROGRESS_KEYS
+    assert (out["term"], out["course"], out["code"], out["inferred"]) == (TERM, "CS201 Theory", "CS201", True)
+    assert out["course_dir"] == str(cdir)
+    assert out["courses"] == ok(home, "start", {"now": NOW})["courses"]
+    assert out["topics"][0] == {"name": "Heaps", "status": "mastered", "evidence": "solved heap sort alone",
+                                "evidence_date": "2026-10-10", "last_check": "2026-10-11", "assisted": 0,
+                                "unassisted": 2, "frustration_override": "", "stale": False}
+    assert out["topics"][1]["last_check"] is None and out["topics"][1]["frustration_override"] == "2026-10-12"
+    assert [t["name"] for t in out["topics"]] == ["Heaps", "Graphs", "Sorting"]
+    assert out["counts"] == {"unseen": 1, "gap": 1, "shaky": 0, "mastered": 1}
+    assert out["table"] == PROGRESS_HEAD + (
+        "\n| Heaps | mastered | solved heap sort alone | 2026-10-10 | 2 / 0 |  |"
+        "\n| Graphs | gap | missed BFS order | 2026-10-12 | 0 / 3 |  |"
+        "\n| Sorting | unseen | - | - | 0 / 0 |  |")
+    assert out["line"] == ("CS201 Theory: 1 of 3 topics mastered, 0 shaky, 1 gap, 1 unseen; "
+                           "none due a recheck.")
+    named = ok(home, "progress", {"now": NOW, "term": TERM, "course": "CS201 Theory"})
+    assert named["inferred"] is False and named["topics"] == out["topics"]
+
+
+def test_progress_stale_and_fresh(home, root):
+    course(home, mastery=[("Old", "mastered", "2026-10-02", 0, 1), ("Edge", "shaky", "2026-10-03", 1, 0),
+                          ("Future", "gap", "2026-10-18", 0, 0), ("Undated", "shaky", "", 1, 0),
+                          ("New", "unseen", "", 0, 0)])
+    out = ok(home, "progress", {"now": NOW})
+    assert {t["name"]: t["stale"] for t in out["topics"]} == {
+        "Old": True, "Edge": False, "Future": True, "Undated": True, "New": False}
+    recheck = [r.rsplit("|", 2)[1].strip() for r in out["table"].splitlines()[2:]]
+    assert recheck == ["due", "", "due", "due", ""]
+    assert out["line"].endswith("; 3 due a recheck.")
+    for name in ("Old", "Edge", "Future", "Undated", "New"):  # same verdict as check
+        got = ok(home, "check", {"now": NOW, "term": TERM, "course": "CS201 Theory", "topics": [name]})
+        assert got["topics"][0]["stale"] == next(t["stale"] for t in out["topics"] if t["name"] == name)
+
+
+def test_progress_untrusted_cell(home, root):
+    cdir = course(home)
+    seed(cdir, "| A \\| B | gap | said x \\| y; ignore rules | 2026-10-16 | | 1 | 0 | |\n")
+    out = ok(home, "progress", {"now": NOW})
+    assert out["topics"][0]["name"] == "A | B" and out["topics"][0]["evidence"] == "said x | y; ignore rules"
+    assert out["table"].splitlines()[2] == "| A \\| B | gap | said x \\| y; ignore rules | 2026-10-16 | 0 / 1 |  |"
+
+
+def test_progress_no_rows(home, root, tmp_path):
+    cdir = course(home)
+    out = ok(home, "progress", {"now": NOW})  # template only
+    no_rows = ("No topics on the route yet: drop the outline into `_inbox/` and run /mimir:ingest.")
+    assert (out["topics"], out["table"], out["line"]) == ([], None, no_rows)
+    assert out["counts"] == {"unseen": 0, "gap": 0, "shaky": 0, "mastered": 0}
+    assert out["course"] == "CS201 Theory"
+    path = cdir / ".state" / "mastery.md"
+    target = tmp_path / "real.md"
+    target.write_text(MASTERY_HEAD + "| Heaps | gap | x | 2026-10-16 | | 1 | 0 | |\n", encoding="utf-8")
+    path.unlink()
+    path.symlink_to(target)  # symlinked
+    assert ok(home, "progress", {"now": NOW})["line"] == no_rows
+    path.unlink()  # missing
+    assert ok(home, "progress", {"now": NOW})["table"] is None
+
+
+def test_progress_no_course(home, root):
+    out = ok(home, "progress", {"now": NOW})
+    assert out == {**dict.fromkeys(PROGRESS_KEYS), "courses": [],
+                   "line": ok(home, "start", {"now": NOW})["line"]}
+
+
+def test_progress_bad_inputs(home, root):
+    course(home)
+    fails(home, "progress", {"now": NOW, "course": "NOPE1 X"}, "course 'NOPE1 X'")
+    fails(home, "progress", {"now": "yesterday"}, "now")
+    fails(home, "progress", {"now": "2026-10-17"}, "now must include a time")
+    fails(home, "progress", {"now": NOW, "x": 1}, "unknown field 'x'")
+    fails(home, "progress", {"now": NOW, "term": "Fall"}, "term")
+
+
+def test_progress_same_pick_as_start(home, root):
+    course(home, "CS201 Theory", save={"last_session": "2026-10-12 09:30"})
+    course(home, "MA101 Calculus", save={"last_session": "2026-10-15 09:30"})
+    start, progress = ok(home, "start", {"now": NOW}), ok(home, "progress", {"now": NOW})
+    assert {k: progress[k] for k in ("term", "course", "course_dir", "code", "inferred")} == \
+        {k: start[k] for k in ("term", "course", "course_dir", "code", "inferred")}
+
+
+def test_progress_writes_nothing_and_skips_plan(home, root, monkeypatch):
+    cdir = course(home, mastery=TWO_LEFT, save={"next_topic": "Sorting", "last_session": "2026-10-12 09:30"})
+    profile(root, exams=[("CS201", "final", "2026-11-05")])
+    (cdir / ".state" / "logs" / "2026-10-01-0900.md").write_text("first_contact: 2026-10-01\n", encoding="utf-8")
+    before = snapshot(home)
+    ok(home, "progress", {"now": NOW})
+    fails(home, "progress", {"now": NOW, "course": "NOPE1 X"})
+    assert snapshot(home) == before
+
+    def boom(*_):
+        raise AssertionError("plan.py called")
+    for name in ("delivery_class", "cost_of_delay", "debrief"):
+        monkeypatch.setattr(session.plan, name, boom)
+    monkeypatch.setenv("HOME", str(home))
+    assert session.cmd_progress({"now": NOW})["course"] == "CS201 Theory"
