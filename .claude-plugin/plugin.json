@@ -13,7 +13,8 @@
     "./skills/notation",
     "./skills/study",
     "./skills/past-questions",
-    "./skills/plan"
+    "./skills/plan",
+    "./skills/forecast"
   ],
   "agents": [
     "./agents/verifier.md",

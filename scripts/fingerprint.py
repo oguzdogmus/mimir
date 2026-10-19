@@ -251,6 +251,30 @@ def _counted(sources: list[dict]) -> set[str]:
     return {s["text"] for s in sources if s["kind"] == "debrief" or s["role"] == "past-papers"}
 
 
+def source_context(root: Path, course_dir: Path, fp_text: str | None) -> tuple[dict, dict | None, str, tuple | None]:
+    """Registries ``_sources`` checks against: (current, prior, prior_note, parsed prior_term).
+
+    ``fp_text`` is the course's fingerprint.md text (None when absent); its
+    ``prior_term:`` line decides whether ``prior-term:<path>`` sources are
+    allowed (``prior`` is None when they are not; ``prior_note`` says why).
+    """
+    prior_value = _key_value(fp_text, "prior_term") or ""
+    parsed = _parse_prior(prior_value)
+    index = course_dir / "INDEX.md"
+    current = {"index": index, "rows": ingest.registry(index)}
+    prior = None
+    prior_note = f"(it says {_short(prior_value)})" if prior_value else "(it is blank; run retake first)"
+    if parsed and parsed[2]:
+        link = course_dir / ".state" / _LINK
+        prior_state = root / parsed[0] / parsed[1] / ".state"
+        if link.is_symlink() and link.resolve() == prior_state.resolve():
+            prior_index = root / parsed[0] / parsed[1] / "INDEX.md"
+            prior = {"index": prior_index, "rows": ingest.registry(prior_index)}
+        else:
+            prior_note = f"and {link} to link to {prior_state} (run retake first)"
+    return current, prior, prior_note, parsed
+
+
 def cmd_write(data: dict) -> dict:
     keys = {"term", "course", "professor", *(k for k, _ in _SECTIONS), _TABLE[0]}
     _check_keys(data, keys)
@@ -266,19 +290,7 @@ def cmd_write(data: dict) -> dict:
     old = ingest.read_text(fp)
     prior_value = _key_value(old, "prior_term") or ""
     current_prof = _key_value(old, "professor")
-    parsed = _parse_prior(prior_value)
-    index = course_dir / "INDEX.md"
-    current = {"index": index, "rows": ingest.registry(index)}
-    prior = None
-    prior_note = f"(it says {_short(prior_value)})" if prior_value else "(it is blank; run retake first)"
-    if parsed and parsed[2]:
-        link = course_dir / ".state" / _LINK
-        prior_state = root / parsed[0] / parsed[1] / ".state"
-        if link.is_symlink() and link.resolve() == prior_state.resolve():
-            prior_index = root / parsed[0] / parsed[1] / "INDEX.md"
-            prior = {"index": prior_index, "rows": ingest.registry(prior_index)}
-        else:
-            prior_note = f"and {link} to link to {prior_state} (run retake first)"
+    current, prior, prior_note, parsed = source_context(root, course_dir, old)
 
     blocks: dict[str, list[tuple[str, list[dict]]]] = {}
     for key, _ in _SECTIONS:
