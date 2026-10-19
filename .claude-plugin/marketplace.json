@@ -1,0 +1,14 @@
+{
+  "name": "mimir",
+  "description": "Mimir, an exam study companion plugin for Claude Code.",
+  "owner": {
+    "name": "Oguz Dogmus"
+  },
+  "plugins": [
+    {
+      "name": "mimir",
+      "source": "./",
+      "description": "Mimir: Wisdom from the well, brought to your terminal. A study companion that teaches college students for their exams and remembers them across sessions."
+    }
+  ]
+}
