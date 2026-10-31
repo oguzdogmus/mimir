@@ -1,0 +1,79 @@
+# Original report: google-independent
+
+Source: <t3-thread://v2/4c5bcb11-81b0-41c1-95df-d92fe94a74a7/thread:delegated-task:command%3Amcp%3A135b902e-d7b3-42f5-997f-5cb0739fa9c2%3Adelegate-task%3A99766802-405e-428a-a041-ca8037fe935c>
+
+Historical agent report, not a new verification. Findings may overlap or disagree; use the consolidated findings and accepted decisions for implementation.
+
+Independent read-only audit of `/home/oguz/mimir` (`HEAD` `10853de`). Test suite status: `970 passed` (`uvx --offline pytest -q`; system `/usr/bin/python3` has no `pytest` installed). Offline/privacy/CSP claims in [README.md](file:///home/oguz/mimir/README.md#L13) and [visual.py](file:///home/oguz/mimir/scripts/visual.py#L284-L454) were audited and **hold up** (inlined KaTeX/fonts, SHA-256 CSP with `default-src 'none'`, strict SVG entity-decoded sanitizer, zero network imports across `scripts/`).
+
+---
+
+### 1. Antigravity's documented symlink install triggers `PermissionError` when reading Mimir's own `SKILL.md` files
+- **Location**: [README.md](file:///home/oguz/mimir/README.md#L44-L52), [SKILL.md](file:///home/oguz/mimir/skills/mimir-core-rules/SKILL.md#L10-L14)
+- **Impact**: High
+- **Effort**: Small
+- **Proposed fix**: Document adding `~/.gemini/config/plugins/mimir` as an extra workspace directory when launching Antigravity (or put the shell `cat` fallback hint directly in each skill's YAML `description` so the agent sees it *before* `view_file` fails; if recommending `cp -r` instead of `ln -s`, let `<mimir>` fall back to `~/.gemini/config/plugins/mimir` when `../..` lacks `scripts/`).
+- **Evidence**: `README.md:48-51` instructs `ln -s ~/.gemini/config/plugins/mimir/skills/mimir-* ~/.gemini/config/skills/`. Antigravity adds `config/skills` to allowed workspace roots, **not** `config/plugins/mimir`, and `view_file` resolves symlinks before checking bounds. Verified live in this Antigravity harness: calling `view_file` on the `<skills>` path `.../config/skills/mimir-core-rules/SKILL.md` fails with `PermissionError: Access to path '.../config/skills/mimir-core-rules/SKILL.md' is denied. It is outside the allowed workspace directories`. Meanwhile, the `cat` fallback in `mimir-core-rules/SKILL.md:14` is inside the very file the agent cannot open, and `cp -r` breaks `<mimir>` resolution (`mimir-core-rules/SKILL.md:10`, two levels above `SKILL.md` after `realpath`).
+
+### 2. `disable-model-invocation: true` hides `mimir-setup`, `mimir-ingest`, and `mimir-help` from natural-language and wrapper-app invocation (plus `model: haiku` drift)
+- **Location**: [SKILL.md](file:///home/oguz/mimir/skills/mimir-setup/SKILL.md#L4), [SKILL.md](file:///home/oguz/mimir/skills/mimir-ingest/SKILL.md#L4), [SKILL.md](file:///home/oguz/mimir/skills/mimir-help/SKILL.md#L5-L6), [README.md](file:///home/oguz/mimir/README.md#L48-L70)
+- **Impact**: High
+- **Effort**: Trivial
+- **Proposed fix**: Remove `disable-model-invocation: true` from `mimir-help` (read-only) and either remove it from `mimir-setup` and `mimir-ingest` (both already gate writes on explicit student confirmation) or update `README.md:58-70` so Quick Start uses explicit `/mimir:...` / `$mimir-...` / `/mimir-...` syntax and notes that ACP wrapper apps cannot invoke disabled skills. Remove Claude-only `model: haiku` from `mimir-help/SKILL.md:6`.
+- **Evidence**: Verified live in this Antigravity session's `<skills>` prompt: only **9 of 12** skills are injected (`mimir-setup`, `mimir-ingest`, and `mimir-help` are stripped, whereas `mimir-core-rules` and `mimir-notation` with Claude-only `user-invocable: false` remain visible). This breaks `README.md:70` (*"You can also just say what you want ... and the agent picks the skill"*), breaks bare `mimir-setup` / `mimir-ingest` in `README.md:58-60`, and makes all three unreachable in Antigravity wrapper apps (`README.md:48`, *"If you use Antigravity through another app..."*) where CLI slash expansion does not run.
+
+### 3. macOS and Windows portability claims fail on GNU `date -d` (breaking 100% of `mimir-study` Q0 exam dates on macOS), POSIX heredocs, and `os.symlink`
+- **Location**: [README.md](file:///home/oguz/mimir/README.md#L82-L84), [session.md](file:///home/oguz/mimir/skills/mimir-study/references/session.md#L15-L17), [urgent.md](file:///home/oguz/mimir/skills/mimir-study/references/urgent.md#L13-L14), [fingerprint.py](file:///home/oguz/mimir/scripts/fingerprint.py#L456)
+- **Impact**: High
+- **Effort**: Small
+- **Proposed fix**: Replace shell `date -d` / `date -Iseconds` calls in `skills/` with a small stdlib `datetime` helper subcommand in `session.py` or `plan.py`, fall back to copying/junctions when `os.symlink` raises `OSError` on Windows (`fingerprint.py:456`), and either avoid `<<'EOF'` heredocs or state in `README.md:82` that Windows requires WSL/Git Bash.
+- **Evidence**: `README.md:82` states Mimir *"should work on other Linux distributions, macOS, Windows and WSL without problems."* However, `session.md:15` and `urgent.md:13` require `date -d '<phrase>' +%F` **and** `date -d '366 days' +%F`, treating any failed command as `unparsed` -> `unknown` (`"Never work out a date yourself"`). BSD `date` on macOS has no GNU `-d` flag (as [mimir-setup/SKILL.md](file:///home/oguz/mimir/skills/mimir-setup/SKILL.md#L28) itself acknowledges), so even `"2026-11-05"` or `"exam tomorrow, help"` always fails on macOS, forcing `Standard` delivery and aborting Urgent lazy setup (`urgent.md:14`). On native Windows (`powershell`/`cmd`), all 12 `<<'EOF'` heredoc invocations fail syntax parsing and `os.symlink` (`fingerprint.py:456`) raises `WinError 1314` without Developer Mode.
+
+### 4. Headline Urgent cold-start (`"exam tomorrow, help"` + attached past paper, no workspace) fails before filing in Codex and Antigravity
+- **Location**: [README.md](file:///home/oguz/mimir/README.md#L9), [urgent.md](file:///home/oguz/mimir/skills/mimir-study/references/urgent.md#L18-L20), [pdftext.py](file:///home/oguz/mimir/scripts/pdftext.py#L338-L341), [workspace.py](file:///home/oguz/mimir/scripts/workspace.py#L345-L357)
+- **Impact**: High
+- **Effort**: Small
+- **Proposed fix**: Stage/copy external attachments into `<root>` before inspecting them (or allow `pdftext.py` on an explicit path during lazy setup), and let [`cmd_file`](file:///home/oguz/mimir/scripts/workspace.py#L332-L361) fall back to `shutil.copy2` when unlinking an outside-workspace source raises `PermissionError`.
+- **Evidence**: `urgent.md:18` instructs the agent to read the attached file *first* (e.g. `~/Downloads/final.pdf` or `~/Downloads/photo.jpg`) to infer `course`/`term` before `workspace.py file` creates the workspace at `urgent.md:20`. (1) For PDFs in Codex/Antigravity, `pdftext.py:338-341` calls `workspace.resolve_root()` and exits `2` (`"{path} is not inside the learning root {root}"`); (2) Antigravity's `view_file` blocks `~/Downloads/*` outside `~/learning`; (3) Codex's default `workspace-write` sandbox blocks `shutil.move` (`urgent.md:20`, *"moves the original (never copy it)"*) from unlinking files in `~/Downloads`.
+
+### 5. Non-Claude answer-key verification loses context isolation AND `helpers/verifier.md` fails on every PDF citation
+- **Location**: [SKILL.md](file:///home/oguz/mimir/skills/mimir-core-rules/SKILL.md#L16), [verified-items.md](file:///home/oguz/mimir/skills/mimir-core-rules/references/verified-items.md#L8), [verifier.md](file:///home/oguz/mimir/helpers/verifier.md#L6-L27), [plugin.json](file:///home/oguz/mimir/plugin.json#L1-L18)
+- **Impact**: High
+- **Effort**: Small
+- **Proposed fix**: Instruct `mimir-core-rules/SKILL.md:16` and `verified-items.md:8` to dispatch native subagents when present (Codex `spawn_agent`, Antigravity `invoke_subagent` with `research`/`self`) before falling back to same-turn self-review, pass `<mimir>/scripts/pdftext.py` in the verifier prompt, and update `helpers/verifier.md:18-27` so non-Claude agents read `.pdf` citations via `pdftext.py pages` instead of returning `ambiguous`.
+- **Evidence**: `agy plugin validate /home/oguz/mimir --strict --json` reports `"agents": 0`, and `verified-items.md:8` hardcodes Claude's `subagent_type` `mimir:verifier`. Under `mimir-core-rules/SKILL.md:16`, Codex and Antigravity run verification in the **same conversation context** that just authored the draft answer key (undermining `README.md:11` / `verifier.md:3` *"Independently checks"*). Worse, `verifier.md:6,18,27` restricts tools to file reading (`tools: Read, Grep, Glob`, *"If a cited file or page cannot be read, the verdict is `ambiguous`"*), never mentioning `pdftext.py`; since neither Codex nor Antigravity has a native PDF `Read` tool, literal adherence marks every `[real: *.pdf, p.N]` item `ambiguous` twice and drops/disputes valid past-paper questions.
+
+### 6. `mimir-setup` custom root / relocation (`~/.config/mimir/root`) and README first-run order collide with Codex and Antigravity sandboxes
+- **Location**: [README.md](file:///home/oguz/mimir/README.md#L48-L58), [SKILL.md](file:///home/oguz/mimir/skills/mimir-setup/SKILL.md#L18-L26), [workspace.py](file:///home/oguz/mimir/scripts/workspace.py#L138-L139)
+- **Impact**: Medium
+- **Effort**: Small
+- **Proposed fix**: Change `README.md:48` to `mkdir -p ~/learning && cd ~/learning && agy` (since `~/learning` does not exist before `mimir-setup`), pass profile fields through `workspace.py` CLI instead of direct file edits when outside CWD, and warn in `mimir-setup` that choosing/relocating to a custom folder requires write access to `~/.config/mimir/root` and restarting the agent inside the new folder.
+- **Evidence**: `README.md:48` tells new users to `cd ~/learning && agy` before step 1 (`README.md:58`, *"Run `mimir-setup` once to create your learning folder"*). If a user picks a custom root or relocates (`mimir-setup/SKILL.md:18-26`), [`_write_pointer`](file:///home/oguz/mimir/scripts/workspace.py#L148-L152) writes `~/.config/mimir/root` and target directories outside CWD — blocked by Codex's default `workspace-write` sandbox — and `mimir-setup/SKILL.md:25` (*"Edit `.state/profile.md` under the `root` from the last returned JSON"*) is blocked by Antigravity's file-tool workspace jail.
+
+### 7. `.docx`/`.pptx`/`.odt`/`.odp` files are indexed as `fidelity: "text"` with `pages: null`, letting `verify.py gate` waive verification on unreadable files
+- **Location**: [ingest.py](file:///home/oguz/mimir/scripts/ingest.py#L28-L29), [ingest.py](file:///home/oguz/mimir/scripts/ingest.py#L289-L290), [SKILL.md](file:///home/oguz/mimir/skills/mimir-ingest/SKILL.md#L15), [verify.py](file:///home/oguz/mimir/scripts/verify.py#L212-L217), [verify.py](file:///home/oguz/mimir/scripts/verify.py#L253-L256)
+- **Impact**: Medium
+- **Effort**: Small
+- **Proposed fix**: In [`_gate_item`](file:///home/oguz/mimir/scripts/verify.py#L253-L256), require `row[1] is not None` (or mark `docx/pptx/odt/odp` as non-`text` fidelity in `ingest.py` unless a stdlib `zipfile`+`xml.etree.ElementTree` text extractor is added) so `quote` citations against Office/ODF binaries cannot bypass `verifier`.
+- **Evidence**: `mimir-ingest/SKILL.md:15` states `"Items the Read tool cannot open (e.g. docx, pptx, odt, odp, HEIC, TIFF): guess from the file name and folder path only"`. Yet `ingest.py:289-290` assigns `docx/pptx/odt/odp` `"fidelity": "text", "pages": None`. In `verify.py:212-217, 253-256`, [`_in_range`](file:///home/oguz/mimir/scripts/verify.py#L212-L217) returns `True` for *any* `page >= 1` when `pages is None`, so `quote: {"path": "slides/deck.pptx", "page": 99}` gets `needs_verification = False` and `decision = "show"` without any agent ever opening the file.
+
+### 8. `plan.py`'s calibrated timing and topic-weight engine is dead code end-to-end (`session.py` hardcodes `"timed": []` and `"weight": 1`)
+- **Location**: [session.py](file:///home/oguz/mimir/scripts/session.py#L516-L525), [visual.py](file:///home/oguz/mimir/scripts/visual.py#L665), [plan.py](file:///home/oguz/mimir/scripts/plan.py#L39-L41), [plan.py](file:///home/oguz/mimir/scripts/plan.py#L414-L426)
+- **Impact**: Medium
+- **Effort**: Small
+- **Proposed fix**: Populate `timed` durations from `.state/logs/` and topic `weight` (`1..3`) from `fingerprint.md` inside [`plan_payload`](file:///home/oguz/mimir/scripts/session.py#L483-L530) (shared by `visual.py:665`), and add an integration test spanning `session.py` -> `plan.py`.
+- **Evidence**: `plan.py` implements weighted topics (`1..3`) and empirical calibration (`CALIBRATION_THRESHOLD = 3`, switching from `"rough: no topics timed yet, ±50%"` to `"based on {n} timed topics"`), tested in isolation in `test_plan.py`. In production, `session.py:516-517` (`"weight": 1`) and `session.py:524-525` (`"timed": []`) hardcode empty calibration data, so every course permanently stays on `"rough: no topics timed yet, ±50%"` and weights every topic equally regardless of completed study logs.
+
+### 9. Manifest drift, leftover Claude-specific prose, and gaps in `tests/test_portability.py`
+- **Location**: [marketplace.json](file:///home/oguz/mimir/.claude-plugin/marketplace.json#L3-L12), [test_portability.py](file:///home/oguz/mimir/tests/test_portability.py#L12-L48), [SKILL.md](file:///home/oguz/mimir/skills/mimir-notation/SKILL.md#L35), [SKILL.md](file:///home/oguz/mimir/skills/mimir-ingest/SKILL.md#L15), [README.md](file:///home/oguz/mimir/README.md#L3)
+- **Impact**: Low
+- **Effort**: Trivial
+- **Proposed fix**: Update `.claude-plugin/marketplace.json:3` description (Codex reads this manifest too) and add `"version": "0.2.0"` to `plugins[0]`; neutralize `"A machine Claude constructed"` (`mimir-notation/SKILL.md:35`), `"the Read tool"` (`mimir-ingest/SKILL.md:15`), and `"a Bash call"` ([visual-builder.md](file:///home/oguz/mimir/helpers/visual-builder.md#L44)); extend `test_portability.py` to assert `set(claude["skills"]) == {f"./skills/{d.name}" for d in SKILLS}`, `README.md:3` version parity, and portable frontmatter keys.
+- **Evidence**: `.claude-plugin/marketplace.json:3` still reads `"Mimir, an exam study companion plugin for Claude Code."` (`codex plugin list` loads `.claude-plugin/marketplace.json`). [`test_manifests_agree`](file:///home/oguz/mimir/tests/test_portability.py#L39-L48) verifies `claude["agents"]` exist on disk but never checks `claude["skills"]` against `skills/*` or `README.md`'s `**Version 0.2.0**`, and [`FORBIDDEN`](file:///home/oguz/mimir/tests/test_portability.py#L24-L29) misses `"Claude"` / `"Read tool"` / `"Bash call"` and `model: haiku|sonnet`.
+
+### 10. `release_check.py` uses `/tmp` (false browser failure on Snap/Flatpak Linux) and `.gitignore` leaks scratch files into local plugin installs
+- **Location**: [release_check.py](file:///home/oguz/mimir/scripts/release_check.py#L68), [RELEASE.md](file:///home/oguz/mimir/RELEASE.md#L16-L29), [.gitignore](file:///home/oguz/mimir/.gitignore#L1-L3)
+- **Impact**: Low
+- **Effort**: Trivial
+- **Proposed fix**: Allocate `release_check.py`'s scratch folder under `~/.cache/mimir/` (matching `$HOME` reachability of real `<course>/.state/out/` visuals) with `/tmp` fallback, add `.claude/`, `.agents/`, `.gemini/`, and local scratch notes to `.gitignore`, and note `uvx pytest -q` / venv setup alongside `python3 -m pytest -q` in `RELEASE.md:19`.
+- **Evidence**: Real visuals live under `$HOME`, which Snap/Flatpak browsers can open, whereas [`main`](file:///home/oguz/mimir/scripts/release_check.py#L68) uses `tempfile.mkdtemp(prefix="mimir release check ")` in `/tmp` — Snap-confined Firefox/Chromium on Ubuntu have private `/tmp` namespaces, so `xdg-open` returns `0` (`opened_html: true`) while the browser renders `File not found`, falsely blocking `RELEASE.md:16`. Meanwhile, `.gitignore` only ignores `__pycache__/`, `*.pyc`, and `.pytest_cache/`, so `codex plugin add ~/mimir` / `agy plugin install ~/mimir` copies untracked repo files (`userfeedback.md`, `.claude/`) into plugin caches.
