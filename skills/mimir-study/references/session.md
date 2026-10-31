@@ -51,7 +51,7 @@ The episode runs 20 to 25 minutes, measured only by `session.py clock`. When the
 
 Right after `E`, Read `<root>/.state/profile.md` once (the always-loaded tier): `course_language`, `teaching_language`, `dial_preference` and `## Rung hints`, used by `teaching.md`. If `profile.md` is missing or unreadable, treat all four as not set and skip every profile Edit in `teaching.md`, saying nothing about it. When `dial_preference` is set (not empty, `none` or a `<...>` placeholder), say "Fewer questions, as you asked on <its date>." before the first topic, the date being the `(<YYYY-MM-DD>)` in it; when it has no such date, say "Fewer questions, as you asked before." Never invent a date.
 
-Topic `T` is `start`'s `topic`. When it is null, say one line, "Your route is complete: every topic is mastered in mastery.md. Want a `mimir-quiz` to keep it fresh?", and close (section 5, with no topic). For each later topic, and for any prerequisite of `T` you would rely on, run `session.py check` with `{"now": "<date -Iseconds>", "term": "...", "course": "...", "topics": ["<T>", "<prerequisite>", ...]}`.
+Topic `T` is `start`'s `topic`. When it is null, say `start`'s `route_line` verbatim (no topics on the route yet, or the route is complete) and close (section 5, with no topic). When `T` is `mastered` (every topic is mastered and `T` is stale), ask only its recheck (step 1 below): right, close; wrong, go on to step 3 for `T`. For each later topic, and for any prerequisite of `T` you would rely on, run `session.py check` with `{"now": "<date -Iseconds>", "term": "...", "course": "...", "topics": ["<T>", "<prerequisite>", ...]}`.
 
 ### Questions
 Every check and practice question is an item `{"topic": "<topic>", "origin": "practice"}` (add `compare` `{path, page, question?}` when a solved reference for the same question type exists in the registry), with the question, its marks, a complete worked answer key and one hint. Before showing any, gate and verify them: Read `<mimir>/skills/mimir-core-rules/references/verified-items.md` and follow it. Show only `show` and `flagged` items, each opening with the gate's `label` verbatim, then the question; a `flagged` item also gets its `flag` line. When the gate drops the recheck or practice item, say its dropped line, record nothing for it, and go on with the episode. Never show an answer key before the student answers. "hint": the prepared hint. "skip", "idk": show the key; it counts as wrong. "just tell me", an all-caps message of at least 3 words that is not an answer to the question showing (so "OK", "BFS", "O(N)", "NP" never count), or a second "idk" in a row is a frustration signal: follow `teaching.md` §4 instead (before an attempt-first attempt, `teaching.md` §5 governs "hint", "skip" and "idk").
@@ -71,10 +71,10 @@ Evidence names the item and its label (e.g. `study recheck [practice, not from a
 
 ## 5. Close
 
-1. `next_topic`: `T` when its teach step was cut short, else the next `remaining` topic after `T` that is not `mastered` now; empty when none is left. When `start`'s `topic` was null (route complete), `current_topic:` and `next_topic:` are both blank.
+1. `next_topic`: `T` when its teach step was cut short, else the next `remaining` topic after `T` that is not `mastered` now; empty when none is left. When `start`'s `topic` was null (no route yet, or route complete), `current_topic:` and `next_topic:` are both blank.
 2. Cliffhanger: end with one question on `next_topic` that the student can almost answer from today's work, tied to what comes next. Never homework, never "try this before next time". Keep its intended answer for `resolution:` without showing it. No cliffhanger when `next_topic` is empty.
 3. Write `save.md` in the template's shape, every field, at most 30 lines:
-   - `current_topic:` `T` (blank when the route was complete); `next_topic:`; `cliffhanger:`; `resolution:`;
+   - `current_topic:` `T` (blank when `start`'s `topic` was null); `next_topic:`; `cliffhanger:`; `resolution:`;
    - `last_class: Standard`; `last_session:` the output of `date '+%F %H:%M'`;
    - `status: on-track` (`at-risk` only for an Urgent session);
    - `pending_debrief:` `<start's exam> <exam_name, else exam>` (e.g. `2026-11-05 final`) when it is empty or `no` and `start`'s `exam` is set (a debrief run in §1 step 9 has just made it `no`); otherwise unchanged;

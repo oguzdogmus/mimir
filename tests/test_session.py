@@ -114,7 +114,7 @@ def test_calm(home, root):
     assert (out["exam"], out["exam_name"], out["q0"], out["code"]) == ("2026-11-05", "final", False, "CS201")
     assert out["inferred"] is True and out["first_contact"] is None
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
-                        "exam_name", "q0", "remaining", "class", "delay_line", "topic",
+                        "exam_name", "q0", "remaining", "class", "delay_line", "topic", "route_line",
                         "first_contact", "debrief", "line"}
 
 
@@ -234,6 +234,7 @@ def test_topic_null_when_route_done(home, root):
     out = ok(home, "start", {"now": NOW})
     assert out["topic"] is None and out["remaining"] == []
     assert out["delay_line"] == "Cost of delay: no topics left on the route."
+    assert out["route_line"] == ROUTE_DONE
 
 
 def test_topic_stale_flag(home, root):
@@ -244,6 +245,83 @@ def test_topic_stale_flag(home, root):
 def test_start_topic_attempt_first(home, root):
     course(home, mastery=[("Graphs", "shaky", "2026-10-10", 3, 0)])
     assert ok(home, "start", {"now": NOW})["topic"]["attempt_first"] is True
+
+
+# --- start: the route (D1) ----------------------------------------------------------
+
+NO_ROUTE = ("No topics on the route yet: drop the outline, slides or past papers into `_inbox/` "
+            "and run mimir-ingest.")
+ROUTE_DONE = ("Your route is complete: every topic is mastered in mastery.md. "
+              "Want a `mimir-quiz` to keep it fresh?")
+
+
+def index(cdir: Path, registry=(), topics=()) -> None:
+    """Write the course INDEX.md: registry (path, role) rows and (topic, target) rows."""
+    text = ("# INDEX\n\n## Registry\n| path | term | role | pages | fidelity |\n|---|---|---|---|---|\n"
+            + "".join(f"| {p} | {TERM} | {r} | 3 | text |\n" for p, r in registry)
+            + "\n## Topics\n| topic | file#anchor |\n|---|---|\n"
+            + "".join(f"| {t} | {f} |\n" for t, f in topics))
+    (cdir / "INDEX.md").write_text(text, encoding="utf-8")
+
+
+SLIDES = [("slides/w1.pdf", "slides"), ("slides/w2.pdf", "slides")]
+SLIDE_TOPICS = [("Heaps", "slides/w1.pdf#page=1"), ("Graphs", "slides/w1.pdf#page=2"),
+                ("heaps", "slides/w2.pdf#page=1"), ("Sorting  \\| merge", "slides/w2.pdf#page=3")]
+
+
+def test_route_empty_is_no_route_yet(home, root):
+    cdir = course(home)
+    out = ok(home, "start", {"now": NOW})
+    assert out["topic"] is None and out["remaining"] == []
+    assert out["route_line"] == NO_ROUTE
+    index(cdir, SLIDES)  # files indexed, no topics
+    assert ok(home, "start", {"now": NOW})["route_line"] == NO_ROUTE
+
+
+def test_route_from_index_without_outline(home, root):
+    cdir = course(home)
+    index(cdir, SLIDES, SLIDE_TOPICS)
+    out = ok(home, "start", {"now": NOW})
+    assert out["remaining"] == [{"name": "Heaps", "status": "unseen"}, {"name": "Graphs", "status": "unseen"},
+                                {"name": "Sorting | merge", "status": "unseen"}]  # ingestion order, no duplicate
+    assert out["topic"]["name"] == "Heaps" and out["route_line"] is None
+    assert ok(home, "start", {"now": NOW})["remaining"] == out["remaining"]  # repeat start: same route
+
+
+def test_route_from_past_papers_keeps_studied_rows(home, root):
+    cdir = course(home, mastery=[("Graphs", "mastered", "2026-10-16", 0, 1)])
+    index(cdir, [("past-papers/2024.pdf", "past-papers")],
+          [("Heaps", "past-papers/2024.pdf#page=1"), ("graphs", "past-papers/2024.pdf#page=2")])
+    out = ok(home, "start", {"now": NOW})
+    assert out["remaining"] == [{"name": "Heaps", "status": "unseen"}]  # Graphs mastered, not duplicated
+    assert out["topic"]["name"] == "Heaps"
+    progress = ok(home, "progress", {"now": NOW})
+    assert [t["name"] for t in progress["topics"]] == ["Graphs", "Heaps"]
+
+
+def test_route_outline_is_kept(home, root):
+    cdir = course(home, mastery=[("Graphs", "unseen", "", 0, 0)])
+    index(cdir, [("outline/syllabus.pdf", "outline")] + SLIDES, SLIDE_TOPICS)
+    out = ok(home, "start", {"now": NOW})
+    assert out["remaining"] == [{"name": "Graphs", "status": "unseen"}]
+
+
+def test_route_all_mastered_fresh_is_complete(home, root):
+    cdir = course(home, mastery=[("Heaps", "mastered", "2026-10-16", 0, 1),
+                                 ("Graphs", "mastered", "2026-10-10", 0, 1)])
+    index(cdir, SLIDES, SLIDE_TOPICS[:2])
+    out = ok(home, "start", {"now": NOW})
+    assert out["topic"] is None and out["route_line"] == ROUTE_DONE
+
+
+def test_route_all_mastered_stale_rechecks_one(home, root):
+    course(home, mastery=[("Heaps", "mastered", "2026-10-16", 0, 1),
+                          ("Graphs", "mastered", "2026-09-01", 0, 1),
+                          ("Sorting", "mastered", "2026-09-02", 0, 1)])
+    out = ok(home, "start", {"now": NOW})
+    assert out["remaining"] == [] and out["route_line"] is None
+    assert out["topic"] == {"name": "Graphs", "status": "mastered", "evidence_date": "2026-09-01",
+                            "stale": True, "attempt_first": False}
 
 
 def test_first_contact_from_logs(home, root):
@@ -775,7 +853,7 @@ def test_progress_untrusted_cell(home, root):
 def test_progress_no_rows(home, root, tmp_path):
     cdir = course(home)
     out = ok(home, "progress", {"now": NOW})  # template only
-    no_rows = ("No topics on the route yet: drop the outline into `_inbox/` and run mimir-ingest.")
+    no_rows = NO_ROUTE
     assert (out["topics"], out["table"], out["line"]) == ([], None, no_rows)
     assert out["counts"] == {"unseen": 0, "gap": 0, "shaky": 0, "mastered": 0}
     assert out["course"] == "CS201 Theory"
