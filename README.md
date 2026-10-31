@@ -1,4 +1,4 @@
-# Mimir: Wisdom from the well, brought to your terminal
+# Mimir: A head start, literally
 
 **Version 0.1.0** · early release, features and file layout may still change ([what's planned](#planned-changes))
 
