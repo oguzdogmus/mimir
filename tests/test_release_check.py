@@ -130,11 +130,11 @@ def test_unwritable_temp_folder_exits_2_with_one_line(monkeypatch, capsys):
 
 def test_help_lists_every_user_command():
     plugin = json.loads((ROOT_DIR / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    help_text = (ROOT_DIR / "skills" / "help" / "SKILL.md").read_text(encoding="utf-8")
+    help_text = (ROOT_DIR / "skills" / "mimir-help" / "SKILL.md").read_text(encoding="utf-8")
     for entry in plugin["skills"]:
         name = entry.rstrip("/").rsplit("/", 1)[-1]
         front = (ROOT_DIR / "skills" / name / "SKILL.md").read_text(encoding="utf-8").split("---")[1]
         if "user-invocable: false" in front:
-            assert f"/mimir:{name}`" not in help_text, name
+            assert f"`{name}`" not in help_text, name
         else:
-            assert f"| `/mimir:{name}` |" in help_text, name
+            assert f"| `{name}` |" in help_text, name
