@@ -4,7 +4,7 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <now|parse-date|start|check|clock|debrief|progress>  < input.json
+    python3 session.py <now|parse-date|start|check|clock|debrief|progress|record>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -189,6 +189,17 @@ progress -- what Mimir believes the student knows. Read-only; never calls plan.p
     ends "; none due a recheck." when no topic is stale. No rows: ``topics``
     [], ``table`` null, line ``start``'s empty-route ``route_line``. No course: ``start``'s line,
     ``courses`` as ``start``'s, every other field null.
+
+record -- persist an eligible answer or a frustration override.
+    Required: term, course, topic, item (stable identity), gate (the verifier
+    result), outcome (unassisted|assisted|wrong), real_past_paper (boolean),
+    session (unique identity), date (YYYY-MM-DD). Optional override and
+    explanation_only booleans distinguish control events from item attempts.
+    Alternatively {term, course, topic, initialize: true} adds an unseen topic.
+    Returns status, recorded, duplicate and line. See the shared recording
+    reference for examples and audit D2/D5 for exact transition semantics.
+    Legacy Markdown is retained; recorder-owned JSON in a trailing comment
+    supplies authoritative rows to check, start and progress.
 
 Exit codes: invalid input (bad field, unknown course, no workspace) exits 2
 with one line on stderr (``session.py: <message>``) naming the field, and
@@ -1004,7 +1015,7 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
-                             ("Mimir session runner. Subcommands: now, parse-date, start, check, clock, debrief, progress. Reads one JSON "
+                             ("Mimir session runner. Subcommands: now, parse-date, start, check, clock, debrief, progress, record. Reads one JSON "
                               "object on stdin and prints one JSON object on stdout. Only record writes mastery state."),
                              COMMANDS, argv)
 
