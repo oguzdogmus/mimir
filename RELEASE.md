@@ -29,7 +29,7 @@ Then fill in that OS's row below, with the commit you ran (`git rev-parse --shor
 
 | OS | Date | Commit | Opened (exit code) | Rendered (by eye) | Tester | Notes |
 |---|---|---|---|---|---|---|
-| Linux | 2026-10-19 | e03dcfd + story 15 | yes, both (exit 0) | passed: HTML in Firefox, SVG in Gwenview, platform text right | Claude Code run, eye check by the maintainer | CachyOS, KDE on Wayland, Python 3.14.8. SVG opens in the system SVG default (Gwenview), accepted by design. |
+| Linux | 2026-10-19 | 71ed3ae + story 15 | yes, both (exit 0) | passed: HTML in Firefox, SVG in Gwenview, platform text right | Claude Code run, eye check by the maintainer | CachyOS, KDE on Wayland, Python 3.14.8. SVG opens in the system SVG default (Gwenview), accepted by design. |
 | macOS | pending | pending | pending | pending | pending | |
 | Windows | pending | pending | pending | pending | pending | |
 | WSL | pending | pending | pending | pending | pending | |
