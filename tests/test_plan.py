@@ -498,6 +498,19 @@ def test_triage_mastered_is_skipped():
     assert names(out) == ["B"]
     assert out["skip"] == [{"name": "A", "reason": "mastered"}]
     assert out["line"] == "Drilling: B. Skipping: A (mastered)."
+    urgent = ok("triage", {"now": NOW, "exam": None, "class": "Urgent",
+                           "types": [qtype("A", status="mastered"), qtype("B")]})
+    assert urgent == out  # Urgent is the default
+
+
+def test_triage_standard_includes_mastered():
+    types = [qtype("A", 20, status="mastered"), qtype("B", 10, status="gap"), qtype("C", status="mastered")]
+    out = ok("triage", {"now": NOW, "exam": None, "class": "Standard", "types": types})
+    assert names(out) == ["A", "B", "C"] and out["skip"] == []  # ranked by pph like the rest
+    assert out["line"] == "Drilling: A, B, C."
+    only = ok("triage", {"now": NOW, "exam": None, "class": "Standard", "types": [qtype("A", status="mastered")]})
+    assert names(only) == ["A"]
+
 
 
 def test_triage_budget():
@@ -610,6 +623,7 @@ TRIAGE = {"now": NOW, "exam": None}
     ({**TRIAGE, "types": ["A"]}, "types[0] must be an object"),
     ({**TRIAGE}, "types is required"),
     ({**TRIAGE, "types": [], "basis": "slides"}, "basis must be one of"),
+    ({**TRIAGE, "types": [], "class": "standard"}, "class must be one of"),
     ({"exam": None, "types": []}, "now is required"),
     ({"now": NOW, "exam": "2026-10-16", "types": []}, "exam is not in the future"),
 ])

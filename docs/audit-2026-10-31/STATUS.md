@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-31.
 Documentation baseline: `10853de7811ac4cb077a7c8c035460c3ea5b75a3`.
-Current work: issues #5–#14 published; no implementation started.
+Current work: step 2 (issue #7) ready for review on `fix/route-correctness`.
 Next action: start any unblocked step (1, 2, 3, 5 or 7; issues #6, #7, #8, #9, #10) with the prompt in HANDOFF.md.
 
 ## Step tracker
@@ -10,7 +10,7 @@ Next action: start any unblocked step (1, 2, 3, 5 or 7; issues #6, #7, #8, #9, #
 | Step | Findings | State | Branch / commit / PR | Validation |
 |---|---|---|---|---|
 | 1 | 1, 4, 15, 25 partial | Ready to start | issue [#6](https://github.com/oguzdogmus/mimir/issues/6) | Not run |
-| 2 | 2, 10, 11 | Ready to start | issue [#7](https://github.com/oguzdogmus/mimir/issues/7) | Not run |
+| 2 | 2, 10, 11 | Ready for review | issue [#7](https://github.com/oguzdogmus/mimir/issues/7); branch `fix/route-correctness` (not pushed) | Targeted 332 passed; full 978 passed |
 | 3 | 3 | Ready to start | issue [#8](https://github.com/oguzdogmus/mimir/issues/8) | Not run |
 | 4 | 8, 9, 12 | Blocked by 3 | issue [#11](https://github.com/oguzdogmus/mimir/issues/11) | Not run |
 | 5 | 7, 13, 19–21, 23, 24, 26 | Ready to start | issue [#9](https://github.com/oguzdogmus/mimir/issues/9) | Not run |
@@ -37,6 +37,20 @@ None recorded after the audit. Add entries as:
 `N01 | symptom | file/function | evidence/reproduction | impact | suggested fix | destination step`.
 
 ## Work log
+
+### 2026-10-31 — Step 2: route correctness (findings 2, 10, 11; D1)
+
+Branch `fix/route-correctness` from `84e8b38`, not pushed, no PR.
+
+- Finding 2 / D1: `session.py` builds the route at read time and stays read-only. The route is the `mastery.md` rows in order. When the `INDEX.md` registry has no `outline` row, each `## Topics` name not yet listed follows as an unseen row, in INDEX order, compared ignoring case and repeated spaces. Nothing is written, so repeated starts cannot duplicate topics. `progress` and the debrief cram payload use the same route. New `ingest.topics()` reads the topic names.
+- `start` has a new `route_line` field. It is null when a topic is picked. Otherwise it says "No topics on the route yet: drop the outline, slides or past papers into `_inbox/` and run mimir-ingest." for an empty route, or the route-complete line. `session.md` and `mimir-plan` print it instead of assuming "every topic is mastered".
+- Finding 10: with nothing unmastered left, `start` picks a stale mastered topic (`next_topic` first, else route order). `session.md` asks only its recheck: right closes, wrong teaches.
+- Finding 11: `plan.py triage` takes optional `class` (`Urgent` default, `Standard`). Standard ranks mastered types with the rest; Urgent output is unchanged. `urgent.md` §2 step 3 passes `start`'s `class.class`, which `mimir-past-questions` step 5 follows.
+- Decision: "an outline supplies the route" means the registry has an `outline` row. If an outline produced no `mastery.md` rows, there is no fallback and the student sees the no-route line. This is rare, since ingest step 9 appends every outline topic.
+- Commands: `uvx pytest tests/test_session.py tests/test_plan.py tests/test_ingest.py -q` gave 332 passed. `uvx pytest tests -q` gave 978 passed. `uvx ruff check scripts tests` reports the same errors as on `main`; none are new.
+- Review: a standards and spec review found no blockers. Doc drift ("urgent triage"), a duplicated unseen-row literal and a missing empty-topics test were fixed.
+- Unrun checks: no live host run of the study or past-questions skills.
+- Next action: user review, then push and open a PR when asked.
 
 ### 2026-10-31 — Issues published
 

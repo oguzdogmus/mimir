@@ -38,7 +38,7 @@ Reached from `session.md` §1 step 2 only when the opening message names a file 
    - No question-type rows: one type per `start` `remaining` topic instead, `marks` null, `seen` and `papers` 0, `status` from `remaining`, `basis` `outline`.
    - No question-type rows and `remaining` empty: one type per distinct topic in the `## Topics` of `INDEX.md`, `marks` null, `seen` and `papers` 0, `status` via `check` as above, `basis` `outline` (e.g. a lazy setup from a notes-only photo).
    A type from a `(tentative)` row is said "from a photo/scan, may be off" whenever you name it beyond the triage line.
-3. `plan.py triage` with `{"now": "<date -Iseconds>", "exam": "<start's exam, or null>", "types": [...], "basis": "..."}`. Say its `line` verbatim. On exit 2, print its stderr line and go to §4. An empty `drill`: go to §4. A `mimir-past-questions` caller goes to its own step 8 instead of §4 in both cases.
+3. `plan.py triage` with `{"now": "<date -Iseconds>", "exam": "<start's exam, or null>", "types": [...], "basis": "...", "class": "<start's class.class>"}` (Standard practice includes mastered types; Urgent skips them). Say its `line` verbatim. On exit 2, print its stderr line and go to §4. An empty `drill`: go to §4. A `mimir-past-questions` caller goes to its own step 8 instead of §4 in both cases.
 4. Drill: §3. Then close: §4.
 
 ## 3. Answer-first drill

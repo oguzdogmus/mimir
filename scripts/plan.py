@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mimir planning engine: delivery class, cost of delay, cram bill, first-contact summary, urgent triage.
+"""Mimir planning engine: delivery class, cost of delay, cram bill, first-contact summary, question-type triage.
 
 Deterministic, standard library only, Python 3.11+. Run as::
 
@@ -33,6 +33,8 @@ types          triage only, required (use [] for none): list of {"name": str,
                int >= 0, "status": unseen|gap|shaky|mastered}. ``seen`` and
                ``papers`` default to 0, ``status`` to unseen; seen <= papers.
 basis          triage only: "papers" (default) or "outline".
+class          triage only: "Urgent" (default) or "Standard" -- the session's
+               delivery class.
 
 Date rules
 ----------
@@ -112,7 +114,7 @@ summary -- one shareable first-contact line.
     A missing or empty sessions list drops the hours clause; exam null gives
     "<label>: exam date unknown."; no course or exam_name gives label "Exam".
 
-triage -- urgent triage: rank question types by points per hour, drill or skip.
+triage -- question-type triage: rank question types by points per hour, drill or skip.
     in : {"now": "2026-11-04T21:00:00+02:00", "exam": "2026-11-05T09:00:00+02:00",
           "basis": "papers", "types": [
             {"name": "Pumping lemma proof", "marks": 20, "seen": 2, "papers": 2, "status": "gap"},
@@ -128,13 +130,14 @@ triage -- urgent triage: rank question types by points per hour, drill or skip.
     seen/papers when papers > 0, else 1; weight = ceil(3 x marks / max marks)
     clamped WEIGHT_MIN..WEIGHT_MAX (1 when every mark is 0); minutes =
     EPISODE_MINUTES x weight, x SHAKY_TIME_FACTOR when ``shaky``; pph = marks x
-    frequency / (minutes / 60). ``mastered`` types are skipped (``mastered``).
+    frequency / (minutes / 60). ``class`` Urgent (default): ``mastered`` types
+    are skipped (``mastered``); Standard: they are ranked with the rest.
     The rest are ranked by pph, highest first, ties in input order. Budget =
-    hours_to_exam x 60 x URGENT_STUDY_SHARE: types are drilled in rank order
+    hours_to_exam x 60 x URGENT_STUDY_SHARE (either class): types are drilled in rank order
     while the cumulative minutes fit, always at least one. Drilling stops at
     the first type that does not fit: no smaller later type is packed into
     the remaining budget. The rest are skipped (``lower yield``). Type names
-    must be unique (ignoring case and repeated spaces). Exam null: every non-mastered type is drilled
+    must be unique (ignoring case and repeated spaces). Exam null: every type not skipped as mastered is drilled
     (budget_minutes null). Date-only exam today: only the top type
     (budget_minutes null). ``basis`` "outline" appends "No past papers, so the
     forecast is weaker." to ``line``. ``drill`` is in rank order; ``skip``
@@ -170,6 +173,7 @@ URGENT_STUDY_SHARE = Fraction(1, 3)  # share of the hours to the exam spent dril
 SHAKY_TIME_FACTOR = Fraction(1, 2)   # a shaky type takes half the minutes of an unseen one
 TRIAGE_STATUSES = ("unseen", "gap", "shaky", "mastered")
 TRIAGE_BASES = ("papers", "outline")
+TRIAGE_CLASSES = ("Urgent", "Standard")
 
 _DATE_ONLY = re.compile(r"\d{4}-\d{2}-\d{2}")
 _DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T.+")
@@ -677,6 +681,10 @@ def triage(data: dict) -> dict:
     basis = "papers" if basis is None else basis
     if basis not in TRIAGE_BASES:
         raise InputError(f"basis must be one of {', '.join(TRIAGE_BASES)}")
+    klass = data.get("class")
+    klass = "Urgent" if klass is None else klass
+    if klass not in TRIAGE_CLASSES:
+        raise InputError(f"class must be one of {', '.join(TRIAGE_CLASSES)}")
     clock = Clock(now, exam)
     hours = None
     today_only = False
@@ -696,8 +704,11 @@ def triage(data: dict) -> dict:
         t["minutes"] = EPISODE_MINUTES * t["weight"] * (SHAKY_TIME_FACTOR if t["status"] == "shaky" else 1)
         t["pph"] = t["marks"] * t["frequency"] / (t["minutes"] / 60)
 
-    mastered = [t for t in types if t["status"] == "mastered"]
-    ranked = sorted((t for t in types if t["status"] != "mastered"), key=lambda t: -t["pph"])
+    # Urgent spends the time left on gaps; Standard practice revises mastered types too.
+    skip_mastered = klass == "Urgent"
+    mastered = [t for t in types if skip_mastered and t["status"] == "mastered"]
+    ranked = sorted((t for t in types if not (skip_mastered and t["status"] == "mastered")),
+                    key=lambda t: -t["pph"])
     budget = None if hours is None else hours * 60 * URGENT_STUDY_SHARE
     drill, lower = [], []
     for t in ranked:
@@ -739,7 +750,7 @@ COMMANDS = {
     "delay": (cost_of_delay, "cost of delay: start today vs later start days"),
     "debrief": (debrief, "cram bill: actual hours vs the counterfactual for the full route"),
     "summary": (summary, "one shareable first-contact summary line"),
-    "triage": (triage, "urgent triage: question types to drill or skip, by points per hour"),
+    "triage": (triage, "triage: question types to drill or skip, by points per hour"),
 }
 
 

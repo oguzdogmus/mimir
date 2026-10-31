@@ -31,6 +31,8 @@ Files read (all inside the learning root, see ``workspace.py``)
   count that is not a whole number counts as 0; an ``evidence_date`` or
   ``last_check`` that is not a valid date is reported as null; ``evidence``
   and ``frustration_override`` are the cell text, trimmed.
+* ``<course>/INDEX.md``: the ``## Registry`` roles and ``## Topics`` names
+  (``ingest.py`` rules; a non-UTF-8 one exits 2) for the route.
 * ``<course>/.state/logs/*.md`` (name order): the first ``first_contact:``
   line whose value is a date or datetime (``plan.py`` rules); for ``debrief``
   also ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
@@ -56,7 +58,7 @@ start -- pick the course, the exam and the class for a new session.
           "status": "gap"}, {"name": "Graphs", "status": "unseen"}],
           "class": {<plan.py class output>}, "delay_line": "Start today: ...",
           "topic": {"name": "Graphs", "status": "unseen", "evidence_date":
-          null, "stale": false, "attempt_first": false}, "first_contact":
+          null, "stale": false, "attempt_first": false}, "route_line": null, "first_contact":
           "2026-10-10T20:00:00+03:00",
           "line": "Standard delivery: exam in 19 days"}
     Course: the given one (``inferred`` false); else the latest ``save.md``
@@ -68,12 +70,20 @@ start -- pick the course, the exam and the class for a new session.
     today or later; else, when a row for ``code`` says ``unknown``, exam null
     with ``q0`` false; else exam null with ``q0`` true (ask "When's the
     exam?"). Rows dated more than plan.MAX_HORIZON_DAYS days ahead are
-    ignored like past ones. Route: ``mastery.md`` rows in order; ``remaining`` = rows not
+    ignored like past ones. Route: ``mastery.md`` rows in order; when the
+    ``INDEX.md`` registry has no ``outline`` row, each ``## Topics`` name not
+    yet listed (ignoring case and repeated spaces) follows as an unseen row,
+    in ``INDEX.md`` order. ``remaining`` = route rows not
     ``mastered``, weight 1 each, sent to ``plan.py class`` (and ``delay``,
     whose ``line`` is ``delay_line`` for Standard only, else null). ``topic``:
     ``save.md`` ``next_topic`` when it is remaining, else the first remaining
-    topic, null when none is left; its ``attempt_first`` is as in ``check``.
-    ``line`` is the class line. ``debrief``: null when ``pending_debrief:``
+    topic; with none remaining, the same pick among the stale mastered topics
+    (stale as in ``check``: the one-question recheck); else null. Its
+    ``attempt_first`` is as in ``check``. ``route_line``: null when ``topic``
+    is set; else "No topics on the route yet: drop the outline, slides or
+    past papers into `_inbox/` and run mimir-ingest." for an empty route, or
+    "Your route is complete: every topic is mastered in mastery.md. Want a
+    `mimir-quiz` to keep it fresh?". ``line`` is the class line. ``debrief``: null when ``pending_debrief:``
     holds no valid date P; else {"exam", "exam_name", "due", "deferred"}.
     P today or later: P with the pending name, due and deferred false (a
     date-only exam is past only from the next day, as in ``plan.py``). P
@@ -123,7 +133,7 @@ debrief -- what the post-exam debrief needs. Read-only, like the rest.
     with target T and previous exam B (the latest row of ``code`` dated
     before T, none when there is none):
     * ``cram``: ``plan.py debrief`` with ``first_contact`` (as in ``start``),
-      ``exam`` T, every ``mastery.md`` row weight 1, ``timed`` [] and the
+      ``exam`` T, every route row (as in ``start``) weight 1, ``timed`` [] and the
       sessions: each log's ``started:`` and the next ``ended:`` after it,
       kept when the start's own calendar date is after B and on or before T;
       a pair that ends before it starts, overlaps an earlier kept pair or
@@ -149,13 +159,12 @@ progress -- what Mimir believes the student knows. Read-only; never calls plan.p
           "line": "CS201 Theory: 1 of 1 topics mastered, 0 shaky, 0 gap,
           0 unseen; 1 due a recheck."}
     Course pick, ``inferred`` and errors are ``start``'s. ``topics``: every
-    ``mastery.md`` row in route order; ``stale`` as in ``check``. ``table``:
+    route row (as in ``start``) in order; ``stale`` as in ``check``. ``table``:
     ``| Topic | Status | Evidence | Evidence date | Solved alone / with help |
     Recheck |``, one row per topic, ``-`` for empty evidence or a null date,
     Recheck ``due`` when stale, cells escaped as ``INDEX.md`` cells. ``line``
     ends "; none due a recheck." when no topic is stale. No rows: ``topics``
-    [], ``table`` null, line "No topics on the route yet: drop the outline
-    into `_inbox/` and run mimir-ingest." No course: ``start``'s line,
+    [], ``table`` null, line ``start``'s empty-route ``route_line``. No course: ``start``'s line,
     ``courses`` as ``start``'s, every other field null.
 
 Exit codes: invalid input (bad field, unknown course, no workspace) exits 2
@@ -180,6 +189,11 @@ STALE_DAYS = 14
 EPISODE_MIN_MINUTES = 20
 EPISODE_MAX_MINUTES = 25
 ATTEMPT_FIRST_ASSISTED = 3
+
+NO_ROUTE_LINE = ("No topics on the route yet: drop the outline, slides or past papers into `_inbox/` "
+                 "and run mimir-ingest.")
+ROUTE_DONE_LINE = ("Your route is complete: every topic is mastered in mastery.md. "
+                   "Want a `mimir-quiz` to keep it fresh?")
 
 STATUSES = ("unseen", "gap", "shaky", "mastered")
 _SEASONS = ("spring", "summer", "fall")
@@ -279,6 +293,22 @@ def mastery(course_dir: Path) -> list[dict]:
             seen.add(_norm(row["name"]))
             out.append(row)
     return out
+
+
+def route(course_dir: Path) -> list[dict]:
+    """The route: ``mastery.md`` rows in order. When no ``outline`` file is in the
+    ``INDEX.md`` registry, each ``## Topics`` name not yet listed follows as an unseen
+    row, in ingestion order (decision D1). Nothing is written."""
+    rows = mastery(course_dir)
+    index = course_dir / "INDEX.md"
+    if any(role == "outline" for role, _, _ in ingest.registry(index).values()):
+        return rows
+    seen = {_norm(r["name"]) for r in rows}
+    for name in ingest.topics(index):
+        if _norm(name) not in seen:
+            seen.add(_norm(name))
+            rows.append(_mastery_row([name], {"topic": 0}))  # an unseen row
+    return rows
 
 
 def _mastery_row(cells: list[str], cols: dict[str, int]) -> dict:
@@ -553,7 +583,7 @@ def _cram(course_dir: Path, logs, first_contact: str | None, target: date,
     if contact_day > target:
         return None
     payload = {"first_contact": first_contact, "exam": target.isoformat(),
-               "topics": [{"name": r["name"], "weight": 1} for r in mastery(course_dir)],
+               "topics": [{"name": r["name"], "weight": 1} for r in route(course_dir)],
                "timed": [], "sessions": _sessions(logs, previous, target, aware)}
     return _plan(plan.debrief, payload)
 
@@ -608,30 +638,33 @@ def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
     if chosen is None:
         return {"root": str(root), "courses": courses, "term": None, "course": None, "course_dir": None,
                 "code": None, "inferred": None, "exam": None, "exam_name": None, "q0": None,
-                "remaining": [], "class": None, "delay_line": None, "topic": None,
+                "remaining": [], "class": None, "delay_line": None, "topic": None, "route_line": None,
                 "first_contact": None, "debrief": None, "line": NO_COURSE_LINE}, None
     code = chosen["course"].split()[0]
     today = now.date()
     exam, exam_name, q0 = _exam(profile, code, today)
-    rows = mastery(course_dir)
+    rows = route(course_dir)
     remaining = [r for r in rows if r["status"] != "mastered"]
     payload = plan_payload(data["now"], exam, remaining)
     klass = _plan(plan.delivery_class, payload)
     delay_line = _plan(plan.cost_of_delay, payload)["line"] if klass["class"] == "Standard" else None
     save = _memory(course_dir, "save.md")
     next_topic = _norm(_key(save, "next_topic"))
-    pick = next((r for r in remaining if next_topic and _norm(r["name"]) == next_topic),
-                remaining[0] if remaining else None)
+    # Nothing unmastered left: a stale mastered topic gets the one-question recheck.
+    candidates = remaining or [r for r in rows if topic_state(r, r["name"], today)["stale"]]
+    pick = next((r for r in candidates if next_topic and _norm(r["name"]) == next_topic),
+                candidates[0] if candidates else None)
     debrief, window = debrief_state(profile, save, code, today, klass["class"])
     topic = None
     if pick is not None:
         state = topic_state(pick, pick["name"], today)
         topic = {k: state[k] for k in ("name", "status", "evidence_date", "stale", "attempt_first")}
+    route_line = None if pick is not None else ROUTE_DONE_LINE if rows else NO_ROUTE_LINE
     return {"root": str(root), "courses": courses, "term": chosen["term"], "course": chosen["course"],
             "course_dir": str(course_dir), "code": code, "inferred": inferred, "exam": exam,
             "exam_name": exam_name, "q0": q0,
             "remaining": [{"name": r["name"], "status": r["status"]} for r in remaining],
-            "class": klass, "delay_line": delay_line, "topic": topic,
+            "class": klass, "delay_line": delay_line, "topic": topic, "route_line": route_line,
             "first_contact": _first_contact(course_dir),
             "debrief": debrief, "line": klass["line"]}, window
 
@@ -666,7 +699,6 @@ def cmd_debrief(data: dict) -> dict:
 
 _PROGRESS_HEAD = ("| Topic | Status | Evidence | Evidence date | Solved alone / with help | Recheck |\n"
                   "|---|---|---|---|---|---|")
-NO_ROUTE_LINE = "No topics on the route yet: drop the outline into `_inbox/` and run mimir-ingest."
 
 
 def cmd_progress(data: dict) -> dict:
@@ -676,7 +708,7 @@ def cmd_progress(data: dict) -> dict:
                 "inferred": None, "topics": None, "counts": None, "table": None, "line": NO_COURSE_LINE}
     today = now.date()
     topics = []
-    for row in mastery(course_dir):
+    for row in route(course_dir):
         state = topic_state(row, row["name"], today)
         topics.append({"name": row["name"], "status": row["status"], "evidence": row["evidence"],
                        "evidence_date": row["evidence_date"], "last_check": row["last_check"],

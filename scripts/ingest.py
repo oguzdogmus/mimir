@@ -632,6 +632,19 @@ def registry(index: Path) -> dict[str, tuple[str, int | None, str]]:
     return rows
 
 
+def topics(index: Path) -> list[str]:
+    """Topic names of an INDEX.md's ``## Topics`` rows in file (ingestion) order, ``\\|``
+    unescaped and spaces collapsed; repeats kept. The file is never changed; a missing
+    INDEX.md has none, a non-UTF-8 one is refused (``InputError``)."""
+    text = read_text(index)
+    if text is None:
+        return []
+    copy = text.splitlines()
+    first, end = _section_table(copy, _TOPICS)  # repairs only the copy
+    names = (" ".join(_unescape(_split_row(row)[0]).split()) for row in copy[first:end])
+    return [name for name in names if name]
+
+
 def _write_atomic(index: Path, text: str) -> None:
     fd, tmp = tempfile.mkstemp(prefix=f".{index.name}.", suffix=".tmp", dir=index.parent)
     try:
