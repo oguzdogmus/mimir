@@ -70,10 +70,9 @@ Evidence names the item and its label (e.g. `study recheck [practice, not from a
 
 1. `next_topic`: `T` when its teach step was cut short, else the next `remaining` topic after `T` that is not `mastered` now; empty when none is left. When `start`'s `topic` was null (no route yet, or route complete), `current_topic:` and `next_topic:` are both blank.
 2. Cliffhanger: end with one question on `next_topic` that the student can almost answer from today's work, tied to what comes next. Never homework, never "try this before next time". Keep its intended answer for `resolution:` without showing it. No cliffhanger when `next_topic` is empty.
-3. Write `save.md` in the template's shape, every field, at most 30 lines:
+3. Write `save.md` in the template's shape, at most 30 lines; preserve last_session and pending_debrief for the shared close step:
    - `current_topic:` `T` (blank when `start`'s `topic` was null); `next_topic:`; `cliffhanger:`; `resolution:`;
-   - `last_class: Standard`; `last_session:` the `last_session` of a fresh `session.py now`;
+   - `last_class: Standard`;
    - `status: on-track` (`at-risk` only for an Urgent session);
-   - `pending_debrief:` `<start's exam> <exam_name, else exam>` (e.g. `2026-11-05 final`) when it is empty or `no` and `start`'s `exam` is set (a debrief run in Start step 9 has just made it `no`); otherwise unchanged;
    - `## Previously on`: 2 to 4 bullets of what this session covered, about 60 seconds of recap in total.
-4. Append to the log: `ended: <session.py now's now>`, a `topics:` line (each topic worked, with its status now), and, when any gate gave `disagreements`, a `## Verifier disagreements` section with each line verbatim.
+4. Read and follow `<mimir>/skills/mimir-core-rules/references/session-close.md`. Append a `topics:` line (each topic worked, with its status now).

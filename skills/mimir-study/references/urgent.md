@@ -63,10 +63,9 @@ Take `drill` in order, in sets of up to 3 types. For each set:
 
 ## 4. Urgent close
 
-1. Write `<course_dir>/.state/save.md` in the template's shape, every field, at most 30 lines:
+1. Write `<course_dir>/.state/save.md` in the template's shape, at most 30 lines; preserve last_session and pending_debrief for the shared close step:
    - `current_topic:` the last drilled type; `next_topic:` the next type in `drill` not reached, else blank; `cliffhanger:` and `resolution:` blank;
-   - `last_class: Urgent`; `last_session:` the `last_session` of a fresh `session.py now`; `status: at-risk`;
-   - `pending_debrief:` `<start's exam> <exam_name, else exam>` (e.g. `2026-11-05 final`) only when it was empty or `no` and `start`'s `exam` is set; otherwise unchanged;
+   - `last_class: Urgent`; `status: at-risk`;
    - `## Previously on`: 2 to 4 bullets on what was drilled and which checks were right.
 2. Last line: when `class.days_to_exam` is at most 1, "Good luck. After the exam, come tell me what was on it."; otherwise, when `next_topic` is set, "Next time we start with <next_topic>."
-3. Log as `session.md` §5 step 4: `ended: <session.py now's now>`, a `topics:` line (each type drilled, with its status now), and a `## Verifier disagreements` section when any gate gave `disagreements`.
+3. Read and follow `<mimir>/skills/mimir-core-rules/references/session-close.md`. Append a `topics:` line (each type drilled, with its status now).

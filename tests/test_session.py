@@ -1050,3 +1050,27 @@ def test_now_reads_the_local_clock_with_its_offset(home):
 
 def test_now_takes_no_fields(home):
     fails(home, "now", {"x": 1}, "unknown field 'x'")
+
+
+@pytest.mark.parametrize("kind", ["Quiz", "Past questions"])
+def test_practice_only_session_accounting(home, root, monkeypatch, kind):
+    """The skill-authored close format reaches selection and cram accounting."""
+    course(home, "ZZ999 Other", save={"last_session": "2026-10-31 12:00"})
+    cdir = course(home, save={"last_session": "", "pending_debrief": "no"})
+    profile(root, exams=[("CS201", "midterm", "2026-11-11")])
+    start = fixed_now(monkeypatch, "2026-11-01T23:45:00+02:00")
+    end = fixed_now(monkeypatch, "2026-11-02T00:15:00+02:00")
+    state = ok(home, "start", {"now": start["now"], "term": TERM, "course": "CS201 Theory"})
+    assert state["first_contact"] is None
+    log(cdir, start["log_name"], f"## {kind}\nstarted: {start['now']}\n"
+        f"first_contact: {start['now']}\nended: {end['now']}\n")
+    (cdir / ".state/save.md").write_text(
+        f"last_session: {end['last_session']}\npending_debrief: 2026-11-11 midterm\n")
+    for _ in range(2):
+        selected = ok(home, "start", {"now": DUE_NOW})
+        assert selected["course"] == "CS201 Theory"
+        assert selected["first_contact"] == start["now"]
+        assert selected["debrief"]["due"] is True
+        result = ok(home, "debrief", {"now": DUE_NOW})
+        assert result["cram"]["session_count"] == 1
+        assert result["cram"]["actual_minutes"] == 30
