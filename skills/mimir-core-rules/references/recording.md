@@ -5,7 +5,7 @@ Call `python3 <mimir>/scripts/session.py record` with one JSON object on stdin:
 
 Use the actual gate result, stable item identity (same question keeps the same identity), and one unique session identity reused throughout this session. Use the date from `session.py now`. Outcomes are `unassisted | assisted | wrong`; Urgent correct answers are always assisted. Set real_past_paper only for an actual past-paper question, not generated practice or a worked example.
 
-For a frustration override add `override: true` and use outcome assisted; this is a control event, not a counted solve. For an explanation without a gated item pass decision drop and counts_for_mastery false. Retrying the same session/item/event is idempotent.
+For a frustration override add `override: true` and use outcome assisted; this is a control event, not a counted solve. For an explanation without a gated item add `explanation_only: true` and pass decision drop and counts_for_mastery false. Retrying the same session/item/event is idempotent.
 
 Print or use the returned status; log refusals without inventing evidence. Subsequent answers in the override session do not count. A later unassisted answer lifts the block but still needs D2 evidence to promote.
 

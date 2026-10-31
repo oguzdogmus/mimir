@@ -37,3 +37,8 @@ do not add evidence. The three most recent dated entries are displayed, while
 attempt identities and qualifying solve facts remain in recorder-owned JSON
 within mastery.md. Original legacy Markdown, unknown columns and notes remain
 intact; check/progress overlay authoritative records without rewriting old data.
+
+Review clarification: initialization uses record with initialize=true, adding an
+unseen topic without evidence. Legacy dated evidence seeds the recent-history
+window. Item-triggered overrides require an eligible gate; explanation-only
+control events explicitly set explanation_only=true with decision drop.

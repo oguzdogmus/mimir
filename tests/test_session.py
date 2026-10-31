@@ -1135,3 +1135,20 @@ def test_record_invalid(home, root, change, field):
              gate={"decision": "show", "counts_for_mastery": True},
              outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17")
     fails(home, "record", {**p, **change}, field)
+
+
+def test_record_initialization_and_legacy_evidence(home, root):
+    course(home, mastery=[("Heaps", "shaky", "2026-10-01", 0, 1)])
+    init = dict(term=TERM, course="CS201 Theory", topic="Graphs", initialize=True)
+    assert ok(home, "record", init)["status"] == "unseen"
+    assert ok(home, "record", init)["duplicate"]
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "flagged", "counts_for_mastery": False},
+             outcome="assisted", real_past_paper=False, session="s1", date="2026-10-17", override=True)
+    assert not ok(home, "record", p)["recorded"]
+    assert not ok(home, "record", {**p, "gate": {"decision": "drop", "counts_for_mastery": False}})["recorded"]
+    ok(home, "record", {**p, "gate": {"decision": "show", "counts_for_mastery": True}})
+    result = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))
+    assert "2026-10-01: ev" in result["topics"][0]["evidence"]
+    assert ok(home, "record", {**p, "session": "s2", "explanation_only": True,
+                              "gate": {"decision": "drop", "counts_for_mastery": False}})["recorded"]

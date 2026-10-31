@@ -58,7 +58,7 @@ After each answer say right or wrong and show the worked key briefly. Follow cor
 
 ### Steps for topic `T`
 1. Recheck: when `T` is `stale`, or a prerequisite you named is `stale` in `check`, ask ONE recheck question first, on `T` if it is stale, else on the first stale prerequisite. Record it. At most one recheck per topic. Never a review set.
-2. "I know this": prepare two gated questions on T and ask them one at a time. Record each answer through `session.py record`. If both are unassisted, skip the explanation and proceed to step 4; the recorder alone decides mastery under D2. Otherwise teach (step 3).
+2. "I know this": prepare two gated questions on T and ask them one at a time. Record each answer through `session.py record`. If both are unassisted and both gate decisions are `show` with `counts_for_mastery: true`, skip the explanation and proceed to step 4; the recorder alone decides mastery under D2. Otherwise teach (step 3).
 3. Teach: Read `<mimir>/skills/mimir-study/references/teaching.md` (once per session) and follow it for `T`: attempt-first when `attempt_first` is true, the explanation ladder with the Socratic dial, the frustration steps, then the disguise drill, each answer gated and recorded as above.
 4. Next topic: the next `remaining` topic after `T` in route order that is not `mastered` now. Run `check` on it (and its prerequisites), then go to step 1 with it as `T`. None left: close.
 

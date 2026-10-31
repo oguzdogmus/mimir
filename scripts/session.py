@@ -868,10 +868,46 @@ def _record_state(text: str) -> dict:
         raise InputError("mastery record state is damaged; restore it before recording") from None
 
 
+def _save_record(path: Path, text: str, state: dict) -> None:
+    lines = [l for l in text.splitlines() if not l.startswith("<!-- mimir-record-v1 ")]
+    encoded = json.dumps(state, ensure_ascii=True).replace("<", "\\u003c").replace(">", "\\u003e")
+    ingest._write_atomic(path, "\n".join(lines) + "\n<!-- mimir-record-v1 " + encoded + " -->\n")
+
+
+def _initial_record(row: dict) -> dict:
+    recent = ([{"date": row["evidence_date"], "evidence": row["evidence"]}]
+              if row["evidence_date"] and row["evidence"] else [])
+    return {"row": row, "attempts": [], "solves": [], "recent": recent,
+            "blocked_session": "legacy" if row["frustration_override"] else None}
+
+
 def cmd_record(data: dict) -> dict:
     """Record an idempotent attempt; retain legacy text and atomic authoritative state."""
+    if data.get("initialize") is True:
+        _check_keys(data, {"term", "course", "topic", "initialize"})
+        term, course = parse_term(data), parse_segment(data, "course")
+        topic = data.get("topic")
+        if not isinstance(topic, str) or not topic.strip() or _has_control(topic):
+            raise InputError("topic must be a nonempty one-line string")
+        folder = workspace.course_folder(ingest._workspace_root(), term, course)
+        if not (folder / "INDEX.md").is_file():
+            raise InputError("course has no INDEX.md")
+        path = folder / ".state" / "mastery.md"
+        if path.is_symlink():
+            raise InputError("mastery.md must not be a symlink")
+        rows = mastery(folder)
+        existing = next((r for r in rows if _norm(r["name"]) == _norm(topic)), None)
+        if existing:
+            return {"status": existing["status"], "recorded": False, "duplicate": True,
+                    "line": "Topic already initialized."}
+        text = _memory(folder, "mastery.md")
+        state = _record_state(text)
+        state[_norm(topic)] = _initial_record(_mastery_row([topic], {"topic": 0}))
+        _save_record(path, text, state)
+        return {"status": "unseen", "recorded": True, "duplicate": False,
+                "line": "Topic initialized."}
     _check_keys(data, {"term", "course", "topic", "item", "gate", "outcome",
-                       "real_past_paper", "session", "date", "override"})
+                       "real_past_paper", "session", "date", "override", "explanation_only"})
     term, course = parse_term(data), parse_segment(data, "course")
     for field in ("topic", "item", "session", "date"):
         value = data.get(field)
@@ -882,7 +918,7 @@ def cmd_record(data: dict) -> dict:
         raise InputError("date must be YYYY-MM-DD")
     if data.get("outcome") not in ("unassisted", "assisted", "wrong"):
         raise InputError("outcome must be unassisted, assisted or wrong")
-    for field in ("real_past_paper", "override"):
+    for field in ("real_past_paper", "override", "explanation_only"):
         if type(data.get(field, False)) is not bool:
             raise InputError(f"{field} must be boolean")
     if "real_past_paper" not in data:
@@ -903,15 +939,15 @@ def cmd_record(data: dict) -> dict:
     key = _norm(data["topic"])
     legacy = next((r for r in mastery(folder) if _norm(r["name"]) == key),
                   _mastery_row([data["topic"]], {"topic": 0}))
-    entry = state.get(key, {"row": legacy, "attempts": [], "solves": [], "recent": [],
-                            "blocked_session": "legacy" if legacy["frustration_override"] else None})
+    entry = state.get(key, _initial_record(legacy))
     row = entry["row"]
     result = {"status": row["status"], "duplicate": False, "recorded": False}
     identity = [data["session"], data["item"], bool(data.get("override"))]
     if identity in entry["attempts"]:
         return {**result, "duplicate": True, "line": "Attempt already recorded."}
     override = data.get("override", False)
-    if not override and (gate["decision"] != "show" or not gate["counts_for_mastery"]):
+    explanation = override and data.get("explanation_only", False) and gate["decision"] == "drop"
+    if not explanation and (gate["decision"] != "show" or not gate["counts_for_mastery"]):
         return {**result, "line": "Attempt does not count: item is flagged or not shown."}
     if entry["blocked_session"] == data["session"] and not override:
         return {**result, "line": "After frustration override, not counted."}
@@ -949,10 +985,7 @@ def cmd_record(data: dict) -> dict:
     row.update(evidence="; ".join(f'{e["date"]}: {e["evidence"]}' for e in entry["recent"]),
                evidence_date=data["date"], last_check=data["date"])
     state[key] = entry
-    # A single atomic write preserves every legacy row, unknown column and note.
-    lines = [l for l in text.splitlines() if not l.startswith("<!-- mimir-record-v1 ")]
-    encoded = json.dumps(state, ensure_ascii=True).replace("<", "\\u003c").replace(">", "\\u003e")
-    ingest._write_atomic(path, "\n".join(lines) + "\n<!-- mimir-record-v1 " + encoded + " -->\n")
+    _save_record(path, text, state)
     return {"status": row["status"], "duplicate": False, "recorded": True,
             "line": f'{row["name"]}: {row["status"]}.'}
 
