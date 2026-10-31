@@ -4,11 +4,11 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <now|parse-date|start|check|clock|debrief|progress>  < input.json
+    python3 session.py <now|parse-date|start|check|clock|debrief|progress|record>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
-``line``. Read-only: it never writes, moves or creates a file. Only ``now``
+``line``. Only record writes mastery.md atomically; other commands are read-only. Only ``now``
 reads the clock; every other subcommand takes "now" as an input (``now``, from
 ``session.py now``), so the same input and files always give the same output.
 
@@ -190,6 +190,17 @@ progress -- what Mimir believes the student knows. Read-only; never calls plan.p
     [], ``table`` null, line ``start``'s empty-route ``route_line``. No course: ``start``'s line,
     ``courses`` as ``start``'s, every other field null.
 
+record -- persist an eligible answer or a frustration override.
+    Required: term, course, topic, item (stable identity), gate (the verifier
+    result), outcome (unassisted|assisted|wrong), real_past_paper (boolean),
+    session (unique identity), date (YYYY-MM-DD). Optional override and
+    explanation_only booleans distinguish control events from item attempts.
+    Alternatively {term, course, topic, initialize: true} adds an unseen topic.
+    Returns status, recorded, duplicate and line. See the shared recording
+    reference for examples and audit D2/D5 for exact transition semantics.
+    Legacy Markdown is retained; recorder-owned JSON in a trailing comment
+    supplies authoritative rows to check, start and progress.
+
 Exit codes: invalid input (bad field, unknown course, no workspace) exits 2
 with one line on stderr (``session.py: <message>``) naming the field, and
 nothing on stdout. An unexpected internal error exits 1 with ``session.py:
@@ -199,6 +210,7 @@ internal error (<Type>)``. No traceback is ever printed.
 from __future__ import annotations
 
 import re
+import json
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -316,6 +328,12 @@ def mastery(course_dir: Path) -> list[dict]:
         if row["name"] and _norm(row["name"]) not in seen:
             seen.add(_norm(row["name"]))
             out.append(row)
+    for key, entry in _record_state(_memory(course_dir, "mastery.md")).items():
+        position = next((i for i, r in enumerate(out) if _norm(r["name"]) == key), len(out))
+        if position == len(out):
+            out.append(entry["row"])
+        else:
+            out[position] = entry["row"]
     return out
 
 
@@ -847,7 +865,144 @@ def cmd_parse_date(data: dict) -> dict:
     return {"date": day.isoformat(), "line": f"Exam date: {day.isoformat()}."}
 
 
+def _record_state(text: str) -> dict:
+    marker = "<!-- mimir-record-v1 "
+    lines = [line for line in text.splitlines() if line.startswith(marker)]
+    if not lines:
+        return {}
+    try:
+        state = json.loads(lines[-1][len(marker):-4])
+        if not isinstance(state, dict):
+            raise ValueError()
+        return state
+    except (ValueError, TypeError):
+        raise InputError("mastery record state is damaged; restore it before recording") from None
+
+
+def _save_record(path: Path, text: str, state: dict) -> None:
+    lines = [l for l in text.splitlines() if not l.startswith("<!-- mimir-record-v1 ")]
+    encoded = json.dumps(state, ensure_ascii=True).replace("<", "\\u003c").replace(">", "\\u003e")
+    ingest._write_atomic(path, "\n".join(lines) + "\n<!-- mimir-record-v1 " + encoded + " -->\n")
+
+
+def _initial_record(row: dict) -> dict:
+    recent = ([{"date": row["evidence_date"], "evidence": row["evidence"]}]
+              if row["evidence_date"] and row["evidence"] else [])
+    return {"row": row, "attempts": [], "solves": [], "recent": recent,
+            "blocked_session": "legacy" if row["frustration_override"] else None}
+
+
+def cmd_record(data: dict) -> dict:
+    """Record an idempotent attempt; retain legacy text and atomic authoritative state."""
+    if data.get("initialize") is True:
+        _check_keys(data, {"term", "course", "topic", "initialize"})
+        term, course = parse_term(data), parse_segment(data, "course")
+        topic = data.get("topic")
+        if not isinstance(topic, str) or not topic.strip() or _has_control(topic):
+            raise InputError("topic must be a nonempty one-line string")
+        folder = workspace.course_folder(ingest._workspace_root(), term, course)
+        if not (folder / "INDEX.md").is_file():
+            raise InputError("course has no INDEX.md")
+        path = folder / ".state" / "mastery.md"
+        if path.is_symlink():
+            raise InputError("mastery.md must not be a symlink")
+        rows = mastery(folder)
+        existing = next((r for r in rows if _norm(r["name"]) == _norm(topic)), None)
+        if existing:
+            return {"status": existing["status"], "recorded": False, "duplicate": True,
+                    "line": "Topic already initialized."}
+        text = _memory(folder, "mastery.md")
+        state = _record_state(text)
+        state[_norm(topic)] = _initial_record(_mastery_row([topic], {"topic": 0}))
+        _save_record(path, text, state)
+        return {"status": "unseen", "recorded": True, "duplicate": False,
+                "line": "Topic initialized."}
+    _check_keys(data, {"term", "course", "topic", "item", "gate", "outcome",
+                       "real_past_paper", "session", "date", "override", "explanation_only"})
+    term, course = parse_term(data), parse_segment(data, "course")
+    for field in ("topic", "item", "session", "date"):
+        value = data.get(field)
+        if not isinstance(value, str) or not value.strip() or _has_control(value):
+            raise InputError(f"{field} must be a nonempty one-line string")
+    day = _valid_date(data["date"])
+    if day is None:
+        raise InputError("date must be YYYY-MM-DD")
+    if data.get("outcome") not in ("unassisted", "assisted", "wrong"):
+        raise InputError("outcome must be unassisted, assisted or wrong")
+    for field in ("real_past_paper", "override", "explanation_only"):
+        if type(data.get(field, False)) is not bool:
+            raise InputError(f"{field} must be boolean")
+    if "real_past_paper" not in data:
+        raise InputError("real_past_paper is required")
+    gate = data.get("gate")
+    if not isinstance(gate, dict) or gate.get("decision") not in ("show", "flagged", "drop", "verify"):
+        raise InputError("gate must contain a valid decision")
+    if type(gate.get("counts_for_mastery")) is not bool:
+        raise InputError("gate.counts_for_mastery must be boolean")
+    folder = workspace.course_folder(ingest._workspace_root(), term, course)
+    if not (folder / "INDEX.md").is_file():
+        raise InputError("course has no INDEX.md")
+    path = folder / ".state" / "mastery.md"
+    if path.is_symlink():
+        raise InputError("mastery.md must not be a symlink")
+    text = _memory(folder, "mastery.md")
+    state = _record_state(text)
+    key = _norm(data["topic"])
+    legacy = next((r for r in mastery(folder) if _norm(r["name"]) == key),
+                  _mastery_row([data["topic"]], {"topic": 0}))
+    entry = state.get(key, _initial_record(legacy))
+    row = entry["row"]
+    result = {"status": row["status"], "duplicate": False, "recorded": False}
+    identity = [data["session"], data["item"], bool(data.get("override"))]
+    if identity in entry["attempts"]:
+        return {**result, "duplicate": True, "line": "Attempt already recorded."}
+    override = data.get("override", False)
+    explanation = override and data.get("explanation_only", False) and gate["decision"] == "drop"
+    if not explanation and (gate["decision"] != "show" or not gate["counts_for_mastery"]):
+        return {**result, "line": "Attempt does not count: item is flagged or not shown."}
+    if entry["blocked_session"] == data["session"] and not override:
+        return {**result, "line": "After frustration override, not counted."}
+    if entry.get("last_date") and data["date"] < entry["last_date"]:
+        raise InputError("date precedes the latest recorded attempt")
+    entry["attempts"].append(identity)
+    entry["last_date"] = data["date"]
+    outcome = data["outcome"]
+    if override:
+        row["status"] = "shaky"
+        row["frustration_override"] = data["date"]
+        entry["blocked_session"] = data["session"]
+        entry["solves"] = []
+        evidence = "frustration override: answer given"
+    else:
+        evidence = f'{data["item"]} {gate.get("label", "")}: {outcome}'.strip()
+        if outcome == "wrong":
+            row["status"] = "shaky" if row["status"] == "mastered" else "gap"
+            entry["solves"] = []
+        elif outcome == "assisted":
+            row["assisted"] += 1
+            if not entry["blocked_session"] and row["status"] != "mastered":
+                row["status"] = "shaky"
+        else:
+            row["unassisted"] += 1
+            entry["blocked_session"] = None
+            row["frustration_override"] = ""
+            solve = {"item": data["item"], "date": data["date"], "real": data["real_past_paper"]}
+            entry["solves"].append(solve)
+            qualifies = any(a["item"] != b["item"] and
+                            (a["date"] != b["date"] or a["real"] or b["real"])
+                            for a in entry["solves"] for b in entry["solves"])
+            row["status"] = "mastered" if qualifies or row["status"] == "mastered" else "shaky"
+    entry["recent"] = (entry["recent"] + [{"date": data["date"], "evidence": evidence}])[-3:]
+    row.update(evidence="; ".join(f'{e["date"]}: {e["evidence"]}' for e in entry["recent"]),
+               evidence_date=data["date"], last_check=data["date"])
+    state[key] = entry
+    _save_record(path, text, state)
+    return {"status": row["status"], "duplicate": False, "recorded": True,
+            "line": f'{row["name"]}: {row["status"]}.'}
+
+
 COMMANDS = {
+    "record": (cmd_record, "record mastery evidence and frustration overrides"),
     "now": (cmd_now, "the local time: ISO timestamp, evidence date, log name, last_session stamp and term"),
     "parse-date": (cmd_parse_date, "the student's exam-date phrase as a YYYY-MM-DD date, or a refusal"),
     "start": (cmd_start, "pick the course, exam, delivery class and first topic for a session"),
@@ -860,8 +1015,8 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
-                             ("Mimir session runner. Subcommands: now, parse-date, start, check, clock, debrief, progress. Reads one JSON "
-                              "object on stdin and prints one JSON object on stdout. Writes nothing."),
+                             ("Mimir session runner. Subcommands: now, parse-date, start, check, clock, debrief, progress, record. Reads one JSON "
+                              "object on stdin and prints one JSON object on stdout. Only record writes mastery state."),
                              COMMANDS, argv)
 
 

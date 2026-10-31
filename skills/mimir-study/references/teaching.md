@@ -50,7 +50,7 @@ The override applies to topic `U`: the topic of the item or explanation in progr
 
 1. First signal on `U`: give exactly ONE smaller step: a statement, not a question. No guiding question in that message.
 2. The student's next reply after the smaller step is another signal, another "idk", or a wrong answer to the same step: say "Giving you the answer. This topic stays marked shaky until you solve one on your own in a later session." and give the answer (the worked key of the item shown, or the point being explained, in the professor's notation). Then the override:
-   - Edit `U`'s `mastery.md` line (add it if missing; keep column order): status `shaky`; append the date to `frustration_override` (comma-separated after any earlier dates); `assisted` and `unassisted` unchanged; evidence `frustration override: answer given`; `evidence_date` and `last_check` the date. Nothing else is recorded for the item that was showing.
+   - Call `session.py record` with `override: true`, topic U and outcome `assisted`, following core rules' recording reference. For explanation-only overrides add `explanation_only: true` and use a stable explanation item identity and a gate with decision `drop`, counts_for_mastery false.
    - Edit the profile: `dial_preference: fewer questions (<date>)`. Say "Fewer questions from now on." The rest of this session teaches in the fewer-questions way (§3).
    - Append to the log under `## Results`: `- <U> frustration override: answer given`.
 3. From here the Frustration rule in core rules applies to `U`.

@@ -1074,3 +1074,81 @@ def test_practice_only_session_accounting(home, root, monkeypatch, kind):
         result = ok(home, "debrief", {"now": DUE_NOW})
         assert result["cram"]["session_count"] == 1
         assert result["cram"]["actual_minutes"] == 30
+
+
+def test_record_requires_distinct_items_and_day(home, root):
+    course(home)
+    payload = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+                   gate={"decision": "show", "counts_for_mastery": True},
+                   outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17")
+    assert ok(home, "record", payload)["status"] == "shaky"
+    assert ok(home, "record", payload)["duplicate"] is True
+    assert ok(home, "record", {**payload, "item": "b"})["status"] == "shaky"
+    assert ok(home, "record", {**payload, "item": "c", "date": "2026-10-18", "session": "s2"})["status"] == "mastered"
+
+
+@pytest.mark.parametrize("change,status,recorded", [
+    ({"item": "b", "real_past_paper": True}, "mastered", True),
+    ({"item": "a", "real_past_paper": True, "session": "s2"}, "shaky", True),
+    ({"item": "b", "outcome": "assisted"}, "shaky", True),
+    ({"item": "b", "outcome": "wrong"}, "gap", True),
+    ({"item": "b", "gate": {"decision": "flagged", "counts_for_mastery": False}}, "shaky", False),
+    ({"item": "b", "gate": {"decision": "drop", "counts_for_mastery": True}}, "shaky", False),
+])
+def test_record_boundaries(home, root, change, status, recorded):
+    course(home)
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "show", "counts_for_mastery": True},
+             outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17")
+    ok(home, "record", p)
+    r = ok(home, "record", {**p, **change})
+    assert (r["status"], r["recorded"]) == (status, recorded)
+
+
+def test_record_override_legacy_and_recent(home, root):
+    c = course(home, mastery=[("Heaps", "mastered", "2026-10-01", 2, 5)])
+    original = (c / ".state/mastery.md").read_text()
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "show", "counts_for_mastery": True},
+             outcome="wrong", real_past_paper=True, session="s1", date="2026-10-17")
+    assert ok(home, "record", p)["status"] == "shaky"
+    ok(home, "record", {**p, "override": True})
+    assert not ok(home, "record", {**p, "item": "b", "outcome": "unassisted"})["recorded"]
+    assert ok(home, "record", {**p, "session": "s2", "item": "b", "outcome": "unassisted"})["status"] == "shaky"
+    assert ok(home, "record", {**p, "session": "s2", "item": "c", "outcome": "unassisted"})["status"] == "mastered"
+    progress = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))
+    row = progress["topics"][0]
+    assert row["evidence"].count("2026-10-17:") == 3
+    assert row["unassisted"] == 7
+    assert (c / ".state/mastery.md").read_text().startswith(original)
+
+
+@pytest.mark.parametrize("change,field", [
+    ({"date": "2026-02-30"}, "date"), ({"outcome": "correct"}, "outcome"),
+    ({"item": ""}, "item"), ({"session": "\n"}, "session"),
+    ({"real_past_paper": 1}, "real_past_paper"),
+    ({"gate": {"decision": "show", "counts_for_mastery": 1}}, "gate"),
+])
+def test_record_invalid(home, root, change, field):
+    course(home)
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "show", "counts_for_mastery": True},
+             outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17")
+    fails(home, "record", {**p, **change}, field)
+
+
+def test_record_initialization_and_legacy_evidence(home, root):
+    course(home, mastery=[("Heaps", "shaky", "2026-10-01", 0, 1)])
+    init = dict(term=TERM, course="CS201 Theory", topic="Graphs", initialize=True)
+    assert ok(home, "record", init)["status"] == "unseen"
+    assert ok(home, "record", init)["duplicate"]
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "flagged", "counts_for_mastery": False},
+             outcome="assisted", real_past_paper=False, session="s1", date="2026-10-17", override=True)
+    assert not ok(home, "record", p)["recorded"]
+    assert not ok(home, "record", {**p, "gate": {"decision": "drop", "counts_for_mastery": False}})["recorded"]
+    ok(home, "record", {**p, "gate": {"decision": "show", "counts_for_mastery": True}})
+    result = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))
+    assert "2026-10-01: ev" in result["topics"][0]["evidence"]
+    assert ok(home, "record", {**p, "session": "s2", "explanation_only": True,
+                              "gate": {"decision": "drop", "counts_for_mastery": False}})["recorded"]

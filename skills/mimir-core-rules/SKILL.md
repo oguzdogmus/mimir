@@ -57,7 +57,7 @@ Every question shown carries exactly one label:
 
 ## Mastery evidence
 - Status is `unseen`, `gap`, `shaky`, or `mastered`. No evidence, no entry: every non-unseen line carries evidence and a date.
-- Only an unassisted solve sets `mastered`. An assisted solve raises a topic to `shaky` at most.
+- Mastery changes only through `session.py record`. Before recording an answer or override, read `<mimir>/skills/mimir-core-rules/references/recording.md` and follow its contract. Two distinct eligible unassisted items, separated by date or including a real past-paper question, are required.
 - Solves on flagged (verifier-disputed) items never count toward mastery. Answers after a frustration override follow the Frustration rule below.
 - A gated item changes mastery only when its gate result has `counts_for_mastery` true. Evidence names the item and its label, dated with the `date` of `session.py now`.
 - Log the gate's `disagreements` lines verbatim under `## Verifier disagreements` in the session log.
@@ -79,7 +79,7 @@ The one rule for answers after a frustration override, in every skill that recor
 - Each skill states what it reads at start, under "Reads at start". Read nothing else then.
 - Everything else (`<course>/.state/mastery.md`, `fingerprint.md`, `forecast.md`, course files) is reached through `INDEX.md` or a targeted lookup when a step needs it.
 - `<course>/.state/logs/` is append-only and never auto-loaded; read it only when the student asks.
-- Caps: profile ≤50 lines (rung hints ≤~5, forecast record 1 line); `save.md` ≤30 lines; fingerprint ≤60 lines, rewritten shorter through `fingerprint.py write` when over; mastery one line per topic; forecast one block per forecast; `INDEX.md` one line per file or topic.
+- Caps: profile ≤50 lines (rung hints ≤~5, forecast record 1 line); `save.md` ≤30 lines; fingerprint ≤60 lines, rewritten shorter through `fingerprint.py write` when over; mastery retains legacy text plus recorder-owned state; forecast one block per forecast; `INDEX.md` one line per file or topic.
 - Keep each file in its template's shape and column order. Rewrite a file shorter before it passes its cap.
 - `fingerprint.md` changes only through `<mimir>/scripts/fingerprint.py` (`write` for entries, `retake` for `professor:` and `prior_term:`), never by hand. Its `(tentative)`, `(prior term)`, `label:` and frequencies are computed there.
 - `forecast.md` and the profile's `forecast_record:` line change only through `<mimir>/scripts/forecast.py` (`write` stores a forecast, `score` stores its hit rate and recomputes the record), never by hand. Confidence lines, hit rates and the record are computed there.
