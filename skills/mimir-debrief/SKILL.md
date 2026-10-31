@@ -17,13 +17,10 @@ Questions: at most 3 (steps 4, 5 and 8 below), one at a time, each waiting for t
 
 ## Entry
 
-From `mimir-study` (its `session.md` §1 step 9): `S`, the evidence date `D`, the log name and the `start` output are the session's; start at step 3. Afterwards the study session goes on as `session.md` says.
+From `mimir-study` (its `session.md` Start step 9): `S`, the evidence date `D`, the log name and the `start` output are the session's; start at step 3. Afterwards the study session goes on as `session.md` says.
 
 1. Run `python3 "<mimir>/scripts/session.py" now` with `{}` on stdin once, now: its `now` is `S`, its `date` is `D` and its `log_name` the log name.
-2. `session.py start` with `{"now": "<S>"}`. When the student's message names a course (its code, the first word of a `courses` entry, ignoring case, or its full name) that is not the picked `course`, rerun `start` with `{"now": "<S>", "term": "<its term>", "course": "<its course>"}`. A named course that matches no `courses` entry: say "No course named <name> in your learning folder." and stop.
-   - Exit 2 saying there is no workspace, or `course` null: say "No course to debrief yet: run `mimir-setup`, then drop your outline and past papers into `_inbox/` and run `mimir-ingest`." and stop.
-   - Any other failure (exit 2 or 1): print its stderr line and stop.
-   - When `inferred` is true, say "Debriefing <course>, say if not."
+2. `session.py start` with `{"now": "<S>"}`. Follow **Resolve the course** in core rules (action: debrief). When `inferred` is true, say "Debriefing <course>, say if not."
 3. `session.py debrief` with `{"now": "<S>", "term": "<term>", "course": "<course>"}`. On any failure print its stderr line and stop. Then, from its `debrief`:
    - null, or `due` and `deferred` both false: say its `line` and stop.
    - `deferred` true: say its `line` verbatim ("Debrief waits until after your <exam>: today is for that.", `<exam>` being the exam ahead) and stop.
