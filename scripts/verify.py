@@ -40,11 +40,11 @@ course folder counts as no row. Errors name the field, e.g.
   photo/scan, wording may be off]`` plus ``original`` ``{"path": <absolute
   file path>, "page": <page>}`` to show beside it (the whole page stands in
   for the crop).
-* ``quote`` ``{path, page}``: the answer key is a direct quote of professor
-  material. The item needs no verification only when ``path`` has a registry
-  row with fidelity ``text`` and role ``outline``, ``slides`` or
-  ``past-papers`` and ``page`` is within its pages; any other quote (``ocr``,
-  ``notes``, unindexed, page out of range) still needs verification.
+* ``quote`` ``{path, page}``: the answer key claims to quote professor
+  material. Checked for shape only: a quote claim never skips the verifier,
+  whatever the cited file's registry row says (an unknown page count, as for
+  docx, pptx, odt and odp, proves nothing). The caller asks the verifier to
+  confirm the quote against that page.
 * ``verdicts``: the verifier's verdicts so far, oldest first, each
   ``correct``, ``wrong``, ``ambiguous`` or ``source-conflict``; at most
   VERIFIER_RETRIES + 1 of them, and none after a ``correct``.
@@ -55,13 +55,13 @@ course folder counts as no row. Errors name the field, e.g.
 
 Decision
 --------
-* no verdicts: ``verify`` when the item needs verification, else ``show``;
+* no verdicts: ``verify`` (every item is checked before it is shown, so
+  ``needs_verification`` is always true);
 * last verdict ``correct``: ``show``;
 * fewer than VERIFIER_RETRIES + 1 verdicts, last not correct: ``retry``;
 * VERIFIER_RETRIES + 1 non-correct verdicts: ``flagged`` when ``compare``
   counts, else ``dropped``.
-Given verdicts always apply, also to items that need no verification. Only
-``show`` and ``flagged`` items may reach the student; ``counts_for_mastery``
+Only ``show`` and ``flagged`` items may reach the student; ``counts_for_mastery``
 is true only for ``show``. A ``flagged`` item carries ``flag``: ``⚠ my checker
 disagrees on <dispute or "this answer">, compare with `<path>` p.<page>[
 <question>]``. Each flagged or dropped item adds one ``disagreements`` line
@@ -120,7 +120,6 @@ VERIFIER_RETRIES = 1
 _QUESTION_MAX = 40
 _VERDICTS = ("correct", "wrong", "ambiguous", "source-conflict")
 _ORIGINS = ("practice", "real")
-_QUOTE_ROLES = ("outline", "slides", "past-papers")
 _ITEM_KEYS = {"topic", "origin", "source", "page", "question", "quote", "verdicts", "compare", "dispute"}
 _DECISIONS = ("show", "verify", "retry", "flagged", "dropped")
 _PRACTICE_LABEL = "[practice, not from a real paper]"
@@ -237,11 +236,8 @@ def _gate_item(item, n: int, rows: dict, course_dir: Path, index: Path, today: s
             result["label"] = _OCR_LABEL
             result["original"] = {"path": str(course_dir / source), "page": page}
 
-    needs = True
     if "quote" in item:
-        quote = _ref(item["quote"], f"{where}.quote", with_question=False)
-        row = _in_range(rows, quote)
-        needs = not (row is not None and row[2] == "text" and row[0] in _QUOTE_ROLES)
+        _ref(item["quote"], f"{where}.quote", with_question=False)
 
     verdicts = item.get("verdicts", [])
     if not isinstance(verdicts, list):
@@ -260,7 +256,7 @@ def _gate_item(item, n: int, rows: dict, course_dir: Path, index: Path, today: s
         if "dispute" in item else ""
 
     if not verdicts:
-        decision = "verify" if needs else "show"
+        decision = "verify"
     elif verdicts[-1] == "correct":
         decision = "show"
     elif len(verdicts) < VERIFIER_RETRIES + 1:
@@ -275,7 +271,7 @@ def _gate_item(item, n: int, rows: dict, course_dir: Path, index: Path, today: s
                               f"`{reference['path']}`{tail}")
             line += f", compare {reference['path']}{tail}"
         result["disagreement"] = line
-    result.update(needs_verification=needs, decision=decision, counts_for_mastery=decision == "show")
+    result.update(needs_verification=True, decision=decision, counts_for_mastery=decision == "show")
     return result
 
 

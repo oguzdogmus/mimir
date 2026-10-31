@@ -123,3 +123,32 @@ def test_cli_prints_one_json_object(root, home):
     bad = subprocess.run([sys.executable, str(PT), "pages"], input=b"{}", capture_output=True, env=env)
     assert bad.returncode == 2 and bad.stdout == b""
     assert bad.stderr.decode().startswith("pdftext.py: ") and bad.stderr.count(b"\n") == 1
+
+
+def cli(home: Path, payload: dict, poppler: bool = True) -> subprocess.CompletedProcess:
+    env = {**os.environ, "HOME": str(home)}
+    if not poppler:
+        env["PATH"] = str(home / "no-bin")  # no pdftotext: the built-in reader runs
+    return subprocess.run([sys.executable, str(PT), "pages"], input=json.dumps(payload).encode(),
+                          capture_output=True, env=env)
+
+
+def test_builtin_refuses_an_oversized_pdf_before_reading_it(root, home):
+    path = course_pdf(root, text_pdf(1), "huge.pdf")
+    with open(path, "r+b") as handle:  # sparse: no real 128 MiB written
+        handle.truncate(128 * 1024 * 1024 + 1)
+    proc = cli(home, {"path": str(path), "first": 1}, poppler=False)
+    assert proc.returncode == 2 and proc.stdout == b""
+    err = proc.stderr.decode()
+    assert err.startswith("pdftext.py: ") and err.count("\n") == 1 and "Traceback" not in err
+    assert "128 MiB" in err and "pdftotext" in err
+
+
+@pytest.mark.parametrize("words, expected", [(rb"8 \8 bits", "8 8 bits"), (rb"a\9b", "a9b"),
+                                             (rb"\101\60x", "A0x")])
+def test_builtin_reads_a_non_octal_digit_escape_as_a_literal(root, home, words, expected):
+    path = course_pdf(root, text_pdf(1, words))
+    proc = cli(home, {"path": str(path), "first": 1}, poppler=False)
+    assert proc.returncode == 0, proc.stderr.decode()
+    out = json.loads(proc.stdout)
+    assert out["engine"] == "builtin" and out["text"] == [{"page": 1, "text": expected}]
