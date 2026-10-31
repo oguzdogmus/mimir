@@ -33,7 +33,9 @@ Print this table and stop:
 
 Match the student's situation to one command. Read that command's `SKILL.md`, then reply in this shape and stop:
 
-> Run `<name>`: <why, in one sentence>.
+> Run `<command>`: <why, in one sentence>.
+
+`<command>` is the skill name written the way this tool invokes skills (core-rules), e.g. `/mimir:mimir-study` in Claude Code. Write the reply without the leading `>`.
 
 At most a two-step sequence, only when the first step is needed first, e.g. "Run `mimir-setup`, then `mimir-ingest`: …".
 

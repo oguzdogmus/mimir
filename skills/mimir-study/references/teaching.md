@@ -7,7 +7,7 @@
 - Profile (read once, at episode start, `session.md` §4): `course_language`, `teaching_language`, `dial_preference`, `## Rung hints`. A value that is empty, `none` or still a template placeholder (`<...>`) counts as not set. When `profile.md` was missing or unreadable, all four are not set and every profile Edit below is skipped, silently.
 - Read the `## Topics` rows for `T` in `<course_dir>/INDEX.md` and the files they point to (at the anchored page), and `<course_dir>/.state/fingerprint.md` (notation, phrasing, disguise types, question types).
 - `attempt_first` for `T`: from the latest `start` `topic` or `check` output for `T`. When the recheck (`session.md` step 1) recorded an answer on `T`, run `check` on `T` again first and use that.
-- Profile edits go through the Edit tool, keep the template's shape and stay within the 50-line cap.
+- Profile edits go through your file-editing tool, keep the template's shape and stay within the 50-line cap.
 
 ## 1. Order for `T`
 

@@ -1,8 +1,8 @@
 # Mimir: A head start, literally
 
-**Version 0.1.0** · early release, features and file layout may still change ([what's planned](#planned-changes))
+**Version 0.2.0** · early release, features and file layout may still change ([what's planned](#planned-changes))
 
-Mimir is an exam study plugin for [Claude Code](https://claude.com/claude-code). It teaches you course material in your professor's style and remembers what you know across sessions. (In Norse myth, Mimir is the severed head Odin consults for wisdom.)
+Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude.com/claude-code), [Codex](https://developers.openai.com/codex) and [Antigravity](https://antigravity.google) (Google's free agent that replaced Gemini CLI). It teaches you course material in your professor's style and remembers what you know across sessions. (In Norse myth, Mimir is the severed head Odin consults for wisdom.)
 
 ## What it does
 
@@ -10,55 +10,75 @@ Mimir is an exam study plugin for [Claude Code](https://claude.com/claude-code).
 - **Sets the pace from the exam date.** Far from the exam, sessions are short teaching episodes (Standard). Close to it, Mimir drills the question types worth the most points per hour (Urgent). It picks the mode and tells you why.
 - **Follows your professor.** Mimir reads the outline, slides and past papers, learns how the professor writes questions, and labels every question with where it came from. Answer keys are checked before you see them.
 - **Remembers you.** It keeps dated evidence of what you solved alone and with help, and picks up where you left off.
-- **Keeps your files local.** Everything lives in one folder (default `~/learning/`). Generated pages work offline. Mimir sends no telemetry; Claude Code itself still talks to the model as usual.
+- **Keeps your files local.** Everything lives in one folder (default `~/learning/`). Generated pages work offline. Mimir sends no telemetry; your agent still talks to its model as usual.
 
 ## Install
 
-You need Claude Code and Python 3.11 or newer (available as `python3`).
+You need Python 3.11 or newer (available as `python3`) and one of the agents below. For Codex and Antigravity, also install `pdftotext` (part of poppler: preinstalled on most Linux, `brew install poppler` on macOS) for the best PDF text; without it Mimir falls back to a simpler built-in reader.
 
-Inside Claude Code:
+**Claude Code**
 
 ```
 /plugin marketplace add oguzdogmus/mimir
 /plugin install mimir@mimir
 ```
 
-Or from a local clone:
+**Codex**
 
 ```sh
-git clone https://github.com/oguzdogmus/mimir.git ~/mimir
-claude plugin marketplace add ~/mimir
-claude plugin install mimir@mimir
+codex plugin marketplace add oguzdogmus/mimir
+codex plugin add mimir@mimir
 ```
 
-To try it for one session without installing: `claude --plugin-dir ~/mimir`.
+**Antigravity**
+
+```sh
+agy plugin install https://github.com/oguzdogmus/mimir
+```
+
+Start Antigravity from your learning folder (`cd ~/learning && agy`): its file tools only reach the folder it was started in. If you use Antigravity through another app that doesn't load plugins, link the skills in as well:
+
+```sh
+ln -s ~/.gemini/config/plugins/mimir/skills/mimir-* ~/.gemini/config/skills/
+```
+
+**From a local clone** (any agent): `git clone https://github.com/oguzdogmus/mimir.git ~/mimir`, then use `~/mimir` in place of `oguzdogmus/mimir` or the GitHub URL above. To try it in Claude Code for one session without installing: `claude --plugin-dir ~/mimir`.
 
 ## Quick start
 
-1. Run `/mimir:setup` once to create your learning folder.
-2. Drop course files (outline, slides, past papers) into `~/learning/_inbox/` and run `/mimir:ingest`.
-3. Run `/mimir:study` and tell it when your exam is.
+1. Run `mimir-setup` once to create your learning folder.
+2. Drop course files (outline, slides, past papers) into `~/learning/_inbox/` and run `mimir-ingest`.
+3. Run `mimir-study` and tell it when your exam is.
 
-Not sure which command fits? Run `/mimir:help`.
+Not sure which command fits? Run `mimir-help`.
 
 ## Commands
 
-| Command | What it is for |
+Each command is a skill. How you call it depends on the agent: `/mimir:mimir-study` in Claude Code, `$mimir-study` in Codex, `/mimir-study` in Antigravity. You can also just say what you want ("quiz me on automata") and the agent picks the skill.
+
+| Skill | What it is for |
 |---|---|
-| `/mimir:setup` | One-time setup: your learning folder, languages and any exam dates you know. |
-| `/mimir:ingest` | File everything in your `_inbox/` into course folders. |
-| `/mimir:study` | Study for an exam. Start here: "exam Friday, help" works, even with just a photo of a past paper. |
-| `/mimir:past-questions` | Drill a course's real past-paper questions, highest points per hour first. |
-| `/mimir:quiz` | Get quizzed at exam level in your professor's style, with checked answer keys. |
-| `/mimir:plan` | See how your plan grows with each day you wait to start. |
-| `/mimir:forecast` | A ranked guess at the topics of your next exam, with the evidence. |
-| `/mimir:progress` | What Mimir believes you know in a course, with dated evidence. |
-| `/mimir:debrief` | After an exam: what was on it, and what that changes. |
-| `/mimir:help` | Tells you which command fits your situation. |
+| `mimir-setup` | One-time setup: your learning folder, languages and any exam dates you know. |
+| `mimir-ingest` | File everything in your `_inbox/` into course folders. |
+| `mimir-study` | Study for an exam. Start here: "exam Friday, help" works, even with just a photo of a past paper. |
+| `mimir-past-questions` | Drill a course's real past-paper questions, highest points per hour first. |
+| `mimir-quiz` | Get quizzed at exam level in your professor's style, with checked answer keys. |
+| `mimir-plan` | See how your plan grows with each day you wait to start. |
+| `mimir-forecast` | A ranked guess at the topics of your next exam, with the evidence. |
+| `mimir-progress` | What Mimir believes you know in a course, with dated evidence. |
+| `mimir-debrief` | After an exam: what was on it, and what that changes. |
+| `mimir-help` | Tells you which command fits your situation. |
 
-## Platform support
+## Works with
 
-So far Mimir has only been tested on **CachyOS (Arch Linux)**. It uses only the Python standard library and each system's default file opener, so it should work on other Linux distributions, macOS, Windows and WSL without problems. If something breaks on your system, please open an issue. The manual cross-platform check is described in [`RELEASE.md`](RELEASE.md).
+| Agent | Status |
+|---|---|
+| Claude Code | Tested |
+| Codex | Tested |
+| Antigravity | Tested |
+| Cursor, Grok Build, Muse Code | Not tested yet. They read the same skill format, so they may work. |
+
+So far Mimir has only been tested on **CachyOS (Arch Linux)**. It uses only the Python standard library and each system's default file opener, so it should work on other Linux distributions, macOS, Windows and WSL without problems. If something breaks on your system or agent, please open an issue. The manual cross-platform check is described in [`RELEASE.md`](RELEASE.md).
 
 ## Planned changes
 
@@ -76,7 +96,7 @@ Mimir is open source under the [Apache License 2.0](LICENSE). You can use, chang
 
 ## Credits
 
-Math sheets use [KaTeX](https://katex.org/) (MIT license), vendored in `assets/vendor/katex/`. `/mimir:help` is modelled on Matt Pocock's [`ask-matt`](https://github.com/mattpocock/skills) router skill.
+Math sheets use [KaTeX](https://katex.org/) (MIT license), vendored in `assets/vendor/katex/`. `mimir-help` is modelled on Matt Pocock's [`ask-matt`](https://github.com/mattpocock/skills) router skill.
 
 These skills work well alongside Mimir:
 
