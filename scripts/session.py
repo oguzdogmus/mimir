@@ -4,13 +4,13 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <start|check|clock|debrief|progress>  < input.json
+    python3 session.py <now|parse-date|start|check|clock|debrief|progress>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
-``line``. Read-only: it never writes, moves or creates a file. "Now" is an
-input (``now``, from ``date -Iseconds``); the clock is never read, so the same
-input and files always give the same output.
+``line``. Read-only: it never writes, moves or creates a file. Only ``now``
+reads the clock; every other subcommand takes "now" as an input (``now``, from
+``session.py now``), so the same input and files always give the same output.
 
 Datetimes are ISO 8601 with a time, as ``plan.py`` takes them
 (e.g. "2026-10-17T09:00:00+03:00"). "Today" is ``now``'s own calendar date.
@@ -45,6 +45,29 @@ Files read (all inside the learning root, see ``workspace.py``)
 
 Subcommands and examples (paths shown for root /home/u/learning)
 ----------------------------------------------------------------
+now -- the local time, the one clock read of a session. Standard library only,
+    so the same on Linux, macOS and Windows.
+    in : {}
+    out: {"now": "2026-10-17T09:05:07+03:00", "date": "2026-10-17",
+          "log_name": "2026-10-17-0905", "last_session": "2026-10-17 09:05",
+          "term": "2026-Fall", "line": "Now: 2026-10-17T09:05:07+03:00."}
+    ``now`` is ISO 8601 to the second with the local UTC offset (the session
+    timestamp); ``date`` the evidence date; ``log_name`` the log file name
+    without ``.md``; ``last_session`` the ``save.md`` stamp; ``term`` the
+    fallback term by month: Jan-May Spring, Jun-Aug Summer, Sep-Dec Fall.
+
+parse-date -- the student's exam-date phrase as a date, or a refusal.
+    in : {"now": "2026-10-17T09:00:00+03:00", "phrase": "Friday"}
+    out: {"date": "2026-10-23", "line": "Exam date: 2026-10-23."}
+    Only these phrases, ignoring case and extra spaces: ``YYYY-MM-DD``;
+    ``today``; ``tomorrow``; a full English weekday name (``friday``), the
+    next such day counting today, so today's own weekday name means today;
+    ``N days`` or ``in N days`` (N a whole number). Today is
+    ``now``'s own calendar date. This is not natural-language date parsing:
+    anything else ("Nov 5", "5/11", "next friday", "fri") exits 2 as
+    unsupported. A date that does not exist, is before today, or is more than
+    plan.MAX_HORIZON_DAYS days after today also exits 2.
+
 start -- pick the course, the exam and the class for a new session.
     in : {"now": "2026-10-17T09:00:00+03:00"}
          optional "course" (a course folder name, e.g. "CS201 Theory") and
@@ -177,7 +200,7 @@ from __future__ import annotations
 
 import re
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import ingest
@@ -195,12 +218,14 @@ NO_ROUTE_LINE = ("No topics on the route yet: drop the outline, slides or past p
 ROUTE_DONE_LINE = ("Your route is complete: every topic is mastered in mastery.md. "
                    "Want a `mimir-quiz` to keep it fresh?")
 
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")  # date.weekday() order
 STATUSES = ("unseen", "gap", "shaky", "mastered")
 _EXAM_TABLE = ("Exam dates", ("course", "exam", "date"))
 _ACTIVE_TABLE = ("Active courses", ("course", "path"))
 _DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 _LAST_SESSION = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})(?: ([0-9]{2}:[0-9]{2}))?")
 _COUNT = re.compile(r"[0-9]+")
+_RELATIVE = re.compile(r"(?:in )?([0-9]+) days?")
 _MASTERY_COLUMNS = ("topic", "status", "evidence", "evidence_date", "last_check", "assisted", "unassisted",
                     "frustration_override")
 
@@ -210,7 +235,7 @@ _MASTERY_COLUMNS = ("topic", "status", "evidence", "evidence_date", "last_check"
 def _moment(data: dict, field: str) -> datetime:
     """A datetime with a time; plan.py's parser, its errors as workspace.InputError."""
     if data.get(field) is None:
-        raise InputError(f"{field} is required (a datetime from `date -Iseconds`)")
+        raise InputError(f"{field} is required (a datetime from `session.py now`)")
     try:
         return plan.parse_moment(data[field], field, need_time=True)
     except plan.InputError as exc:
@@ -766,7 +791,61 @@ def cmd_clock(data: dict) -> dict:
     return {"elapsed_minutes": minutes, "phase": phase, "line": f"Episode: {minutes} min, {what}."}
 
 
+def _clock() -> datetime:
+    """The local wall clock with its UTC offset, to the second. Only ``now`` reads it."""
+    return datetime.now().astimezone()
+
+
+def _season(month: int) -> str:
+    return "Spring" if month <= 5 else "Summer" if month <= 8 else "Fall"
+
+
+def cmd_now(data: dict) -> dict:
+    _check_keys(data, set())
+    now = _clock().replace(microsecond=0)
+    stamp = now.isoformat()
+    return {"now": stamp, "date": now.date().isoformat(), "log_name": now.strftime("%Y-%m-%d-%H%M"),
+            "last_session": now.strftime("%Y-%m-%d %H:%M"), "term": f"{now.year}-{_season(now.month)}",
+            "line": f"Now: {stamp}."}
+
+
+def cmd_parse_date(data: dict) -> dict:
+    _check_keys(data, {"now", "phrase"})
+    today = _moment(data, "now").date()
+    phrase = data.get("phrase")
+    if not isinstance(phrase, str):
+        raise InputError("phrase is required (the student's exam-date phrase)")
+    text = " ".join(phrase.split()).casefold()
+    if not text:
+        raise InputError("phrase is empty")
+    relative = _RELATIVE.fullmatch(text)
+    horizon = today + timedelta(days=plan.MAX_HORIZON_DAYS)
+    if text == "today":
+        day = today
+    elif text == "tomorrow":
+        day = today + timedelta(days=1)
+    elif relative:
+        count = int(relative.group(1))
+        day = today + timedelta(days=count) if count <= plan.MAX_HORIZON_DAYS else horizon + timedelta(days=1)
+    elif text in WEEKDAYS:
+        day = today + timedelta(days=(WEEKDAYS.index(text) - today.weekday()) % 7)
+    elif _DATE.fullmatch(text):
+        day = _valid_date(text)
+        if day is None:
+            raise InputError(f"phrase {_short(phrase)} is not a real date")
+    else:
+        raise InputError(f"phrase {_short(phrase)} is unsupported (use YYYY-MM-DD, today, tomorrow, "
+                         "a weekday name or \"in N days\")")
+    if day < today:
+        raise InputError(f"phrase {_short(phrase)} is in the past ({day.isoformat()})")
+    if day > horizon:
+        raise InputError(f"phrase {_short(phrase)} is more than {plan.MAX_HORIZON_DAYS} days ahead")
+    return {"date": day.isoformat(), "line": f"Exam date: {day.isoformat()}."}
+
+
 COMMANDS = {
+    "now": (cmd_now, "the local time: ISO timestamp, evidence date, log name, last_session stamp and term"),
+    "parse-date": (cmd_parse_date, "the student's exam-date phrase as a YYYY-MM-DD date, or a refusal"),
     "start": (cmd_start, "pick the course, exam, delivery class and first topic for a session"),
     "check": (cmd_check, "status, counts and staleness for named topics"),
     "clock": (cmd_clock, "elapsed episode minutes and phase (teach, wrap, over)"),
@@ -777,7 +856,7 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
-                             ("Mimir session runner. Subcommands: start, check, clock, debrief, progress. Reads one JSON "
+                             ("Mimir session runner. Subcommands: now, parse-date, start, check, clock, debrief, progress. Reads one JSON "
                               "object on stdin and prints one JSON object on stdout. Writes nothing."),
                              COMMANDS, argv)
 

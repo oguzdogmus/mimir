@@ -55,3 +55,14 @@ def test_manifests_agree():
 
 def test_no_agents_folder_for_other_tools_to_misread():
     assert not (ROOT_DIR / "agents").exists()
+
+
+SHELL_DATE = re.compile(r"`date( [-+'\"][^`]*)?` (call|command)|\(`date`\)|`date [-+'\"]|\$\(date\b|\bdate -[A-Za-z]|\bdate \+%")
+
+
+def test_no_shell_date_commands():
+    """GNU `date -d` and friends differ on macOS and are missing on Windows: the
+    clock and date phrases go through `session.py now` and `parse-date`."""
+    for path in MARKDOWN:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not SHELL_DATE.search(line), f"{path}:{n}: {line.strip()[:80]}"

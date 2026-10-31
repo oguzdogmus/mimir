@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -775,7 +776,7 @@ def test_debrief_due_writes_nothing(home, root):
     assert snapshot(home) == before
 
 
-def test_stdlib_only_and_no_clock():
+def test_stdlib_only_and_only_now_reads_the_clock():
     tree = ast.parse(SS.read_text(encoding="utf-8"))
     local = {"workspace", "plan", "ingest"}
     for node in ast.walk(tree):
@@ -784,9 +785,11 @@ def test_stdlib_only_and_no_clock():
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 assert alias.name.split(".")[0] in sys.stdlib_module_names | local
-        elif isinstance(node, ast.Attribute):
-            assert node.attr not in {"now", "today", "utcnow", "time"} or not (
-                isinstance(node.value, ast.Name) and node.value.id in {"datetime", "date", "time"})
+    clock_reads = [fn.name for fn in ast.walk(tree) if isinstance(fn, ast.FunctionDef)
+                   for node in ast.walk(fn) if isinstance(node, ast.Attribute)
+                   and node.attr in {"now", "today", "utcnow", "time"}
+                   and isinstance(node.value, ast.Name) and node.value.id in {"datetime", "date", "time"}]
+    assert clock_reads == ["_clock"]  # only the `now` subcommand reads the clock
     assert (session.STALE_DAYS, session.EPISODE_MIN_MINUTES, session.EPISODE_MAX_MINUTES) == (14, 20, 25)
 
 
@@ -905,3 +908,136 @@ def test_progress_writes_nothing_and_skips_plan(home, root, monkeypatch):
         monkeypatch.setattr(session.plan, name, boom)
     monkeypatch.setenv("HOME", str(home))
     assert session.cmd_progress({"now": NOW})["course"] == "CS201 Theory"
+
+
+# --- parse-date ------------------------------------------------------------------------
+
+def parse(home, phrase, now=NOW):
+    return ok(home, "parse-date", {"now": now, "phrase": phrase})["date"]
+
+
+def test_parse_date_iso(home):
+    assert parse(home, "2026-11-05") == "2026-11-05"
+
+
+@pytest.mark.parametrize("now,phrase,expected", [
+    (NOW, "today", "2026-10-17"),
+    (NOW, " Tomorrow ", "2026-10-18"),
+    ("2026-10-31T23:59:59+03:00", "tomorrow", "2026-11-01"),  # month boundary
+    ("2026-12-31T08:00:00+03:00", "tomorrow", "2027-01-01"),  # year boundary
+    ("2028-02-28T08:00:00+00:00", "tomorrow", "2028-02-29"),  # leap day
+    (NOW, "in 3 days", "2026-10-20"),
+    (NOW, "3 days", "2026-10-20"),
+    (NOW, "in 1 day", "2026-10-18"),
+    (NOW, "0 days", "2026-10-17"),
+    ("2026-12-20T08:00:00+03:00", "in 15 days", "2027-01-04"),
+    (NOW, "366 days", "2027-10-18"),  # the horizon itself is allowed
+])
+def test_parse_date_relative(home, now, phrase, expected):
+    assert parse(home, phrase, now) == expected
+
+
+@pytest.mark.parametrize("now,phrase,expected", [
+    (NOW, "Saturday", "2026-10-17"),  # same weekday as today means today
+    (NOW, "sunday", "2026-10-18"),
+    (NOW, "FRIDAY", "2026-10-23"),  # yesterday's weekday is six days ahead
+    (NOW, "Wednesday", "2026-10-21"),
+    ("2026-10-31T10:00:00+03:00", "monday", "2026-11-02"),  # month boundary
+    ("2026-12-31T10:00:00+03:00", "friday", "2027-01-01"),  # year boundary
+    # Today is now's own calendar date, in now's own offset: the same instant
+    # is Friday in UTC and Saturday in UTC+3.
+    ("2026-10-17T01:00:00+03:00", "saturday", "2026-10-17"),
+    ("2026-10-16T22:00:00+00:00", "saturday", "2026-10-17"),
+    ("2026-10-16T22:00:00+00:00", "friday", "2026-10-16"),
+    ("2026-10-17T01:00:00+03:00", "tomorrow", "2026-10-18"),
+    ("2026-10-16T22:00:00+00:00", "tomorrow", "2026-10-17"),
+    ("2026-10-16T22:00:00", "today", "2026-10-16"),  # no offset: taken as given
+])
+def test_parse_date_weekdays_and_offsets(home, now, phrase, expected):
+    assert parse(home, phrase, now) == expected
+
+
+@pytest.mark.parametrize("phrase,needle", [
+    ("2026-02-30", "not a real date"),
+    ("2026-13-01", "not a real date"),
+    ("2026-10-16", "in the past"),
+    ("2027-10-19", "more than 366 days ahead"),
+    ("367 days", "more than 366 days ahead"),
+    ("in 1000 days", "more than 366 days ahead"),
+    ("in 99999999999999999999 days", "more than 366 days ahead"),
+    ("Nov 5", "unsupported"),
+    ("5/11", "unsupported"),
+    ("next friday", "unsupported"),
+    ("this friday", "unsupported"),
+    ("fri", "unsupported"),
+    ("yesterday", "unsupported"),
+    ("-3 days", "unsupported"),
+    ("in days", "unsupported"),
+    ("2026-11-5", "unsupported"),
+    ("20261105", "unsupported"),
+    ("2026-11-05T09:00", "unsupported"),
+    ("", "phrase is empty"),
+    ("   ", "phrase is empty"),
+    ("x" * 300, "unsupported"),
+    ("tomorrow\nfriday", "unsupported"),
+])
+def test_parse_date_refusals(home, phrase, needle):
+    fails(home, "parse-date", {"now": NOW, "phrase": phrase}, needle)
+
+
+def test_parse_date_bad_input(home):
+    fails(home, "parse-date", {"phrase": "today"}, "now is required")
+    fails(home, "parse-date", {"now": "2026-10-17", "phrase": "today"}, "now must include a time")
+    fails(home, "parse-date", {"now": NOW}, "phrase is required")
+    fails(home, "parse-date", {"now": NOW, "phrase": 5}, "phrase is required")
+    fails(home, "parse-date", {"now": NOW, "phrase": "today", "x": 1}, "unknown field 'x'")
+
+
+# --- now -------------------------------------------------------------------------------
+
+def fixed_now(monkeypatch, iso):
+    moment = datetime.fromisoformat(iso)
+    monkeypatch.setattr(session, "_clock", lambda: moment)
+    out = session.cmd_now({})
+    assert isinstance(out["line"], str) and out["line"]
+    return out
+
+
+@pytest.mark.parametrize("clock,now,day,log,last,term", [
+    ("2026-10-17T09:05:07.123456+03:00", "2026-10-17T09:05:07+03:00", "2026-10-17", "2026-10-17-0905",
+     "2026-10-17 09:05", "2026-Fall"),
+    ("2026-12-31T23:59:59.999+00:00", "2026-12-31T23:59:59+00:00", "2026-12-31", "2026-12-31-2359",
+     "2026-12-31 23:59", "2026-Fall"),
+    ("2027-01-01T00:00:00-05:00", "2027-01-01T00:00:00-05:00", "2027-01-01", "2027-01-01-0000",
+     "2027-01-01 00:00", "2027-Spring"),
+    ("2026-05-31T18:30:00+05:30", "2026-05-31T18:30:00+05:30", "2026-05-31", "2026-05-31-1830",
+     "2026-05-31 18:30", "2026-Spring"),
+    ("2026-06-01T08:00:00+14:00", "2026-06-01T08:00:00+14:00", "2026-06-01", "2026-06-01-0800",
+     "2026-06-01 08:00", "2026-Summer"),
+    ("2026-08-31T08:00:00-09:30", "2026-08-31T08:00:00-09:30", "2026-08-31", "2026-08-31-0800",
+     "2026-08-31 08:00", "2026-Summer"),
+    ("2026-09-01T08:00:00+00:00", "2026-09-01T08:00:00+00:00", "2026-09-01", "2026-09-01-0800",
+     "2026-09-01 08:00", "2026-Fall"),
+])
+def test_now_fixed_clock(monkeypatch, clock, now, day, log, last, term):
+    out = fixed_now(monkeypatch, clock)
+    assert (out["now"], out["date"], out["log_name"], out["last_session"], out["term"]) == \
+        (now, day, log, last, term)
+
+
+def test_now_reads_the_local_clock_with_its_offset(home):
+    for tz, offset in (("UTC0", "+00:00"), ("IST-5:30", "+05:30"), ("EST5", "-05:00")):
+        proc = subprocess.run([sys.executable, str(SS), "now"], input=b"{}", capture_output=True, check=False,
+                              env={**os.environ, "HOME": str(home), "TZ": tz})
+        assert proc.returncode == 0 and proc.stderr == b"", proc.stderr.decode()
+        out = json.loads(proc.stdout)
+        assert out["now"].endswith(offset), (tz, out["now"])
+        moment = datetime.fromisoformat(out["now"])
+        assert out["date"] == moment.date().isoformat()
+        assert out["log_name"] == moment.strftime("%Y-%m-%d-%H%M")
+        # what now prints is what every other subcommand takes
+        assert ok(home, "parse-date", {"now": out["now"], "phrase": "today"})["date"] == out["date"]
+
+
+def test_now_takes_no_fields(home):
+    fails(home, "now", {"x": 1}, "unknown field 'x'")

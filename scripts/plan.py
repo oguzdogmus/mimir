@@ -7,7 +7,7 @@ Deterministic, standard library only, Python 3.11+. Run as::
 
 Each subcommand reads ONE JSON object on stdin and prints ONE JSON object on
 stdout: structured data plus a ready-to-print ``line``. "Now" is an input
-(``now``, from ``date -Iseconds``); the clock is never read, so the same input
+(``now``, from ``session.py now``); the clock is never read, so the same input
 always gives byte-identical output.
 
 Stdin schema (a date-only value is exactly ``YYYY-MM-DD``; a datetime is an
@@ -243,7 +243,7 @@ def parse_moment(value, field: str, *, need_time: bool = False):
     except ValueError:
         raise InputError(f"{field} is not a valid date: {_short(value)}") from None
     if need_time and is_date_only(moment):
-        raise InputError(f"{field} must include a time, e.g. from `date -Iseconds`")
+        raise InputError(f"{field} must include a time, e.g. from `session.py now`")
     return moment
 
 

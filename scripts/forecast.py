@@ -12,7 +12,7 @@ and prints ONE JSON object on stdout: structured data plus a ready-to-print
 workspace at the learning root (see ``workspace.py``) and an existing course
 folder; the term and course folders, the course ``.state/`` and
 ``forecast.md`` must not be symlinks. The clock is never read: ``date`` is an
-input (``date +%F``). On any error nothing is written.
+input (``session.py now``'s ``date``). On any error nothing is written.
 
 The model picks the topics and their evidence; this script owns the trust
 numbers: the confidence line, hit rates and the cumulative record are always

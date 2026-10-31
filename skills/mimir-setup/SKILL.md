@@ -23,7 +23,7 @@ All workspace changes go through `python3 "<mimir>/scripts/workspace.py" <cmd>`.
    Print each returned `line`. If any other `init` or `relocate` call exits non-zero, show its stderr line and stop without editing the profile.
 5. Edit `.state/profile.md` under the `root` from the last returned JSON, keeping the template's shape:
    - `course_language:` and `teaching_language:`.
-   - One `| CODE | exam | YYYY-MM-DD |` row per known exam under `## Exam dates`. Replace `|` and newlines in cell values with spaces.
-   - Relative exam dates: run `date -d '<phrase>' +%F`; if that fails (e.g. macOS), ask for the date as YYYY-MM-DD in the same setup exchange. Never do date arithmetic yourself.
-   - Last, `setup_done:` set to the output of `date +%F`.
+   - First run `python3 "<mimir>/scripts/session.py" now` with `{}` on stdin once: `N` is its `now`.
+   - One `| CODE | exam | YYYY-MM-DD |` row per known exam under `## Exam dates`, the date being the `date` of `python3 "<mimir>/scripts/session.py" parse-date` with `{"now": "<N>", "phrase": "<the date as the student gave it>"}` (escape it as a JSON string). It accepts only `YYYY-MM-DD`, today, tomorrow, an English weekday name (today's own weekday means today) and "N days" or "in N days". When it exits 2, ask for the date as YYYY-MM-DD in the same setup exchange. Never do date arithmetic yourself. Replace `|` and newlines in cell values with spaces.
+   - Last, `setup_done:` set to the `date` of that `session.py now` call.
 6. Say: "Drop your course outline and past papers into `<root>/_inbox/`." Teaching can start right after.
