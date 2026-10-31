@@ -83,7 +83,7 @@ start -- pick the course, the exam and the class for a new session.
     dated P); ``deferred`` = the class is Urgent, ``due`` = not deferred.
     A workspace with no course folder gives
     ``course`` null, every course field null, and the line "No course yet:
-    run /mimir:setup, then /mimir:ingest."
+    run mimir-setup, then mimir-ingest."
 
 check -- staleness and counts for named topics.
     in : {"now": "...", "term": "2026-Fall", "course": "CS201 Theory",
@@ -155,7 +155,7 @@ progress -- what Mimir believes the student knows. Read-only; never calls plan.p
     Recheck ``due`` when stale, cells escaped as ``INDEX.md`` cells. ``line``
     ends "; none due a recheck." when no topic is stale. No rows: ``topics``
     [], ``table`` null, line "No topics on the route yet: drop the outline
-    into `_inbox/` and run /mimir:ingest." No course: ``start``'s line,
+    into `_inbox/` and run mimir-ingest." No course: ``start``'s line,
     ``courses`` as ``start``'s, every other field null.
 
 Exit codes: invalid input (bad field, unknown course, no workspace) exits 2
@@ -423,7 +423,7 @@ def _exam(profile: str, code: str, today: date) -> tuple[str | None, str | None,
 _PENDING = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\s+(.*))?")
 _LOG_NAME = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})-[0-9]{4}(?:-[^/]*)?\.md")
 _NO_CRAM_LINE = "Cram bill: no study sessions logged."
-NO_COURSE_LINE = "No course yet: run /mimir:setup, then /mimir:ingest."
+NO_COURSE_LINE = "No course yet: run mimir-setup, then mimir-ingest."
 
 
 def _code_exams(profile: str, code: str) -> list[tuple[date, str]]:
@@ -666,7 +666,7 @@ def cmd_debrief(data: dict) -> dict:
 
 _PROGRESS_HEAD = ("| Topic | Status | Evidence | Evidence date | Solved alone / with help | Recheck |\n"
                   "|---|---|---|---|---|---|")
-NO_ROUTE_LINE = "No topics on the route yet: drop the outline into `_inbox/` and run /mimir:ingest."
+NO_ROUTE_LINE = "No topics on the route yet: drop the outline into `_inbox/` and run mimir-ingest."
 
 
 def cmd_progress(data: dict) -> dict:

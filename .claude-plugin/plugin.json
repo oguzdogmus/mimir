@@ -1,28 +1,28 @@
 {
   "name": "mimir",
-  "version": "0.1.0",
-  "description": "Exam study companion for Claude Code. Teaches college students for their exams in the professor's style and remembers them across sessions.",
+  "version": "0.2.0",
+  "description": "Exam study companion for AI coding agents (Claude Code, Codex, Antigravity). Teaches college students for their exams in the professor's style and remembers them across sessions.",
   "author": {
     "name": "Oguz Dogmus"
   },
   "license": "Apache-2.0",
   "repository": "https://github.com/oguzdogmus/mimir",
   "skills": [
-    "./skills/core-rules",
-    "./skills/setup",
-    "./skills/ingest",
-    "./skills/quiz",
-    "./skills/notation",
-    "./skills/study",
-    "./skills/past-questions",
-    "./skills/plan",
-    "./skills/forecast",
-    "./skills/debrief",
-    "./skills/progress",
-    "./skills/help"
+    "./skills/mimir-core-rules",
+    "./skills/mimir-setup",
+    "./skills/mimir-ingest",
+    "./skills/mimir-quiz",
+    "./skills/mimir-notation",
+    "./skills/mimir-study",
+    "./skills/mimir-past-questions",
+    "./skills/mimir-plan",
+    "./skills/mimir-forecast",
+    "./skills/mimir-debrief",
+    "./skills/mimir-progress",
+    "./skills/mimir-help"
   ],
   "agents": [
-    "./agents/verifier.md",
-    "./agents/visual-builder.md"
+    "./helpers/verifier.md",
+    "./helpers/visual-builder.md"
   ]
 }

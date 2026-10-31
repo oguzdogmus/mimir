@@ -130,7 +130,7 @@ delay -- the cost-of-delay slider page and chart, from ``assets/interactive/slid
     The route and the exam come from ``session.py start`` for that course
     and the rows from ``plan.py``: ``delay_line`` is the same line as
     ``start``'s in a Standard session (``start`` gives none when Urgent; this
-    still computes it, so ``/mimir:plan`` works in either class). No
+    still computes it, so ``mimir-plan`` works in either class). No
     arithmetic happens in the page. The page: a native range
     input "Start day" over every row, an ``<output>`` with that row's line,
     the confidence line and a table of every row. The SVG chart is generated

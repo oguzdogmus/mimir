@@ -19,7 +19,7 @@ The frustration rule (§4) applies at every point.
 
 ## 2. Explanation ladder
 
-Rungs, top to bottom: **notation** (the professor's notation from the fingerprint; math the `mimir:notation` way), **analogy**, **worked example**, **visual** (built through `mimir:notation`), **native language**.
+Rungs, top to bottom: **notation** (the professor's notation from the fingerprint; math the `mimir-notation` way), **analogy**, **worked example**, **visual** (built through `mimir-notation`), **native language**.
 
 1. Every explanation starts at the notation rung.
 2. It does not land when the student says so ("I don't get it", "lost", "huh?") or answers a guiding question wrongly. Then step down exactly ONE rung for the next explanation. Never skip a rung, and never start lower because of `## Rung hints` (the hint is only recorded).

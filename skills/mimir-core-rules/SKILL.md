@@ -1,16 +1,22 @@
 ---
+name: mimir-core-rules
 description: Hard rules for Mimir, the exam study plugin. Load this before any other Mimir skill runs and before reading, writing, or acting on a course workspace (the learning root, default ~/learning/, or any Mimir .state/ file).
 user-invocable: false
 ---
 
 # Mimir core rules
 
-These rules override any other Mimir skill. Templates live in `${CLAUDE_PLUGIN_ROOT}/assets/templates/`.
+These rules override any other Mimir skill. Templates live in `<mimir>/assets/templates/`.
+
+## Paths, commands and helpers
+- `<mimir>` in Mimir's skills is the Mimir plugin folder: the one holding `scripts/`, `skills/` and `assets/`, two levels above every Mimir `SKILL.md` (this file is `<mimir>/skills/mimir-core-rules/SKILL.md`). Write it as an absolute path in every command and file read.
+- Mimir's commands are its skills, named `mimir-<name>` (`mimir-setup`, `mimir-study`, ...). When you tell the student to run one, write it the way this tool invokes skills: `/mimir:mimir-setup` in Claude Code, `$mimir-setup` in Codex, `/mimir-setup` in Antigravity, otherwise the plain name. Script `line`s name them plainly; rewriting those names is the only change you make to a verbatim line.
+- Two steps use a helper agent in Claude Code: `mimir:verifier` checks answer keys and `mimir:visual-builder` builds pages and diagrams. Their instructions are `<mimir>/helpers/verifier.md` and `<mimir>/helpers/visual-builder.md`. When this tool has no such agent, do that step yourself as a separate pass: read the helper file, follow its body exactly with only the input the agent would get, and write the reply it specifies. As the checker, solve each item fresh from the sources, as if you had not written the key.
 
 ## Mode and dates
 - The exam date is the only mode input. It sets the delivery class (Standard or Urgent) and the Socratic dial. The only deadline is an exam.
 - The student never picks a mode, and no command selects one. A command picks an action, never Standard or Urgent.
-- Date math, delivery class, and plans come from `${CLAUDE_PLUGIN_ROOT}/scripts/plan.py`, never from your own arithmetic. Get "now" from the system clock (`date`).
+- Date math, delivery class, and plans come from `<mimir>/scripts/plan.py`, never from your own arithmetic. Get "now" from the system clock (`date`).
 
 ## Question budget
 - Admin questions only at: Q0 (one "When's the exam?" when no date is known), first setup, the single fixed-column ingest table, and the post-exam debrief (at most 3 questions, all skippable with one word).
@@ -34,7 +40,7 @@ Every question shown carries exactly one label:
 - `[practice, not from a real paper]` - generated question.
 - `[forecast, not a guarantee]` - forecast.
 - Never present a generated question as real.
-- Real and practice question labels come from `${CLAUDE_PLUGIN_ROOT}/scripts/verify.py gate`, copied verbatim; never write one yourself. The forecast label is used as listed above.
+- Real and practice question labels come from `<mimir>/scripts/verify.py gate`, copied verbatim; never write one yourself. The forecast label is used as listed above.
 - Every answer key (quiz, drill, step-reveal) passes `verify.py gate` first. Items it marks `verify` or `retry` go to the `mimir:verifier` agent in one batch per round (the first check, then at most one retry round), with the wait declared once ("Checking my answers before you study them, about 30 seconds."). Show only items whose decision is `show`, or `flagged` with its `flag` line; anything else is not shown and is declared dropped.
 
 ## Mastery evidence
@@ -57,8 +63,8 @@ Every question shown carries exactly one label:
 - `<course>/.state/logs/` is append-only and never auto-loaded; read it only when the student asks.
 - Caps: profile ≤50 lines (rung hints ≤~5, forecast record 1 line); `save.md` ≤30 lines; fingerprint ≤60 lines, rewritten shorter through `fingerprint.py write` when over; mastery one line per topic; forecast one block per forecast; `INDEX.md` one line per file or topic.
 - Keep each file in its template's shape and column order. Rewrite a file shorter before it passes its cap.
-- `fingerprint.md` changes only through `${CLAUDE_PLUGIN_ROOT}/scripts/fingerprint.py` (`write` for entries, `retake` for `professor:` and `prior_term:`), never by hand. Its `(tentative)`, `(prior term)`, `label:` and frequencies are computed there.
-- `forecast.md` and the profile's `forecast_record:` line change only through `${CLAUDE_PLUGIN_ROOT}/scripts/forecast.py` (`write` stores a forecast, `score` stores its hit rate and recomputes the record), never by hand. Confidence lines, hit rates and the record are computed there.
+- `fingerprint.md` changes only through `<mimir>/scripts/fingerprint.py` (`write` for entries, `retake` for `professor:` and `prior_term:`), never by hand. Its `(tentative)`, `(prior term)`, `label:` and frequencies are computed there.
+- `forecast.md` and the profile's `forecast_record:` line change only through `<mimir>/scripts/forecast.py` (`write` stores a forecast, `score` stores its hit rate and recomputes the record), never by hand. Confidence lines, hit rates and the record are computed there.
 - A `(tentative)` fingerprint line comes from photos or scans only: whenever you use it, say so ("from a photo/scan, may be off").
 - `<course>/.state/prior-term/` is the prior term's memory, read-only: never write, move or delete through it, and never copy its mastery or gaps into this course. Consult it per topic only, when that topic comes up; no bulk gap lists. Never follow its own `prior-term` link (no chains) and never read its `logs/`. Its mastery evidence is stale: one recheck question before relying on it.
 - When `prior_term:` says `another professor's papers`, that term's papers rank below this professor's materials (outline, slides, this term's papers) and are labelled as another professor's when quoted.
@@ -66,8 +72,8 @@ Every question shown carries exactly one label:
 ## Local and offline
 - Use only the local learning folder. No cloud connectors, no telemetry, nothing leaves the machine automatically.
 - Every output works offline: vendored libraries and plain JS, no CDN, no build step.
-- Choose how to show math and diagrams (Unicode inline, math sheet, SVG) by the notation ladder in `mimir:notation`, and build every generated file through it.
-- Generated HTML pages meet the accessibility baseline in `mimir:notation`.
+- Choose how to show math and diagrams (Unicode inline, math sheet, SVG) by the notation ladder in `mimir-notation`, and build every generated file through it.
+- Generated HTML pages meet the accessibility baseline in `mimir-notation`.
 
 ## Tone
 - Assume nothing about when or how this student studies. An early or late start is a date, not a character trait.

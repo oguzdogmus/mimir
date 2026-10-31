@@ -1,11 +1,12 @@
 ---
+name: mimir-setup
 description: One-time full Mimir setup. Picks the learning folder, the course and teaching languages, and any exam dates already known.
 disable-model-invocation: true
 ---
 
-Load `mimir:core-rules` first.
+First read `../mimir-core-rules/SKILL.md` (beside this skill's folder) unless it is already loaded; it defines `<mimir>`.
 
-All workspace changes go through `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/workspace.py" <cmd>`. Pass its JSON on stdin with a quoted heredoc (`<<'EOF'`) so paths with spaces survive. It prints one JSON object with a ready-to-print `line`.
+All workspace changes go through `python3 "<mimir>/scripts/workspace.py" <cmd>`. Pass its JSON on stdin with a quoted heredoc (`<<'EOF'`) so paths with spaces survive. It prints one JSON object with a ready-to-print `line`.
 
 1. Run `root` with `{}`. If `setup_done` is set, say "Setup already done on <setup_done>. Your learning folder is <root>." and stop.
 2. Say: "One-time setup. This may take a few minutes, and it will not be repeated."

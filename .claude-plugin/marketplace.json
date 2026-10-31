@@ -8,7 +8,7 @@
     {
       "name": "mimir",
       "source": "./",
-      "description": "Exam study companion for Claude Code. Teaches college students for their exams in the professor's style and remembers them across sessions."
+      "description": "Exam study companion for AI coding agents (Claude Code, Codex, Antigravity). Teaches college students for their exams in the professor's style and remembers them across sessions."
     }
   ]
 }

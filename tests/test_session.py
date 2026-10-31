@@ -260,7 +260,7 @@ def test_first_contact_from_logs(home, root):
 
 def test_no_course_yet(home, root):
     out = ok(home, "start", {"now": NOW})
-    assert out["course"] is None and out["courses"] == [] and "/mimir:ingest" in out["line"]
+    assert out["course"] is None and out["courses"] == [] and "mimir-ingest" in out["line"]
 
 
 def test_course_without_index_is_not_a_course(home, root):
@@ -685,7 +685,7 @@ def test_debrief_bad_inputs(home, root):
 
 def test_debrief_no_course(home, root):
     out = ok(home, "debrief", {"now": DUE_NOW})
-    assert out["course"] is None and out["debrief"] is None and "/mimir:setup" in out["line"]
+    assert out["course"] is None and out["debrief"] is None and "mimir-setup" in out["line"]
 
 
 def test_debrief_due_writes_nothing(home, root):
@@ -777,7 +777,7 @@ def test_progress_untrusted_cell(home, root):
 def test_progress_no_rows(home, root, tmp_path):
     cdir = course(home)
     out = ok(home, "progress", {"now": NOW})  # template only
-    no_rows = ("No topics on the route yet: drop the outline into `_inbox/` and run /mimir:ingest.")
+    no_rows = ("No topics on the route yet: drop the outline into `_inbox/` and run mimir-ingest.")
     assert (out["topics"], out["table"], out["line"]) == ([], None, no_rows)
     assert out["counts"] == {"unseen": 0, "gap": 0, "shaky": 0, "mastered": 0}
     assert out["course"] == "CS201 Theory"

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "mimir",
+  "version": "0.2.0",
+  "description": "Exam study companion for AI coding agents (Claude Code, Codex, Antigravity). Teaches college students for their exams in the professor's style and remembers them across sessions.",
+  "author": {
+    "name": "Oguz Dogmus"
+  },
+  "homepage": "https://github.com/oguzdogmus/mimir",
+  "repository": "https://github.com/oguzdogmus/mimir",
+  "license": "Apache-2.0",
+  "keywords": [
+    "study",
+    "exam",
+    "education",
+    "students",
+    "skills"
+  ]
+}
