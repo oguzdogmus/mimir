@@ -15,7 +15,7 @@
 2. Otherwise: teach (§2, §3).
 3. Then the disguise drill (§6).
 
-The frustration rule (§4) applies at every point.
+The frustration steps (§4) apply at every point.
 
 ## 2. Explanation ladder
 
@@ -49,11 +49,11 @@ An "idk" on an item still follows the Questions rule (key shown, counts as wrong
 The override applies to topic `U`: the topic of the item or explanation in progress when the signal came. That is usually `T`; a recheck item on a stale prerequisite makes `U` that prerequisite, and its line is overridden, not `T`'s.
 
 1. First signal on `U`: give exactly ONE smaller step: a statement, not a question. No guiding question in that message.
-2. The student's next reply after the smaller step is another signal, another "idk", or a wrong answer to the same step: say "Giving you the answer. This topic stays marked shaky until you solve one on your own." and give the answer (the worked key of the item shown, or the point being explained, in the professor's notation). Then the override:
+2. The student's next reply after the smaller step is another signal, another "idk", or a wrong answer to the same step: say "Giving you the answer. This topic stays marked shaky until you solve one on your own in a later session." and give the answer (the worked key of the item shown, or the point being explained, in the professor's notation). Then the override:
    - Edit `U`'s `mastery.md` line (add it if missing; keep column order): status `shaky`; append the date to `frustration_override` (comma-separated after any earlier dates); `assisted` and `unassisted` unchanged; evidence `frustration override: answer given`; `evidence_date` and `last_check` the date. Nothing else is recorded for the item that was showing.
    - Edit the profile: `dial_preference: fewer questions (<date>)`. Say "Fewer questions from now on." The rest of this session teaches in the fewer-questions way (§3).
    - Append to the log under `## Results`: `- <U> frustration override: answer given`.
-3. For the rest of the session, no answer on `U` changes `mastery.md`: say right or wrong and show the key as usual, and log `- <U> <kind> <label>: after frustration override, not counted`.
+3. From here the Frustration rule in core rules applies to `U`.
 4. Before an attempt-first attempt, only "just tell me"-type and all-caps signals come here; "hint", "skip" and "idk" follow §5.
 
 ## 5. Attempt-first

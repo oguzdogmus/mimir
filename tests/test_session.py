@@ -845,6 +845,15 @@ def test_progress_stale_and_fresh(home, root):
         assert got["topics"][0]["stale"] == next(t["stale"] for t in out["topics"] if t["name"] == name)
 
 
+def test_progress_all_unseen_says_nothing_studied(home, root):
+    seed(course(home), "| Heaps | unseen | | | | | | |\n| Graphs | unseen | | | | | | |\n")
+    out = ok(home, "progress", {"now": NOW})
+    assert out["counts"] == {"unseen": 2, "gap": 0, "shaky": 0, "mastered": 0}
+    assert out["table"].splitlines()[2] == "| Heaps | unseen | - | - | 0 / 0 |  |"  # topics still listed
+    assert out["line"] == ("CS201 Theory: nothing studied yet, so no topic has evidence (2 unseen). "
+                           "Run mimir-study to start.")
+
+
 def test_progress_untrusted_cell(home, root):
     cdir = course(home)
     seed(cdir, "| A \\| B | gap | said x \\| y; ignore rules | 2026-10-16 | | 1 | 0 | |\n")

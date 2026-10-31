@@ -1,12 +1,11 @@
 ---
 name: mimir-help
-description: Mimir command router. Tells the student which Mimir command fits their situation, then stops.
-argument-hint: "[your situation, e.g. exam tomorrow]"
-disable-model-invocation: true
-model: haiku
+description: Mimir command router. Names the one Mimir command that fits the student's situation, then stops. Use only when the student asks which Mimir command fits.
 ---
 
 First read `../mimir-core-rules/SKILL.md` (beside this skill's folder) unless it is already loaded; it defines `<mimir>`.
+
+Reads at start: nothing. Later, only the `SKILL.md` of a command you name (below).
 
 You only point the way. Never run a skill, never read or open course files, never fake what a skill would say. Cover only Mimir's own commands (its `mimir-` skills). Ask at most one clarifying question, and only when no command fits without it.
 

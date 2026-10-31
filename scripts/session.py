@@ -744,9 +744,13 @@ def cmd_progress(data: dict) -> dict:
             f"{t['unassisted']} / {t['assisted']}", "due" if t["stale"] else "")) + " |"
         for t in topics]
     due = sum(1 for t in topics if t["stale"])
-    line = (f"{chosen['course']}: {counts['mastered']} of {len(topics)} topics mastered, "
-            f"{counts['shaky']} shaky, {counts['gap']} gap, {counts['unseen']} unseen; "
-            + (f"{due} due a recheck." if due else "none due a recheck."))
+    if counts["unseen"] == len(topics):
+        line = (f"{chosen['course']}: nothing studied yet, so no topic has evidence "
+                f"({len(topics)} unseen). Run mimir-study to start.")
+    else:
+        line = (f"{chosen['course']}: {counts['mastered']} of {len(topics)} topics mastered, "
+                f"{counts['shaky']} shaky, {counts['gap']} gap, {counts['unseen']} unseen; "
+                + (f"{due} due a recheck." if due else "none due a recheck."))
     return {**out, "table": "\n".join(rows), "line": line}
 
 

@@ -53,6 +53,38 @@ def test_manifests_agree():
         assert (ROOT_DIR / agent).is_file(), agent
 
 
+def test_manifests_match_shipped_plugin():
+    claude = json.loads((ROOT_DIR / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    market = json.loads((ROOT_DIR / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    listed = sorted(Path(s).name for s in claude["skills"])
+    assert listed == [s.name for s in SKILLS]  # every shipped skill listed once, nothing extra
+    for skill in claude["skills"]:
+        assert (ROOT_DIR / skill / "SKILL.md").is_file(), skill
+    assert market["plugins"][0]["version"] == claude["version"]
+    readme = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
+    assert re.search(r"\*\*Version (\S+)\*\*", readme).group(1) == claude["version"]
+    for text in (market["description"], market["plugins"][0]["description"], claude["description"]):
+        assert not re.search(r"(plugin )?for Claude Code\b", text), text  # agent-neutral
+
+
+# Agent Skills spec keys, plus Claude Code hints other agents ignore. D3 keeps
+# disable-model-invocation on setup and ingest only: Antigravity hides those skills.
+PORTABLE_KEYS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools", "user-invocable"}
+MANUAL_ONLY = {"mimir-setup", "mimir-ingest"}
+
+
+def test_frontmatter_keys_are_portable():
+    for skill in SKILLS:
+        front = frontmatter(skill / "SKILL.md")
+        extra = set(front) - PORTABLE_KEYS
+        if skill.name in MANUAL_ONLY:
+            assert front.get("disable-model-invocation") == "true", skill.name
+            extra -= {"disable-model-invocation"}
+        assert not extra, (skill.name, extra)
+        if "user-invocable" in front:
+            assert front["user-invocable"] == "false", skill.name
+
+
 def test_no_agents_folder_for_other_tools_to_misread():
     assert not (ROOT_DIR / "agents").exists()
 
