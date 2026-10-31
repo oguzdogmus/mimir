@@ -2,14 +2,14 @@
 
 Last updated: 2026-10-31.
 Documentation baseline: `10853de7811ac4cb077a7c8c035460c3ea5b75a3`.
-Current work: issues #5–#14 published; no implementation started.
-Next action: start any unblocked step (1, 2, 3, 5 or 7; issues #6, #7, #8, #9, #10) with the prompt in HANDOFF.md.
+Current work: step 1 ready for review on `fix/script-safety`.
+Next action: review step 1 (#6); start any other unblocked step (2, 3, 5 or 7; issues #7, #8, #9, #10) with the prompt in HANDOFF.md.
 
 ## Step tracker
 
 | Step | Findings | State | Branch / commit / PR | Validation |
 |---|---|---|---|---|
-| 1 | 1, 4, 15, 25 partial | Ready to start | issue [#6](https://github.com/oguzdogmus/mimir/issues/6) | Not run |
+| 1 | 1, 4, 15, 25 partial | Ready for review | issue [#6](https://github.com/oguzdogmus/mimir/issues/6), branch `fix/script-safety` | Targeted: 440 passed; full `uvx --offline pytest -q`: 991 passed |
 | 2 | 2, 10, 11 | Ready to start | issue [#7](https://github.com/oguzdogmus/mimir/issues/7) | Not run |
 | 3 | 3 | Ready to start | issue [#8](https://github.com/oguzdogmus/mimir/issues/8) | Not run |
 | 4 | 8, 9, 12 | Blocked by 3 | issue [#11](https://github.com/oguzdogmus/mimir/issues/11) | Not run |
@@ -37,6 +37,10 @@ None recorded after the audit. Add entries as:
 `N01 | symptom | file/function | evidence/reproduction | impact | suggested fix | destination step`.
 
 ## Work log
+
+### 2026-10-31 — Step 1 moved to its own branch
+
+The step 1 commit had been made directly on local `main`. It was moved to `fix/script-safety`, rebased onto `main` after PR #15, and local `main` was reset to `origin/main`. Full suite after rebase: `uvx --offline pytest -q` -> 991 passed. Not yet reviewed.
 
 ### 2026-10-31 — Issues published
 
