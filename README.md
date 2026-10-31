@@ -70,6 +70,10 @@ These come from hands-on testing and are subject to change. Until 1.0, expect ch
 - **Teaching before drilling.** Urgent sessions show a worked answer first, even on topics you have never seen. Planned: a short "why this exists" and the simplest rule before the first worked example, starting from the easiest form of a question, a short round of questions on the first session to find what you already know, and a clear rule for uncertain exam dates ("in 9 or 16 days").
 - **Workspace migrations.** When the folder layout changes (for example the new `textbook` folder), existing workspaces need their files moved and references updated. Planned: a layout version in the workspace and a migration step with a dry run.
 
+## License
+
+Mimir is open source under the [Apache License 2.0](LICENSE). You can use, change and share it, including commercially, as long as you credit the original project: keep the [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) files, and say which files you changed.
+
 ## Credits
 
 Math sheets use [KaTeX](https://katex.org/) (MIT license), vendored in `assets/vendor/katex/`. `/mimir:help` is modelled on Matt Pocock's [`ask-matt`](https://github.com/mattpocock/skills) router skill.

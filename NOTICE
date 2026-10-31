@@ -1,0 +1,10 @@
+Mimir
+Copyright 2026 Oguz Dogmus
+https://github.com/oguzdogmus/mimir
+
+This product includes software developed by Oguz Dogmus.
+Under the Apache License 2.0, any redistribution or derivative work must
+keep this NOTICE file and credit the original project.
+
+Mimir bundles KaTeX (https://katex.org/), copyright Khan Academy and
+other contributors, under the MIT License (assets/vendor/katex/).

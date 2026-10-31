@@ -5,6 +5,8 @@
   "author": {
     "name": "Oguz Dogmus"
   },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/oguzdogmus/mimir",
   "skills": [
     "./skills/core-rules",
     "./skills/setup",
