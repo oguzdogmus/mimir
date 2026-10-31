@@ -21,3 +21,19 @@ D1–D3 were the three explicit questions in the prior proposal. D4–D5 capture
 - D2 still needs explicit test cases for distinct items, dates, helped attempts, frustration overrides and repeated attempts. Choose a deterministic interpretation consistent with D2 and record it.
 - Step 8 contains alternative technical approaches, not a mandate to implement all alternatives. Inspect host capabilities and filesystem behavior first; document the chosen approach and remaining limitations.
 - Missing live host/OS access is a validation gap, not a passing result.
+
+## D2 / D5 implementation clarification (#12)
+Mastered requires a pair of eligible unassisted attempts on distinct item identities:
+their calendar dates differ OR either item is a real past-paper question. Same-item
+retries cannot form the pair. A wrong answer resets qualifying solve facts; a wrong
+answer on mastered first becomes shaky. Assisted attempts preserve mastered but
+never promote to mastered. Override resets qualifying facts and blocks all later
+attempts in that session. A later-session unassisted attempt lifts the block and
+counts as the first new solve, never as an automatic promotion. Legacy counts
+are preserved but cannot prove item identity or satisfy D2. Existing mastered
+status is preserved until a wrong answer or override. Dates must be nondecreasing
+per topic. Duplicate identity is topic + session + item + event kind; retries
+do not add evidence. The three most recent dated entries are displayed, while
+attempt identities and qualifying solve facts remain in recorder-owned JSON
+within mastery.md. Original legacy Markdown, unknown columns and notes remain
+intact; check/progress overlay authoritative records without rewriting old data.

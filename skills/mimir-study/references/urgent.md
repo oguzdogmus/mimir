@@ -53,11 +53,7 @@ Take `drill` in order, in sets of up to 3 types. For each set:
    1. Worked item (when shown): the gate's `label` verbatim, then the question, then the worked answer. An `ocr` item adds "Original: `<path>`, p.<page>" from the gate's `original`; a `flagged` item adds its `flag` line. Then one line: "Say \"steps\" to open this answer one step at a time." A reply of exactly "steps" (while the worked item or its check item is showing) is never an answer: build a step-reveal page of this worked item, unchanged (load `mimir-notation` for the `steps` content and the `visual-builder` call; the label, question and any original as the shown blocks), print the agent's line, and keep waiting for the check answer.
    2. Check item (when shown): its `label` verbatim (and `flag` line), then the question. Wait for the answer. Never show the key before the answer. "hint": the prepared hint. "skip", "idk", "just tell me": show the key; it counts as wrong. "stop": show no further item or key and go to §4 (log each shown check not yet answered as `- <type> urgent check <label>: not reached`).
    3. Say right or wrong and show the key briefly. Record the check only:
-      - `show` item, right (with or without a hint): Edit the topic's `mastery.md` line (add it if missing; keep the column order; escape `|`): assisted +1, status `shaky` (a `mastered` topic stays `mastered`); evidence `urgent check <label>: assisted solve`.
-      - `show` item, wrong: status `gap`, evidence `urgent check <label>: wrong`.
-      - `evidence_date` and `last_check` are the evidence date.
-      - `flagged` item: nothing in `mastery.md`; log `flagged, not counted`.
-      - Worked items never change `mastery.md`.
+      - Follow core rules' recording reference: right answers always use `assisted` (even without a hint), wrong answers use `wrong`. Worked examples are not attempts. Log flagged items as not counted.
       Append to the log under `## Results` (add the heading once): `- <type> urgent check <label>: <assisted solve|wrong|flagged, not counted>`.
 4. Next set, until the drilled types run out or the student says "stop".
 
