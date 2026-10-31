@@ -1,10 +1,12 @@
 {
   "name": "mimir",
   "version": "0.1.0",
-  "description": "Mimir: Wisdom from the well, brought to your terminal. A study companion that teaches college students for their exams and remembers them across sessions.",
+  "description": "Exam study companion for Claude Code. Teaches college students for their exams in the professor's style and remembers them across sessions.",
   "author": {
     "name": "Oguz Dogmus"
   },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/oguzdogmus/mimir",
   "skills": [
     "./skills/core-rules",
     "./skills/setup",

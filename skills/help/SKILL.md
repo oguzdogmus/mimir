@@ -19,7 +19,7 @@ Print this table and stop:
 |---|---|
 | `/mimir:setup` | One-time setup: your learning folder, languages and any exam dates you know. |
 | `/mimir:ingest` | File everything in your `_inbox/` (outline, slides, past papers) into course folders. |
-| `/mimir:study` | Study for an exam. The front door: "exam Friday, help" works, even with just a photo of a past paper. |
+| `/mimir:study` | Study for an exam. Start here: "exam Friday, help" works, even with just a photo of a past paper. |
 | `/mimir:past-questions` | Drill a course's real past-paper questions, highest points per hour first. |
 | `/mimir:quiz` | Get quizzed at exam level in your professor's style, with checked answer keys. |
 | `/mimir:plan` | See how your plan grows with each day you wait to start. |

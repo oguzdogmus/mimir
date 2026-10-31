@@ -8,7 +8,7 @@
     {
       "name": "mimir",
       "source": "./",
-      "description": "Mimir: Wisdom from the well, brought to your terminal. A study companion that teaches college students for their exams and remembers them across sessions."
+      "description": "Exam study companion for Claude Code. Teaches college students for their exams in the professor's style and remembers them across sessions."
     }
   ]
 }
