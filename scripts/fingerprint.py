@@ -78,9 +78,9 @@ retake -- link a retaken course to its prior term, decide the professor.
           "assumed": false, "carry": true, "prior_fingerprint": "/home/u/
           learning/2026-Fall/CS201 Theory/.state/fingerprint.md",
           "line": "Linked ... same professor (Dr. Ayse Kaya) ..."}
-    ``prior_term`` must differ from ``term`` (any case) and its year may not
-    be later than ``term``'s (same year, other word is allowed; the caller
-    picks the earlier term); the prior course folder and its
+    ``prior_term`` must sort strictly before ``term`` in term order
+    (``workspace.term_key``: year, then Spring < Summer < Fall, then other
+    words alphabetically; any case); the prior course folder and its
     ``.state/`` must exist and not be symlinks. The course is built if new
     (``workspace.build_course``). ``<course>/.state/prior-term`` becomes a
     RELATIVE symlink to the prior ``.state/`` (so ``workspace.py relocate``
@@ -410,9 +410,10 @@ def cmd_retake(data: dict) -> dict:
     professor = _line(data["professor"], "professor", required=False)
     if _norm(professor) == "unknown":
         professor = ""
-    if prior_term.casefold() == term.casefold():
+    prior_key, term_key = workspace.term_key(prior_term), workspace.term_key(term)
+    if prior_key == term_key:
         raise InputError(f"prior_term {prior_term} is the same term as the course; a retake links an earlier term")
-    if int(prior_term[:4]) > int(term[:4]):
+    if prior_key > term_key:
         raise InputError(f"prior_term {prior_term} is later than {term}; a retake links an earlier term")
     root = ingest._workspace_root()
     course_dir = _course(root, term, course)

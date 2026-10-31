@@ -112,6 +112,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 import unicodedata
 from pathlib import Path
 
@@ -123,6 +124,7 @@ _COURSE_MEMORY = ("mastery.md", "fingerprint.md", "save.md", "forecast.md")
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "assets" / "templates"
 
 _TERM = re.compile(r"[0-9]{4}-\w+")
+_SEASONS = ("spring", "summer", "fall")
 _PLACEHOLDER = re.compile(r"<[^<>]+>")
 _KEY_LINE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*):\s.*")
 _UNSAFE_CHARS = set('/\\<>:"|?*')
@@ -202,6 +204,13 @@ def parse_term(data: dict) -> str:
     return term
 
 
+def term_key(term: str) -> tuple:
+    """Sort key for ``YYYY-<word>`` terms: by year, then Spring < Summer < Fall, then other words alphabetically."""
+    year, word = term.split("-", 1)
+    w = word.lower()
+    return (int(year), (0, _SEASONS.index(w), "") if w in _SEASONS else (1, 0, w))
+
+
 def parse_role(data: dict) -> str:
     role = data.get("role")
     if role not in _ROLES:
@@ -245,13 +254,21 @@ def check_safe_root(path: Path, field: str) -> None:
 def set_pointer(root: Path) -> None:
     pointer = pointer_path()
     if root == default_root():
-        if pointer.exists() or pointer.is_symlink():
-            pointer.unlink()
+        pointer.unlink(missing_ok=True)  # a concurrent writer may have removed it already
         return
     pointer.parent.mkdir(parents=True, exist_ok=True)
-    tmp = pointer.with_name(pointer.name + ".tmp")
-    tmp.write_text(f"{root}\n", encoding="utf-8")
-    os.replace(tmp, pointer)
+    # A unique temp file per writer in the pointer's folder, so concurrent writers never share one.
+    fd, tmp = tempfile.mkstemp(prefix=f".{pointer.name}.", suffix=".tmp", dir=pointer.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(f"{root}\n")
+        os.replace(tmp, pointer)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def has_tree(root: Path) -> bool:

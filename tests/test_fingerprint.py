@@ -594,18 +594,26 @@ def test_symlinked_fingerprint_refused(root, home, prior, tmp_path, cmd):
     assert os.readlink(path) == str(real)
 
 
-@pytest.mark.parametrize("prior_term, needle", [("2027-spring", "same term"), ("2028-Fall", "later than"),
+@pytest.mark.parametrize("prior_term, needle", [("2027-spring", "same term"),     # equal
+                                                ("2027-Summer", "later than"),     # later, same year
+                                                ("2027-Fall", "later than"),
+                                                ("2027-Q2", "later than"),         # other words sort after seasons
+                                                ("2028-Fall", "later than"),       # later year
                                                 ("2028-Spring", "later than")])
-def test_retake_refuses_same_or_later_term(root, home, prior, prior_term, needle):
+def test_retake_refuses_same_or_later_term(root, home, prior_term, needle):
     course(home, root, term=prior_term)
+    course(home, root, term=NEW)
     before = snapshot(root)
     fails(home, "retake", retake("x", prior_term=prior_term), needle)
     assert snapshot(root) == before
 
 
-def test_retake_same_year_other_word_allowed(root, home):
-    course(home, root, term="2027-Fall")
-    out = ok(home, "retake", retake("", prior_term="2027-Fall", term="2027-Spring"))
+@pytest.mark.parametrize("prior_term, term", [("2027-Spring", "2027-Fall"), ("2027-Spring", "2027-Summer"),
+                                              ("2027-Fall", "2027-Q2"), ("2026-Fall", "2027-Spring")])
+def test_retake_links_an_earlier_term(root, home, prior_term, term):
+    course(home, root, term=prior_term)
+    course(home, root, term=term)
+    out = ok(home, "retake", retake("", prior_term=prior_term, term=term))
     assert out["same_professor"] is True
 
 

@@ -32,7 +32,8 @@ ROWS = [("past-papers/2024-final.pdf", "past-papers", "4", "text"),
         ("slides/scan.pdf", "slides", "5", "ocr"),
         ("outline/outline.pdf", "outline", "2", "text"),
         ("notes/summary.pdf", "notes", "3", "text"),
-        ("past-papers/a|b.pdf", "past-papers", "2", "text")]
+        ("past-papers/a|b.pdf", "past-papers", "2", "text"),
+        ("slides/deck.pptx", "slides", "", "text")]
 
 
 @pytest.fixture
@@ -187,22 +188,37 @@ def test_practice_unverified_needs_verify(home, cdir):
     assert out["line"] == "Gate: 1 item, 1 to verify."
 
 
-@pytest.mark.parametrize("path,page", [("slides/s1.pdf", 2), ("outline/outline.pdf", 2),
-                                       ("past-papers/2024-final.pdf", 4), ("past-papers/nopages.pdf", 99)])
-def test_cited_text_quote_shows_without_verification(home, cdir, path, page):
-    r = one(home, practice(quote={"path": path, "page": page}))
-    assert r["decision"] == "show" and r["needs_verification"] is False and r["counts_for_mastery"] is True
-    assert r["label"] == PRACTICE
-
-
-@pytest.mark.parametrize("quote", [{"path": "slides/scan.pdf", "page": 2},        # ocr row
+@pytest.mark.parametrize("quote", [{"path": "slides/s1.pdf", "page": 2},          # text slides
+                                   {"path": "outline/outline.pdf", "page": 2},    # text outline
+                                   {"path": "past-papers/2024-final.pdf", "page": 4},
+                                   {"path": "past-papers/nopages.pdf", "page": 99},  # unknown page count
+                                   {"path": "slides/deck.pptx", "page": 99},      # office file, no pages
+                                   {"path": "slides/scan.pdf", "page": 2},        # ocr row
                                    {"path": "past-papers/photo.jpg", "page": 1},  # ocr row
                                    {"path": "notes/summary.pdf", "page": 1},      # not professor material
                                    {"path": "slides/missing.pdf", "page": 1},     # unindexed
                                    {"path": "slides/s1.pdf", "page": 6}])         # past the end
-def test_other_quotes_still_need_verification(home, cdir, quote):
+def test_every_quote_needs_verification(home, cdir, quote):
     r = one(home, practice(quote=quote))
-    assert r["decision"] == "verify" and r["needs_verification"] is True
+    assert r["decision"] == "verify" and r["needs_verification"] is True and r["counts_for_mastery"] is False
+    assert r["label"] == PRACTICE
+
+
+@pytest.mark.parametrize("item", [practice(), practice(quote={"path": "slides/s1.pdf", "page": 2}),
+                                  real(), real(source="past-papers/nopages.pdf", page=40),
+                                  real(quote={"path": "slides/deck.pptx", "page": 3})])
+def test_no_item_without_verdicts_is_shown(home, cdir, item):
+    assert one(home, item)["decision"] == "verify"
+    assert one(home, {**item, "verdicts": []})["decision"] == "verify"
+
+
+def test_verified_quote_shows_and_rejected_quote_is_dropped(home, cdir):
+    quote = {"path": "slides/deck.pptx", "page": 3}
+    shown = one(home, practice(quote=quote, verdicts=["correct"]))
+    assert shown["decision"] == "show" and shown["counts_for_mastery"] is True
+    assert one(home, practice(quote=quote, verdicts=["source-conflict"]))["decision"] == "retry"
+    dropped = one(home, practice(quote=quote, verdicts=["source-conflict", "wrong"]))
+    assert dropped["decision"] == "dropped" and dropped["counts_for_mastery"] is False
 
 
 def test_real_text_label(home, cdir):
@@ -270,7 +286,7 @@ def test_verdicts_apply_to_quote_items(home, cdir):
     quote = {"path": "slides/s1.pdf", "page": 2}
     assert one(home, practice(quote=quote, verdicts=["wrong"]))["decision"] == "retry"
     assert one(home, practice(quote=quote, verdicts=["wrong", "wrong"]))["decision"] == "dropped"
-    assert one(home, practice(quote=quote, verdicts=[]))["decision"] == "show"
+    assert one(home, practice(quote=quote, verdicts=[]))["decision"] == "verify"
 
 
 def test_empty_verdicts_is_no_verdicts(home, cdir):
@@ -282,8 +298,8 @@ def test_mixed_batch_numbers_and_line(home, cdir):
                         real(verdicts=["wrong"]), practice(verdicts=["wrong", "correct"]),
                         practice(verdicts=["ambiguous", "wrong"])))
     assert [r["n"] for r in out["results"]] == [1, 2, 3, 4, 5]
-    assert out["verify"] == [1] and out["retry"] == [3]
-    assert out["line"] == "Gate: 5 items, 2 to show, 1 to verify, 1 to retry, 1 dropped."
+    assert out["verify"] == [1, 2] and out["retry"] == [3]
+    assert out["line"] == "Gate: 5 items, 1 to show, 2 to verify, 1 to retry, 1 dropped."
     assert len(out["disagreements"]) == 1 and "item 5 " in out["disagreements"][0]
 
 
