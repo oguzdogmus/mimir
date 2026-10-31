@@ -1,6 +1,6 @@
 {
   "name": "mimir",
-  "description": "Mimir, an exam study companion plugin for Claude Code.",
+  "description": "Mimir, an exam study companion plugin for AI coding agents.",
   "owner": {
     "name": "Oguz Dogmus"
   },
@@ -8,6 +8,7 @@
     {
       "name": "mimir",
       "source": "./",
+      "version": "0.2.0",
       "description": "Exam study companion for AI coding agents (Claude Code, Codex, Antigravity). Teaches college students for their exams in the professor's style and remembers them across sessions."
     }
   ]

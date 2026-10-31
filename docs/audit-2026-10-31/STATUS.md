@@ -13,7 +13,7 @@ Next action: start any other unblocked step (3, 5 or 7; issues #8, #9, #10) with
 | 2 | 2, 10, 11 | Merging | issue [#7](https://github.com/oguzdogmus/mimir/issues/7), PR [#17](https://github.com/oguzdogmus/mimir/pull/17), branch `fix/route-correctness` | Targeted 332 passed; full after merging main: 999 passed |
 | 3 | 3 | Ready to start | issue [#8](https://github.com/oguzdogmus/mimir/issues/8) | Not run |
 | 4 | 8, 9, 12 | Blocked by 3 | issue [#11](https://github.com/oguzdogmus/mimir/issues/11) | Not run |
-| 5 | 7, 13, 19–21, 23, 24, 26 | Ready to start | issue [#9](https://github.com/oguzdogmus/mimir/issues/9) | Not run |
+| 5 | 7, 13, 19–21, 23, 24, 26 | Merging | issue [#9](https://github.com/oguzdogmus/mimir/issues/9), branch `fix/instruction-cleanup` | Targeted 150 passed; full 1059 passed |
 | 6 | 16; 7 enforcement | Blocked by 5 | issue [#12](https://github.com/oguzdogmus/mimir/issues/12) | Not run |
 | 7 | 22 | Ready to start | issue [#10](https://github.com/oguzdogmus/mimir/issues/10) | Not run |
 | 8A | 5, 6, 14 | Blocked by 1, 3 | issue [#13](https://github.com/oguzdogmus/mimir/issues/13) | Not run |
@@ -37,6 +37,22 @@ None recorded after the audit. Add entries as:
 `N01 | symptom | file/function | evidence/reproduction | impact | suggested fix | destination step`.
 
 ## Work log
+
+### 2026-10-31 — Step 5: instruction cleanup (findings 7, 13, 19–21, 23, 24, 26; D3, D5)
+
+Branch `fix/instruction-cleanup` from `c07ae8b`.
+
+- Finding 7 / D5: a named `## Frustration rule` section in core rules is the only statement of how answers count after an override (blocked for the rest of that session; an unassisted solve in a later session lifts it; lifting adds no mastery evidence). `session.md` Recording, `teaching.md` §4 step 3 and quiz step 14 point to it. Past-questions reaches it through `session.md`'s Recording rules. Enforcement stays with step 6.
+- Finding 19: core rules no longer list global session-start reads. Every user-facing skill has a "Reads at start" line (study keeps its existing list).
+- Finding 20: the question budget says items and the cliffhanger are content.
+- Finding 23: the "I know this" check is two questions, no third.
+- Finding 13 / D3: `mimir-help` lost `disable-model-invocation`, `model: haiku` and `argument-hint`; its description says to use it only when the student asks which command fits. Setup and ingest keep the flag. The README gives the exact setup/ingest command per agent and says plain-words requests don't start them.
+- Finding 21: study description is about 290 characters in plain words; quiz no longer claims past papers and points to `mimir-past-questions`.
+- Finding 26: forecast stops with a "not enough material" line when the registry has no outline and no past papers. `session.py progress` says "nothing studied yet" when every topic is unseen (new boundary test).
+- Finding 24: marketplace description is agent-neutral and the plugin entry carries `version`. `test_portability.py` checks the manifest skill list against `skills/`, manifest and README versions, agent-neutral descriptions, and portable frontmatter keys (spec keys plus `user-invocable: false`; `disable-model-invocation` only on setup and ingest).
+- Commands: `uvx --offline pytest tests/test_portability.py tests/test_session.py -q` gave 150 passed. `uvx --offline pytest tests -q` gave 1059 passed. Ruff on touched Python files reports the same 4 errors as `main`.
+- Review: Standards and Spec sub-agent reviews. Fixed: duplicated override wording in `teaching.md`, ambiguous lift wording, quiz start reads missing the profile fallback, help description wider than the spec, an unverified README claim softened. Left for step 7: fixed fallback lines that write command names plainly (forecast's new line follows the existing pattern).
+- Unrun checks: live host checks of help auto-invocation and setup/ingest manual invocation in Codex and Antigravity (step 8A).
 
 ### 2026-10-31 — Step 2: route correctness (findings 2, 10, 11; D1)
 

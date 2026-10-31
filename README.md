@@ -49,11 +49,21 @@ ln -s ~/.gemini/config/plugins/mimir/skills/mimir-* ~/.gemini/config/skills/
 2. Drop course files (outline, slides, past papers) into `~/learning/_inbox/` and run `mimir-ingest`.
 3. Run `mimir-study` and tell it when your exam is.
 
-Not sure which command fits? Run `mimir-help`.
+`mimir-setup` and `mimir-ingest` change your files, so they only run when you type the command yourself. Asking in plain words ("set me up") does not start them. Type exactly:
+
+| Agent | Setup | Ingest |
+|---|---|---|
+| Claude Code | `/mimir:mimir-setup` | `/mimir:mimir-ingest` |
+| Codex | `$mimir-setup` | `$mimir-ingest` |
+| Antigravity | `/mimir-setup` | `/mimir-ingest` |
+
+If you use Antigravity through another app that doesn't expand these commands, setup and ingest may not be reachable there; run those two steps in the Antigravity CLI.
+
+Not sure which command fits? Run `mimir-help`, or ask "which Mimir command should I use?".
 
 ## Commands
 
-Each command is a skill. How you call it depends on the agent: `/mimir:mimir-study` in Claude Code, `$mimir-study` in Codex, `/mimir-study` in Antigravity. You can also just say what you want ("quiz me on automata") and the agent picks the skill.
+Each command is a skill. How you call it depends on the agent: `/mimir:mimir-study` in Claude Code, `$mimir-study` in Codex, `/mimir-study` in Antigravity. For every command except `mimir-setup` and `mimir-ingest`, you can also just say what you want ("quiz me on automata") and the agent picks the skill.
 
 | Skill | What it is for |
 |---|---|
