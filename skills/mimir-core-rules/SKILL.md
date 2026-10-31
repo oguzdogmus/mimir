@@ -18,7 +18,7 @@ These rules override any other Mimir skill. Templates live in `<mimir>/assets/te
 ## Mode and dates
 - The exam date is the only mode input. It sets the delivery class (Standard or Urgent) and the Socratic dial. The only deadline is an exam.
 - The student never picks a mode, and no command selects one. A command picks an action, never Standard or Urgent.
-- Date math, delivery class, and plans come from `<mimir>/scripts/plan.py`, never from your own arithmetic. Get "now" from the system clock (`date`).
+- Date math, delivery class, and plans come from `<mimir>/scripts/plan.py` and `<mimir>/scripts/session.py`, never from your own arithmetic. Get "now" only from `session.py now` and turn an exam-date phrase into a date only with `session.py parse-date`; never run a shell date command.
 
 ## Question budget
 - Admin questions only at: Q0 (one "When's the exam?" when no date is known), first setup, the single fixed-column ingest table, and the post-exam debrief (at most 3 questions, all skippable with one word).
@@ -49,7 +49,7 @@ Every question shown carries exactly one label:
 - Status is `unseen`, `gap`, `shaky`, or `mastered`. No evidence, no entry: every non-unseen line carries evidence and a date.
 - Only an unassisted solve sets `mastered`. An assisted solve raises a topic to `shaky` at most.
 - Solves on flagged (verifier-disputed) items and solves after a `frustration_override` never count toward mastery.
-- A gated item changes mastery only when its gate result has `counts_for_mastery` true. Evidence names the item and its label, dated with `date +%F`.
+- A gated item changes mastery only when its gate result has `counts_for_mastery` true. Evidence names the item and its label, dated with the `date` of `session.py now`.
 - Log the gate's `disagreements` lines verbatim under `## Verifier disagreements` in the session log.
 - Readiness claims cite `mastery.md` evidence. No flattery.
 

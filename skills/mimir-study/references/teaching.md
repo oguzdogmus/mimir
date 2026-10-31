@@ -1,6 +1,6 @@
 # Teaching engine (Standard episode, topic `T`)
 
-`session.md` §4 step 3 hands off here. Standard delivery only: never in Urgent. The scripts, the item rules (Questions), the recording rules (Recording) and the `clock` rule of `session.md` §4 all still apply: after each step below (each explanation step, each guiding answer, each item answer), run `date -Iseconds` and `session.py clock`, and obey `wrap` and `over`. Every date written here is the `date +%F` value from `session.md` §1 step 1; never work out a date.
+`session.md` §4 step 3 hands off here. Standard delivery only: never in Urgent. The scripts, the item rules (Questions), the recording rules (Recording) and the `clock` rule of `session.md` §4 all still apply: after each step below (each explanation step, each guiding answer, each item answer), run `session.py now` and `session.py clock`, and obey `wrap` and `over`. Every date written here is the evidence date from `session.md` §1 step 1; never work out a date.
 
 ## 0. Inputs
 
