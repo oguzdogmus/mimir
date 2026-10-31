@@ -199,8 +199,6 @@ def test_course_pick_last_in_term_order(home, root):
     course(home, "BB2 Other", term="2025-Q2")
     out = ok(home, "start", {"now": NOW})
     assert (out["term"], out["course"]) == ("2026-Fall", "AA1 First")
-    assert session._term_key("2026-Fall") < session._term_key("2026-Q2")
-    assert session._term_key("2026-Spring") < session._term_key("2026-Summer")
 
 
 def test_course_given_is_not_inferred(home, root):

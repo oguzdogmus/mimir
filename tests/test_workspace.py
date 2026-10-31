@@ -738,3 +738,60 @@ def test_failed_old_tree_delete_is_a_warning(home, tmp_path, monkeypatch, capsys
     assert f"The old folder {root} was not fully removed" in out["line"]
     assert pointer(home).read_text() == f"{target}\n"
     assert (target / ".state" / "profile.md").is_file()
+
+
+# --- root pointer writes ------------------------------------------------------------
+
+def _main(monkeypatch, capsys, cmd: str, payload: dict) -> tuple[int, str, str]:
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(payload).encode())))
+    code = ws.main([cmd])
+    out, err = capsys.readouterr()
+    return code, out, err
+
+
+def test_concurrent_pointer_writers_use_independent_temp_files(home, monkeypatch, capsys):
+    real_replace, sources = ws.os.replace, []
+
+    def interleaved(src, dst):
+        sources.append(Path(src))
+        if len(sources) == 1:  # a second writer runs to completion between the first one's write and replace
+            ws.set_pointer(home / "other")
+        real_replace(src, dst)
+
+    monkeypatch.setattr(ws.os, "replace", interleaved)
+    code, out, err = _main(monkeypatch, capsys, "init", {"root": "~/uni"})
+    monkeypatch.undo()
+    assert code == 0 and err == "" and json.loads(out)["root"] == str(home / "uni")
+    assert len(sources) == 2 and sources[0] != sources[1]
+    assert all(s.parent == pointer(home).parent for s in sources)
+    assert pointer(home).read_text() == f"{home / 'uni'}\n"
+    assert sorted(p.name for p in pointer(home).parent.iterdir()) == ["root"]
+
+
+def test_failed_pointer_write_cleans_up_and_keeps_the_old_pointer(home, monkeypatch, capsys):
+    ok(home, "init", {"root": "~/uni"})
+
+    def broken_replace(src, dst):
+        raise OSError(errno.EIO, "Input/output error")
+
+    monkeypatch.setattr(ws.os, "replace", broken_replace)
+    code, out, err = _main(monkeypatch, capsys, "relocate", {"to": str(home / "moved")})
+    monkeypatch.undo()
+    assert code == 2 and out == ""
+    assert err.startswith("workspace.py: ") and err.count("\n") == 1 and "Traceback" not in err
+    assert sorted(p.name for p in pointer(home).parent.iterdir()) == ["root"]
+    assert pointer(home).read_text() == f"{home / 'uni'}\n"
+    assert (home / "uni" / ".state" / "profile.md").is_file() and not (home / "moved").exists()
+
+
+def test_term_order_is_year_then_season_then_other_words():
+    order = ["2025-Q2", "2026-spring", "2026-Summer", "2026-Fall", "2026-Q1", "2026-Q2", "2027-Spring"]
+    assert sorted(reversed(order), key=ws.term_key) == order
+    assert ws.term_key("2026-FALL") == ws.term_key("2026-fall")
+
+
+def test_concurrent_resets_to_the_default_root_do_not_fail(home):
+    ok(home, "init", {"root": "~/uni"})
+    ws.set_pointer(ws.default_root())
+    ws.set_pointer(ws.default_root())  # the pointer is already gone: still fine
+    assert not pointer(home).exists()

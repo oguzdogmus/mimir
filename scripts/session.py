@@ -196,7 +196,6 @@ ROUTE_DONE_LINE = ("Your route is complete: every topic is mastered in mastery.m
                    "Want a `mimir-quiz` to keep it fresh?")
 
 STATUSES = ("unseen", "gap", "shaky", "mastered")
-_SEASONS = ("spring", "summer", "fall")
 _EXAM_TABLE = ("Exam dates", ("course", "exam", "date"))
 _ACTIVE_TABLE = ("Active courses", ("course", "path"))
 _DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
@@ -402,12 +401,6 @@ def _valid_moment(text: str) -> bool:
 
 # --- Course pick ----------------------------------------------------------------------
 
-def _term_key(term: str) -> tuple:
-    year, word = term.split("-", 1)
-    w = word.lower()
-    return (int(year), (0, _SEASONS.index(w), "") if w in _SEASONS else (1, 0, w))
-
-
 def _pick(courses: list[dict], profile: str) -> dict:
     stamped = [(c, s) for c in courses if (s := _last_session(Path(c["course_dir"])))]
     if stamped:
@@ -418,7 +411,7 @@ def _pick(courses: list[dict], profile: str) -> dict:
         hit = by_path.get(path.strip().strip("/"))
         if hit:
             return hit
-    return max(courses, key=lambda c: (_term_key(c["term"]), c["course"]))
+    return max(courses, key=lambda c: (workspace.term_key(c["term"]), c["course"]))
 
 
 def _usable(root: Path, course: dict) -> bool:
