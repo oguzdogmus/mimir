@@ -208,11 +208,16 @@ class _Font:
         return "".join(self.table.get(raw[i:i + w], "") for i in range(0, len(raw) - w + 1, w))
 
 
-def _fonts(objs: dict, resources: bytes, budget: ingest._Budget) -> dict[bytes, _Font]:
+def _fonts(objs: dict, resources: bytes, budget: ingest._Budget, cache: dict | None = None) -> dict[bytes, _Font]:
+    if cache is None:
+        cache = {}
     res = _deref(objs, resources) if resources else None
     fonts = _deref(objs, _value(res[0], b"Font")) if res else None
     out: dict[bytes, _Font] = {}
     for name, num in _NAMED_REF.findall(fonts[0] if fonts else b""):
+        if int(num) in cache:
+            out[name] = cache[int(num)]
+            continue
         head = objs.get(int(num), (b"", None))[0]
         two_byte = bool(_TYPE0.search(head))
         cmap_data = _stream(objs, _value(head, b"ToUnicode"), budget)
@@ -221,6 +226,7 @@ def _fonts(objs: dict, resources: bytes, budget: ingest._Budget) -> dict[bytes, 
             out[name] = _Font(table, 2 if two_byte else width)
         else:
             out[name] = _Font(None, 2 if two_byte else 1)
+        cache[int(num)] = out[name]
     return out
 
 
@@ -405,11 +411,12 @@ def builtin_text(path: Path, first: int, last: int) -> list[str] | None:
     objs = _objects(data, budget)
     pages = _pages(objs)
     texts = []
+    font_cache = {}
     for page, resources in pages[first - 1:last]:
         contents = _value(page, b"Contents") or b""
         refs = re.findall(rb"([0-9]+)\s+[0-9]+\s+R", contents)
         content = b"\n".join(_stream(objs, b"%s 0 R" % ref, budget) for ref in refs)
-        texts.append(_page_text(content, _fonts(objs, resources, budget)))
+        texts.append(_page_text(content, _fonts(objs, resources, budget, font_cache)))
     return texts
 
 

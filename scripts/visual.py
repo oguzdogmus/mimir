@@ -870,7 +870,7 @@ def cmd_delay(data: dict) -> dict:
         raise InputError(f"no exam date for {course}: the cost of delay needs one")
     if not start["remaining"]:
         raise InputError(f"no topics left on the route of {course}: nothing to plan")
-    payload = session.plan_payload(data["now"], start["exam"], start["remaining"])
+    payload = session.plan_payload(data["now"], start["exam"], start["remaining"], Path(start["course_dir"]))
     rows, est, _ = session._plan(plan.delay_rows, payload)
     delay_line = session._plan(plan.cost_of_delay, payload)["line"]
     texts = [plan.delay_phrase(row, i == 0) for i, row in enumerate(rows)]

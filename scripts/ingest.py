@@ -716,6 +716,7 @@ def cmd_index(data: dict) -> dict:
         raise InputError(f"{index} is not valid UTF-8; fix or remove it, nothing was changed") from None
     lines = text.splitlines()
     results, added = [], 0
+    topic_cells = []
     for rel, (path, role, found, cells) in plan.items():
         pages = "" if found["pages"] is None else str(found["pages"])
         row = f"| {_cell(rel)} | {term} | {role} | {pages} | {found['fidelity']} |"
@@ -727,11 +728,17 @@ def cmd_index(data: dict) -> dict:
             lines[hit] = row
         results.append({"path": str(path), "role": role, "pages": found["pages"],
                         "fidelity": found["fidelity"], "new": hit is None})
-        for cell in cells:
-            first, end = _section_table(lines, _TOPICS)
-            if not any(_split_row(lines[i])[:2] == _split_row(cell) for i in range(first, end)):
-                lines.insert(end, cell)
-                added += 1
+        topic_cells.extend(cells)
+    first, end = _section_table(lines, _TOPICS)
+    existing = {tuple(_split_row(lines[i])[:2]) for i in range(first, end)}
+    additions = []
+    for cell in topic_cells:
+        key = tuple(_split_row(cell))
+        if key not in existing:
+            existing.add(key)
+            additions.append(cell)
+    lines[end:end] = additions
+    added = len(additions)
     new_text = "\n".join(lines) + "\n"
     if new_text != text:
         _write_atomic(index, new_text)
