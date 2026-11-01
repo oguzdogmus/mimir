@@ -305,7 +305,7 @@ def test_file_moves_into_role(home):
     dest_dir = home / "learning" / "2026-Fall" / "CS201 Theory" / "past-papers"
     assert out["dest"] == str(dest_dir / "2024-final.pdf")
     assert out["source"] == str(src)
-    assert out["line"] == f"Saved 2024-final.pdf to {dest_dir}/"
+    assert out["line"] == f"Moved 2024-final.pdf to {dest_dir}/"
     assert_absolute_paths(out)
     assert not src.exists()
     assert (dest_dir / "2024-final.pdf").read_bytes() == b"%PDF paper"
@@ -610,10 +610,10 @@ def test_file_partial_move_removes_dest(home, monkeypatch):
     dest = home / "learning" / "2026-Fall" / "CS201 Theory" / "slides" / "big.pdf"
 
     def partial_move(source, destination):
-        Path(destination).write_bytes(b"full")
+        destination.write(b"full")
         raise OSError(errno.ENOSPC, "No space left on device")
 
-    monkeypatch.setattr(ws.shutil, "move", partial_move)
+    monkeypatch.setattr(ws.shutil, "copyfileobj", partial_move)
     with pytest.raises(OSError):
         ws.cmd_file({"source": str(src), **COURSE, "role": "slides"})
     monkeypatch.undo()
@@ -795,3 +795,32 @@ def test_concurrent_resets_to_the_default_root_do_not_fail(home):
     ws.set_pointer(ws.default_root())
     ws.set_pointer(ws.default_root())  # the pointer is already gone: still fine
     assert not pointer(home).exists()
+
+
+def test_file_keeps_completed_copy_when_delete_denied(home, monkeypatch):
+    src = home / "attachment.pdf"
+    src.write_bytes(b"complete paper")
+    unlink = Path.unlink
+
+    def deny_original(path, *args, **kwargs):
+        if path == src:
+            raise PermissionError("denied")
+        return unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", deny_original)
+    result = ws.cmd_file({"source": str(src), **COURSE, "role": "past-papers"})
+    assert result["action"] == "copied"
+    assert result["line"].startswith("Copied ")
+    assert src.read_bytes() == Path(result["dest"]).read_bytes() == b"complete paper"
+
+
+def test_file_refuses_destination_role_symlink(home, tmp_path):
+    ok(home, "course", COURSE)
+    role = home / "learning" / COURSE["term"] / COURSE["course"] / "notes"
+    role.rmdir()
+    role.symlink_to(tmp_path)
+    src = home / "attachment.txt"
+    src.write_text("paper")
+    fails(home, "file", {"source": str(src), **COURSE, "role": "notes"}, "symlink")
+    assert src.exists()
+    assert not (tmp_path / src.name).exists()

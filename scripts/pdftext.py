@@ -15,7 +15,10 @@ pages -- the text of pages first..last of one PDF inside the learning root.
           "line": "Read pages 3-4 of /home/u/.../2024-final.pdf (pdftotext)."}
     ``last`` is optional (default ``first``); at most MAX_PAGES pages per call.
     ``path`` (absolute or ``~``) must be a regular ``.pdf`` file that resolves
-    inside the learning root. The engine is ``pdftotext`` (poppler) when it is
+    inside the learning root. An explicitly supplied attachment may instead set
+    optional ``attachment`` to the exact same absolute path as ``path``.
+    The caller must obtain host authorization first; this field grants no OS
+    permissions and never authorizes a directory. The engine is ``pdftotext`` (poppler) when it is
     installed and succeeds, else ``builtin``: a small extractor for unencrypted
     PDFs with FlateDecode streams, reading ToUnicode maps of simple and Type0
     fonts. The built-in extractor refuses a file larger than
@@ -437,7 +440,7 @@ def _page_number(data: dict, field: str) -> int:
 
 
 def cmd_pages(data: dict) -> dict:
-    _check_keys(data, {"path", "first", "last"})
+    _check_keys(data, {"path", "first", "last", "attachment"})
     path = parse_path(data, "path")
     first = _page_number(data, "first")
     last = _page_number(data, "last") if "last" in data else first
@@ -447,7 +450,12 @@ def cmd_pages(data: dict) -> dict:
         raise InputError(f"at most {MAX_PAGES} pages per call")
     root, _ = workspace.resolve_root()
     resolved = path.resolve()
-    if not workspace._is_within(resolved, root.resolve()):
+    # Explicit attachment scope is supplied by the host after permission checks.
+    # It authorizes only this exact path, never a directory or a permission bypass.
+    attachment = parse_path(data, "attachment") if "attachment" in data else None
+    if attachment is not None and attachment != path:
+        raise InputError("attachment must match the explicitly supplied path")
+    if not workspace._is_within(resolved, root.resolve()) and attachment != path:
         raise InputError(f"{path} is not inside the learning root {root}")
     if path.suffix.lower() != ".pdf" or not resolved.is_file():
         raise InputError(f"{path} is not a PDF file")

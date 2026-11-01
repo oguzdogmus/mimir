@@ -152,3 +152,15 @@ def test_builtin_reads_a_non_octal_digit_escape_as_a_literal(root, home, words, 
     assert proc.returncode == 0, proc.stderr.decode()
     out = json.loads(proc.stdout)
     assert out["engine"] == "builtin" and out["text"] == [{"page": 1, "text": expected}]
+
+
+def test_explicit_outside_attachment_scope(home):
+    path = home / "attachment.pdf"
+    path.write_bytes(text_pdf())
+    payload = {"path": str(path), "first": 1}
+    with pytest.raises(pdftext.InputError, match="not inside"):
+        pdftext.cmd_pages(payload)
+    result = pdftext.cmd_pages({**payload, "attachment": str(path)})
+    assert result["text"][0]["text"].strip()
+    with pytest.raises(pdftext.InputError, match="must match"):
+        pdftext.cmd_pages({**payload, "attachment": str(home)})
