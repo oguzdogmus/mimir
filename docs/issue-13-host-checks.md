@@ -12,9 +12,9 @@ Chosen approach: capability-based helper dispatch in the shared core rules,
 the existing PDF page reader with exact-path attachment scope, and separate
 copy/delete stages in workspace filing. No new agent framework is needed.
 
-## Live scenarios still required
+## Initial live scenarios (historical checklist)
 
-These are pending, not passes. Unit tests do not substitute for these checks.
+This was the initial checklist. See the T3 results below for the current status. Unit tests do not substitute for live checks.
 
 - Codex: independent verifier reads an actual cited PDF and returns its verdict;
   record tool used, evidence path/page and observed result.
@@ -97,3 +97,18 @@ CLI attempts. Before marking its scenarios passed, inspect:
 
 The delegated run writes docs/issue-13-antigravity-t3.md. Its report is evidence
 to audit, not an automatic acceptance decision.
+
+
+## T3 Antigravity results — audited
+
+The T3-managed run completed the independent PDF verifier, Urgent first-contact
+attachment flow through its first verified drill, and real OS deletion-denial
+scenarios. See issue-13-antigravity-t3.md for actual calls and host limitations.
+Parent inspection confirmed the two independent child transcripts, the actual
+registry and session log, the student-output artifact, and byte-identical
+retained source/copy (794 bytes; SHA-256
+26a008970c350193d1d9e86a1009273e75f0c66682cc4e43c266eae580882bd2).
+
+This supersedes the earlier direct-CLI permission blocker for T3-managed use.
+Native agent tools were available, so same-context fallback remains unexercised
+by this run. Its separate capability-limited test is still pending.
