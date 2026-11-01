@@ -50,3 +50,26 @@ host-denial behavior merely by reading an outside-root path successfully.
   1 topic added). Workspace: /tmp/mimir-13-codex-1r_e9r59.
   This checks real read/file/index integration, not a full conversational
   Urgent session or its date/class routing.
+
+## Final automated validation and review
+
+- Targeted suites: 263 passed.
+- Full suite: 1080 passed in 89.61 seconds.
+- Python compileall and git diff --check passed.
+- GPT-6.1 Terra Standards review: no documented violations or actionable smells.
+- GPT-6.1 Terra Spec review: live acceptance incomplete; instruction-string
+  provenance assertions do not establish runtime log/once-only behavior.
+  Full-suite evidence missing from the original reviewed commit is recorded
+  above. No scope creep found.
+- Retrying Antigravity with a session-only command(python3) allow rule still
+  returned the same headless command-permission denial. No successful
+  Antigravity verification or quick-start run is claimed.
+
+## Remaining acceptance work
+
+Run the complete conversational Urgent attachment flow on both hosts, and
+exercise the same-context fallback through two verification batches in one
+session: inspect the actual session log for checker: self and the transcript
+for exactly one disclosure. Existing portability assertions are contract
+checks only. Antigravity requires an interactive permission grant or a
+working narrowly scoped permission configuration before these can run.
