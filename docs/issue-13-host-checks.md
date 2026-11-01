@@ -43,3 +43,10 @@ host-denial behavior merely by reading an outside-root path successfully.
   is needed to finish its PDF and attachment quick-start checks.
 - Targeted boundary suite: 263 tests passed. Copy-deletion denial is injected
   at the filesystem boundary; this is unit coverage, not a live host pass.
+- Codex host, live script workflow in isolated temporary HOME:
+  read outside-root PDF first ("Pumping lemma"), applied the missing-course
+  fallback "Exam 2026-11-02", filed as past-papers, and indexed the returned
+  destination with page=1. Observed: action moved; Indexed 1 file (1 new,
+  1 topic added). Workspace: /tmp/mimir-13-codex-1r_e9r59.
+  This checks real read/file/index integration, not a full conversational
+  Urgent session or its date/class routing.
