@@ -1,6 +1,6 @@
 {
   "name": "mimir",
-  "version": "0.2.0",
+  "version": "0.3.4",
   "description": "Exam study companion for AI coding agents (Claude Code, Codex, Antigravity). Teaches college students for their exams in the professor's style and remembers them across sessions.",
   "author": {
     "name": "Oguz Dogmus"

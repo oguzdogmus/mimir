@@ -1,6 +1,6 @@
 # Mimir: A head start, literally
 
-**Version 0.2.0** · early release, features and file layout may still change ([what's planned](#planned-changes))
+**Version 0.3.4** · early release, features and file layout may still change ([what's planned](#planned-changes))
 
 Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude.com/claude-code), [Codex](https://developers.openai.com/codex) and [Antigravity](https://antigravity.google) (Google's free agent that replaced Gemini CLI). It teaches you course material in your professor's style and remembers what you know across sessions.
 ## What it does
