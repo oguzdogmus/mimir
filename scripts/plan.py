@@ -673,6 +673,11 @@ def parse_types(data: dict) -> list[dict]:
     return types
 
 
+def mark_weight(marks, top) -> int:
+    """Shared mark-share policy for triage and session planning."""
+    return min(WEIGHT_MAX, max(WEIGHT_MIN, math.ceil(3 * marks / top))) if top > 0 else WEIGHT_MIN
+
+
 def triage(data: dict) -> dict:
     now = required_moment(data, "now", need_time=True)
     exam = optional_moment(data, "exam")
@@ -699,8 +704,7 @@ def triage(data: dict) -> dict:
             t["marks"] = fill
     top = max((t["marks"] for t in types), default=Fraction(0))
     for t in types:
-        weight = math.ceil(3 * t["marks"] / top) if top > 0 else WEIGHT_MIN
-        t["weight"] = min(WEIGHT_MAX, max(WEIGHT_MIN, weight))
+        t["weight"] = mark_weight(t["marks"], top)
         t["minutes"] = EPISODE_MINUTES * t["weight"] * (SHAKY_TIME_FACTOR if t["status"] == "shaky" else 1)
         t["pph"] = t["marks"] * t["frequency"] / (t["minutes"] / 60)
 

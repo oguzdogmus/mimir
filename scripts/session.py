@@ -156,7 +156,7 @@ debrief -- what the post-exam debrief needs. Read-only, like the rest.
     with target T and previous exam B (the latest row of ``code`` dated
     before T, none when there is none):
     * ``cram``: ``plan.py debrief`` with ``first_contact`` (as in ``start``),
-      ``exam`` T, every route row (as in ``start``) weight 1, ``timed`` [] and the
+      ``exam`` T, every route row weighted as in ``start``, logged timing evidence and the
       sessions: each log's ``started:`` and the next ``ended:`` after it,
       kept when the start's own calendar date is after B and on or before T;
       a pair that ends before it starts, overlaps an earlier kept pair or
@@ -211,7 +211,6 @@ from __future__ import annotations
 
 import re
 import json
-import math
 from fractions import Fraction
 import sys
 from datetime import date, datetime, timedelta
@@ -629,7 +628,8 @@ def planning_evidence(course_dir: Path, now: str) -> tuple[dict, list[dict]]:
     """Exact topic matches only; malformed/ambiguous evidence stays uncalibrated.
 
     Fingerprint marks use the triage engine's ceil(3 * marks / maximum) rule.
-    Timings are nonoverlapping intervals, accumulated once per distinct topic.
+    Timings are nonoverlapping intervals, averaged once per distinct topic.
+    Offset/no-offset mixtures are ambiguous and excluded, like debrief sessions.
     """
     marks = {}
     for name, frequency, value in _section_rows(
@@ -643,7 +643,7 @@ def planning_evidence(course_dir: Path, now: str) -> tuple[dict, list[dict]]:
         if number > 0:
             marks.setdefault(name, number)
     top = max(marks.values(), default=1)
-    weights = {name: max(1, min(3, math.ceil(3 * value / top))) for name, value in marks.items()}
+    weights = {name: plan.mark_weight(value, top) for name, value in marks.items()}
     clock = plan.parse_moment(now, "now", need_time=True)
     intervals = []
     for _, text in _logs(course_dir):
@@ -656,13 +656,15 @@ def planning_evidence(course_dir: Path, now: str) -> tuple[dict, list[dict]]:
             except (plan.InputError, TypeError, ValueError):
                 continue
     totals = {}
+    counts = {}
     last = None
     for start, end, name in sorted(intervals):
         if last is not None and start < last:
             continue
         totals[name] = totals.get(name, Fraction(0)) + Fraction((end - start).total_seconds()) / 60
+        counts[name] = counts.get(name, 0) + 1
         last = end
-    return weights, [{"weight": weights.get(name, 1), "minutes": minutes}
+    return weights, [{"weight": weights.get(name, 1), "minutes": minutes / counts[name]}
                      for name, minutes in totals.items()]
 
 
