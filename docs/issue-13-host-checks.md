@@ -1,114 +1,67 @@
-# Issue 13 host checks
+# Issue 13 host acceptance — 2026-11-01
 
-## Capability inspection — 2026-11-01
+## Capability decision
 
-Codex CLI 0.166.0, running through T3 Code: native independent agent tools are
-available. T3 also advertises GPT-6.1 Terra for the requested review agents.
-Antigravity CLI 1.4.12 is installed; its actual help output advertises
-`--add-dir` (repeatable). The install instructions use this to expose the
-resolved plugin directory alongside the learning folder.
+Use the existing PDF reader, exact-path attachment scope, separate copy/delete
+stages, and capability-based native helper dispatch. No additional agent
+framework is needed.
 
-Chosen approach: capability-based helper dispatch in the shared core rules,
-the existing PDF page reader with exact-path attachment scope, and separate
-copy/delete stages in workspace filing. No new agent framework is needed.
+Codex CLI 0.166.0 through T3 offers native independent agents.
+T3-managed Antigravity ACP 1.4.1 offers define_subagent/invoke_subagent.
+Direct agy CLI 1.4.12 headless attempts denied commands; the T3-managed run
+successfully exercised the actual workflow. These are different host setups,
+not contradictory results.
 
-## Initial live scenarios (historical checklist)
+## Verified evidence
 
-This was the initial checklist. See the T3 results below for the current status. Unit tests do not substitute for live checks.
+- [Codex Urgent baseline](issue-13-codex-urgent.md): actual date/class routing,
+  outside-root read before classification/filing, registry and fingerprint,
+  triage and independent PDF verification. Both items reached show.
+- [Antigravity live acceptance](issue-13-antigravity-t3.md): native independent
+  verifier returned correct/wrong and ambiguous for unreadable evidence;
+  Urgent attachment workflow reached the first verified drill; real host
+  file-tool denial remained denied; real OS deletion denial retained the
+  completed copy, reported copied, and allowed indexing.
+- [Antigravity fallback acceptance](issue-13-antigravity-fallback.md): a child
+  with native subagent tools disabled completed two batches in one session.
+  Parent audit of actual PLANNER_RESPONSE.content confirmed exactly one
+  fallback disclosure and one wait notice. The actual session log contains
+  checker: self; no independent-agent dispatch was recorded.
 
-- Codex: independent verifier reads an actual cited PDF and returns its verdict;
-  record tool used, evidence path/page and observed result.
-- Codex: Urgent first contact reads an explicitly supplied outside-root PDF
-  before course classification, files it and indexes the returned destination.
-- Antigravity: repeat both scenarios with the plugin directory added to the
-  workspace; record actual agent availability and fallback provenance.
-- Permission boundary: a denied attachment read remains denied; a completed
-  copy survives denied deletion and is reported as copied.
+Parent inspection also confirmed the independent child transcripts, registry,
+session log and output artifact, and identical retained original/copy bytes:
+794 bytes, SHA-256
+26a008970c350193d1d9e86a1009273e75f0c66682cc4e43c266eae580882bd2.
 
-The current process has unrestricted filesystem access. It cannot establish
-host-denial behavior merely by reading an outside-root path successfully.
+## Validation and review
 
-## Observed results
-
-- Codex 0.166.0 / T3, native independent GPT-6.1 Terra agent:
-  read /tmp/mimir-issue13-live/attachment.pdf page 1 using pdftext.py
-  with explicit attachment scope. Actual pdftotext output: "Pumping lemma".
-  Given a deliberately incorrect "hello" key, returned
-  "1 | wrong | fake-real no | page 1 says Pumping lemma, not hello".
-  This is a live independent PDF verification pass.
-- Antigravity 1.4.12, launched with --add-dir for the repository and fixture
-  directory: the headless run reported that command permission was auto-denied
-  because it cannot prompt. No evidence was read; this scenario is blocked,
-  not passed. Permissions were not bypassed. An interactive permission grant
-  is needed to finish its PDF and attachment quick-start checks.
-- Targeted boundary suite: 263 tests passed. Copy-deletion denial is injected
-  at the filesystem boundary; this is unit coverage, not a live host pass.
-- Codex host, live script workflow in isolated temporary HOME:
-  read outside-root PDF first ("Pumping lemma"), applied the missing-course
-  fallback "Exam 2026-11-02", filed as past-papers, and indexed the returned
-  destination with page=1. Observed: action moved; Indexed 1 file (1 new,
-  1 topic added). Workspace: /tmp/mimir-13-codex-1r_e9r59.
-  This checks real read/file/index integration, not a full conversational
-  Urgent session or its date/class routing.
-
-## Final automated validation and review
-
-- Targeted suites: 263 passed.
+- Targeted workspace/PDF/verify/portability suites: 263 passed.
 - Full suite: 1080 passed in 89.61 seconds.
 - Python compileall and git diff --check passed.
-- GPT-6.1 Terra Standards review: no documented violations or actionable smells.
-- GPT-6.1 Terra Spec review: live acceptance incomplete; instruction-string
-  provenance assertions do not establish runtime log/once-only behavior.
-  Full-suite evidence missing from the original reviewed commit is recorded
-  above. No scope creep found.
-- Retrying Antigravity with a session-only command(python3) allow rule still
-  returned the same headless command-permission denial. No successful
-  Antigravity verification or quick-start run is claimed.
+- GPT-6.1 Terra Standards review: no violations or actionable smells.
+- GPT-6.1 Terra Spec review identified missing live checks, runtime provenance
+  evidence, and full-suite documentation. The reports and audited transcript
+  evidence above resolve those gaps. No scope creep was reported.
 
-## Remaining acceptance work
+Only evidence documents changed after the passing full suite.
 
-Run the complete conversational Urgent attachment flow on both hosts, and
-exercise the same-context fallback through two verification batches in one
-session: inspect the actual session log for checker: self and the transcript
-for exactly one disclosure. Existing portability assertions are contract
-checks only. Antigravity requires an interactive permission grant or a
-working narrowly scoped permission configuration before these can run.
+## Practical limits
 
-## T3 Antigravity evidence audit criteria
+These are synthetic-fixture live agent exercises, not tests with student data.
+They prove the recorded workflows, not universal reliability of future model
+behavior. No student reply was fabricated in the first-contact scenario.
 
-The T3-managed live run must be evaluated separately from the failed direct
-CLI attempts. Before marking its scenarios passed, inspect:
+Antigravity file tools require workspace access to the learning root, real
+plugin directory, and any outside attachment directory. Its native verifier
+requires command access, bundled with file-write tools; read-only behavior is
+prompt-enforced and the observed verifier made no write calls.
 
-- The actual tool inventory and any independent verifier dispatch/result,
-  distinguishing T3 orchestration tools from native Antigravity agent tools.
-- PDF page-reader output for the cited page and correct/wrong key verdicts.
-  Unreadable evidence must produce ambiguity rather than guessed correctness.
-- Ordered date parsing, Urgent class output, outside-root attachment read,
-  course classification, filing destination, registry entry, fingerprint,
-  session restart, and gated first drill item. A successful file/index script
-  alone does not prove the conversational quick start.
-- An actual session log and transcript for two fallback batches, if native
-  independence is unavailable: checker: self in the log and exactly one
-  student-facing disclosure. Count transcript messages, not quoted text in
-  test code or report prose.
-- For deletion-denied filing, inspect both source and destination bytes,
-  the returned action and printed line, and the permission setup. Label
-  operating-system permission tests separately from host permission tests.
+Disabling native subagent tools genuinely removed them in the fallback test.
+Disabling MCP tools did not fully remove call_mcp_tool. External T3 delegation
+remained exposed but was prohibited by the child's orchestration policy; the
+fallback test establishes behavior without an authorized native checker,
+not complete protocol-level isolation from every possible delegation tool.
 
-The delegated run writes docs/issue-13-antigravity-t3.md. Its report is evidence
-to audit, not an automatic acceptance decision.
-
-
-## T3 Antigravity results — audited
-
-The T3-managed run completed the independent PDF verifier, Urgent first-contact
-attachment flow through its first verified drill, and real OS deletion-denial
-scenarios. See issue-13-antigravity-t3.md for actual calls and host limitations.
-Parent inspection confirmed the two independent child transcripts, the actual
-registry and session log, the student-output artifact, and byte-identical
-retained source/copy (794 bytes; SHA-256
-26a008970c350193d1d9e86a1009273e75f0c66682cc4e43c266eae580882bd2).
-
-This supersedes the earlier direct-CLI permission blocker for T3-managed use.
-Native agent tools were available, so same-context fallback remains unexercised
-by this run. Its separate capability-limited test is still pending.
+The copy-denial test used real kernel permissions after dropping
+CAP_DAC_OVERRIDE in Antigravity's user namespace. It is distinct from host
+tool permission enforcement and from the unit tests' injected failures.
