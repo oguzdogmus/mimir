@@ -99,6 +99,8 @@ So far Mimir has only been tested on **CachyOS (Arch Linux)**. It uses only the 
 
 ## Planned changes
 
+[![Mimir roadmap: shipped foundations, next reliability improvements, planned learning experience improvements, and future textbook support and migrations](assets/roadmap/mimir-roadmap-readme.png)](assets/roadmap/mimir-roadmap-readme.png)
+
 These come from hands-on testing and are subject to change. Until 1.0, expect changes to how sessions run and to the folder layout.
 
 - **Better-looking visuals.** The HTML pages and SVG diagrams Mimir builds work, but look plain. They need a stronger visual style.
