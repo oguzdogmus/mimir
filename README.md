@@ -35,7 +35,15 @@ codex plugin add mimir@mimir
 agy plugin install https://github.com/oguzdogmus/mimir
 ```
 
-Start Antigravity from your learning folder (`cd ~/learning && agy`): its file tools only reach the folder it was started in. If you use Antigravity through another app that doesn't load plugins, link the skills in as well:
+Create the learning folder before launch (`mkdir -p ~/learning`). Start with the real plugin directory added to its workspace:
+
+```sh
+mkdir -p ~/learning
+cd ~/learning
+agy --add-dir "$(realpath ~/.gemini/config/plugins/mimir)"
+```
+
+Grant any host permission requests for these directories. A skill symlink alone does not grant access to its target. If you use Antigravity through another app that doesn't load plugins, link the skills in as well:
 
 ```sh
 ln -s ~/.gemini/config/plugins/mimir/skills/mimir-* ~/.gemini/config/skills/

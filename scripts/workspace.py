@@ -62,7 +62,7 @@ course -- create one course tree (runs init on the current root first).
           Theory", "created": [...], "line": "Course folder ready:
           /home/u/learning/2026-Fall/CS201 Theory/"}
 
-file -- move one regular file into ``<course>/<role>/``, same basename.
+file -- file one regular file into ``<course>/<role>/``, same basename.
     in : {"source": "/home/u/learning/_inbox/2024-final.pdf", "term":
           "2026-Fall", "course": "CS201 Theory", "role": "past-papers"}
     out: {"source": "...", "dest": "/home/u/learning/2026-Fall/CS201
@@ -459,24 +459,34 @@ def cmd_file(data: dict) -> dict:
     root, _ = resolve_root()
     if _is_memory_file(source, root):
         raise InputError(f"source is a Mimir memory file and cannot be filed: {source}")
+    course_folder(root, term, course)
     dest_dir = root / term / course / role
+    if dest_dir.is_symlink():
+        raise InputError(f"destination role folder is a symlink: {dest_dir}")
     dest = dest_dir / source.name
     if dest.exists() or dest.is_symlink():
         raise InputError(f"{dest} already exists; nothing was moved")
     created: list[str] = []
     course_dir = build_course(root, term, course, created)
+    # Exclusive creation preserves an existing destination, even in a race.
+    writer = dest.open("xb")
     try:
-        shutil.move(source, dest)
+        with writer, source.open("rb") as reader:
+            shutil.copyfileobj(reader, writer)
     except BaseException:
-        # A failed cross-filesystem copy can leave a partial dest; the source is the original.
-        if source.exists() and (dest.exists() or dest.is_symlink()):
-            try:
-                dest.unlink()
-            except OSError:
-                pass
+        dest.unlink(missing_ok=True)
         raise
+    action = "moved"
+    try:
+        source.unlink()
+    except OSError:
+        action = "copied"
+    verb = "Moved" if action == "moved" else "Copied"
+    line = f"{verb} {source.name} to {dest_dir}/"
+    if action == "copied":
+        line += f" Original retained at {source}."
     return {"source": str(source), "dest": str(dest), "course_dir": str(course_dir),
-            "created": created, "line": f"Saved {source.name} to {dest_dir}/"}
+            "created": created, "action": action, "line": line}
 
 
 def cmd_relocate(data: dict) -> dict:

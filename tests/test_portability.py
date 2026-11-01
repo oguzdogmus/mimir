@@ -98,3 +98,13 @@ def test_no_shell_date_commands():
     for path in MARKDOWN:
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             assert not SHELL_DATE.search(line), f"{path}:{n}: {line.strip()[:80]}"
+
+
+def test_verification_dispatch_and_provenance_contract():
+    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text()
+    helper = (ROOT_DIR / "helpers/verifier.md").read_text()
+    assert "native independent subagent" in core
+    assert "checker: self" in core and "checker: independent" in core
+    assert "once per session" in core
+    assert "pdftext.py" in helper and "ambiguous" in helper
+    assert "Bash" in frontmatter(ROOT_DIR / "helpers/verifier.md")["tools"]
