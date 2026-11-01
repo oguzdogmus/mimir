@@ -97,8 +97,8 @@ start -- pick the course, the exam and the class for a new session.
     ``INDEX.md`` registry has no ``outline`` row, each ``## Topics`` name not
     yet listed (ignoring case and repeated spaces) follows as an unseen row,
     in ``INDEX.md`` order. ``remaining`` = route rows not
-    ``mastered``, weight 1 each, sent to ``plan.py class`` (and ``delay``,
-    whose ``line`` is ``delay_line`` for Standard only, else null). ``topic``:
+    ``mastered``, weighted from matching fingerprint marks, sent to ``plan.py class`` (and ``delay``,
+    using logged Topic timings; whose ``line`` is ``delay_line`` for Standard only, else null). ``topic``:
     ``save.md`` ``next_topic`` when it is remaining, else the first remaining
     topic; with none remaining, the same pick among the stale mastered topics
     (stale as in ``check``: the one-question recheck); else null. Its
@@ -211,6 +211,8 @@ from __future__ import annotations
 
 import re
 import json
+import math
+from fractions import Fraction
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -401,25 +403,23 @@ def _last_session(course_dir: Path) -> str | None:
     return f"{m.group(1)} {clock}" if hh < 24 and mm < 60 else None
 
 
-def _logs(course_dir: Path) -> list[tuple[str, str]]:
+def _logs(course_dir: Path):
     """(name, text) of each readable ``.state/logs/*.md`` in name order; symlinks,
     unreadable and non-UTF-8 logs are skipped."""
     logs = course_dir / ".state" / "logs"
     try:
         if logs.is_symlink() or not logs.is_dir():
-            return []
+            return
         names = sorted(p for p in logs.iterdir() if p.suffix == ".md")
     except OSError:
-        return []
-    out = []
+        return
     for log in names:
         try:
             if log.is_symlink() or not log.is_file():
                 continue
-            out.append((log.name, _text(log)))
+            yield log.name, _text(log)
         except (InputError, OSError):
             continue
-    return out
 
 
 def _first_contact(course_dir: Path) -> str | None:
@@ -618,18 +618,61 @@ def _cram(course_dir: Path, logs, first_contact: str | None, target: date,
     contact_day = contact if plan.is_date_only(contact) else contact.date()
     if contact_day > target:
         return None
-    payload = {"first_contact": first_contact, "exam": target.isoformat(),
-               "topics": [{"name": r["name"], "weight": 1} for r in route(course_dir)],
-               "timed": [], "sessions": _sessions(logs, previous, target, aware)}
+    payload = plan_payload(now.isoformat(), target.isoformat(), route(course_dir), course_dir)
+    payload.update(first_contact=first_contact, sessions=_sessions(logs, previous, target, aware))
     return _plan(plan.debrief, payload)
 
 
 # --- Subcommands ----------------------------------------------------------------------
 
-def plan_payload(now: str, exam: str | None, remaining: list[dict]) -> dict:
-    """The ``plan.py`` class/delay input for a route: each remaining topic weighs 1."""
-    return {"now": now, "exam": exam, "topics": [{"name": r["name"], "weight": 1} for r in remaining],
-            "timed": []}
+def planning_evidence(course_dir: Path, now: str) -> tuple[dict, list[dict]]:
+    """Exact topic matches only; malformed/ambiguous evidence stays uncalibrated.
+
+    Fingerprint marks use the triage engine's ceil(3 * marks / maximum) rule.
+    Timings are nonoverlapping intervals, accumulated once per distinct topic.
+    """
+    marks = {}
+    for name, frequency, value in _section_rows(
+            _memory(course_dir, "fingerprint.md"), ("Question types", ("type", "frequency", "marks"))):
+        if "(tentative)" in name or "(prior term)" in name:
+            continue
+        name = _norm(name.split(" (source:", 1)[0])
+        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?%?", value):
+            continue
+        number = Fraction(value.rstrip("%"))
+        if number > 0:
+            marks.setdefault(name, number)
+    top = max(marks.values(), default=1)
+    weights = {name: max(1, min(3, math.ceil(3 * value / top))) for name, value in marks.items()}
+    clock = plan.parse_moment(now, "now", need_time=True)
+    intervals = []
+    for _, text in _logs(course_dir):
+        for name, start, end in _section_rows(text, ("Topic timings", ("topic", "started", "ended"))):
+            try:
+                start = plan.parse_moment(start, "started", need_time=True)
+                end = plan.parse_moment(end, "ended", need_time=True)
+                if name and start < end <= clock:
+                    intervals.append((start, end, _norm(name)))
+            except (plan.InputError, TypeError, ValueError):
+                continue
+    totals = {}
+    last = None
+    for start, end, name in sorted(intervals):
+        if last is not None and start < last:
+            continue
+        totals[name] = totals.get(name, Fraction(0)) + Fraction((end - start).total_seconds()) / 60
+        last = end
+    return weights, [{"weight": weights.get(name, 1), "minutes": minutes}
+                     for name, minutes in totals.items()]
+
+
+def plan_payload(now: str, exam: str | None, remaining: list[dict],
+                 course_dir: Path | None = None) -> dict:
+    """Planner input, with explicit cold-start fallback for absent evidence."""
+    weights, timed = planning_evidence(course_dir, now) if course_dir else ({}, [])
+    return {"now": now, "exam": exam,
+            "topics": [{"name": r["name"], "weight": weights.get(_norm(r["name"]), 1)} for r in remaining],
+            "timed": timed}
 
 
 def cmd_start(data: dict) -> dict:
@@ -681,7 +724,7 @@ def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
     exam, exam_name, q0 = _exam(profile, code, today)
     rows = route(course_dir)
     remaining = [r for r in rows if r["status"] != "mastered"]
-    payload = plan_payload(data["now"], exam, remaining)
+    payload = plan_payload(data["now"], exam, remaining, course_dir)
     klass = _plan(plan.delivery_class, payload)
     delay_line = _plan(plan.cost_of_delay, payload)["line"] if klass["class"] == "Standard" else None
     save = _memory(course_dir, "save.md")
@@ -726,7 +769,7 @@ def cmd_debrief(data: dict) -> dict:
     root = Path(st["root"])
     course_dir = Path(st["course_dir"])
     target, previous = window
-    logs = _logs(course_dir)
+    logs = list(_logs(course_dir))
     cram = _cram(course_dir, logs, st["first_contact"], target, previous, now)
     return {**out, "cram": cram, "disagreements": _disagreements(logs, previous, target),
             "offer_next_course": _offer_next_course(root, st["term"]),

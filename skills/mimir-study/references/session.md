@@ -56,6 +56,9 @@ Every check and practice question is an item `{"topic": "<topic>", "origin": "pr
 ### Recording
 After each answer say right or wrong and show the worked key briefly. Follow core rules' recording reference for each answer, then append its outcome under `## Results` in the log.
 
+### Topic timing
+At the start of work on each topic, obtain `session.py now` and retain its exact timestamp. When finishing that topic, switching topics, or closing, obtain the end timestamp and append one row under `## Topic timings` in the session log: `| topic | started | ended |` (with an alignment row). Escape topic cells as Markdown cells. Record only actual study intervals; exclude breaks and administrative work. Never invent durations or duplicate an already logged interval. An interrupted interval without an observed end remains unrecorded.
+
 ### Steps for topic `T`
 1. Recheck: when `T` is `stale`, or a prerequisite you named is `stale` in `check`, ask ONE recheck question first, on `T` if it is stale, else on the first stale prerequisite. Record it. At most one recheck per topic. Never a review set.
 2. "I know this": prepare two gated questions on T and ask them one at a time. Record each answer through `session.py record`. If both are unassisted and both gate decisions are `show` with `counts_for_mastery: true`, skip the explanation and proceed to step 4; the recorder alone decides mastery under D2. Otherwise teach (step 3).

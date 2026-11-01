@@ -1152,3 +1152,27 @@ def test_record_initialization_and_legacy_evidence(home, root):
     assert "2026-10-01: ev" in result["topics"][0]["evidence"]
     assert ok(home, "record", {**p, "session": "s2", "explanation_only": True,
                               "gate": {"decision": "drop", "counts_for_mastery": False}})["recorded"]
+
+
+def test_start_uses_fingerprint_weights_and_logged_topic_times(home, root):
+    c = course(home, mastery=[(n, 'gap', '', 0, 0) for n in ('A', 'B', 'C')])
+    args = {'now': NOW, 'term': TERM, 'course': c.name}
+    profile(root, exams=[('CS201', 'final', '2026-11-05')])
+    cold = ok(home, 'start', args)
+    assert cold['class']['route_minutes']['point'] == 75
+    assert cold['class']['confidence'].startswith('rough:')
+    (c / '.state/fingerprint.md').write_text(
+        '## Question types\n| type | frequency | marks |\n|---|---|---|\n'
+        '| A (source: past-papers/a.pdf) | 1 of 1 papers | 30 |\n'
+        '| B (source: past-papers/a.pdf) | 1 of 1 papers | 10 |\n')
+    weighted = ok(home, 'start', args)
+    assert weighted['class']['route_minutes']['point'] == 125
+    (c / '.state/logs/timing.md').write_text(
+        '## Topic timings\n| topic | started | ended |\n|---|---|---|\n'
+        '| A | 2026-10-16T09:00:00+03:00 | 2026-10-16T09:30:00+03:00 |\n'
+        '| B | 2026-10-16T10:00:00+03:00 | 2026-10-16T10:10:00+03:00 |\n'
+        '| C | 2026-10-16T11:00:00+03:00 | 2026-10-16T11:10:00+03:00 |\n')
+    calibrated = ok(home, 'start', args)
+    assert calibrated['class']['route_minutes']['point'] == 50
+    assert calibrated['class']['confidence'] == 'based on 3 timed topics'
+    assert calibrated['delay_line'] != weighted['delay_line']
