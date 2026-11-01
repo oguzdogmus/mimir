@@ -73,3 +73,27 @@ session: inspect the actual session log for checker: self and the transcript
 for exactly one disclosure. Existing portability assertions are contract
 checks only. Antigravity requires an interactive permission grant or a
 working narrowly scoped permission configuration before these can run.
+
+## T3 Antigravity evidence audit criteria
+
+The T3-managed live run must be evaluated separately from the failed direct
+CLI attempts. Before marking its scenarios passed, inspect:
+
+- The actual tool inventory and any independent verifier dispatch/result,
+  distinguishing T3 orchestration tools from native Antigravity agent tools.
+- PDF page-reader output for the cited page and correct/wrong key verdicts.
+  Unreadable evidence must produce ambiguity rather than guessed correctness.
+- Ordered date parsing, Urgent class output, outside-root attachment read,
+  course classification, filing destination, registry entry, fingerprint,
+  session restart, and gated first drill item. A successful file/index script
+  alone does not prove the conversational quick start.
+- An actual session log and transcript for two fallback batches, if native
+  independence is unavailable: checker: self in the log and exactly one
+  student-facing disclosure. Count transcript messages, not quoted text in
+  test code or report prose.
+- For deletion-denied filing, inspect both source and destination bytes,
+  the returned action and printed line, and the permission setup. Label
+  operating-system permission tests separately from host permission tests.
+
+The delegated run writes docs/issue-13-antigravity-t3.md. Its report is evidence
+to audit, not an automatic acceptance decision.
