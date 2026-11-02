@@ -146,4 +146,6 @@ Mimir is open source under the [Apache License 2.0](LICENSE). You can use, chang
 
 ## Credits
 
-Math sheets use [KaTeX](https://katex.org/) (MIT license), vendored in `assets/vendor/katex/`. `mimir-help` is modelled on Matt Pocock's [`ask-matt`](https://github.com/mattpocock/skills) router skill.
+Math sheets use [KaTeX](https://katex.org/) (MIT license), vendored in `assets/vendor/katex/`.
+
+`mimir-help` is modelled on Matt Pocock's [`ask-matt`](https://github.com/mattpocock/skills) router skill.
