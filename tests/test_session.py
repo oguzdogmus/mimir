@@ -414,25 +414,72 @@ def test_check_refuses_symlinked_course(home, root, tmp_path):
     fails(home, "check", {"now": NOW, "term": TERM, "course": "LINK1 Alias", "topics": ["a"]}, "symlink")
 
 
-# --- clock -------------------------------------------------------------------------
+# --- no episode clock ------------------------------------------------------------
 
-@pytest.mark.parametrize("now,minutes,phase", [
-    ("2026-10-17T09:19:59+03:00", 19, "teach"),
-    ("2026-10-17T09:20:00+03:00", 20, "wrap"),
-    ("2026-10-17T09:24:59+03:00", 24, "wrap"),
-    ("2026-10-17T09:25:00+03:00", 25, "over"),
-    ("2026-10-17T07:30:00+01:00", 30, "over"),  # other offset, same instant arithmetic
-])
-def test_clock(home, now, minutes, phase):
-    out = ok(home, "clock", {"start": NOW, "now": now})
-    assert (out["elapsed_minutes"], out["phase"]) == (minutes, phase)
+def test_no_clock_subcommand(home):
+    """Sessions run until the student ends them: there is no episode timer."""
+    proc = _run(SS, home, "clock", {"start": NOW, "now": NOW})
+    assert proc.returncode == 2 and proc.stdout == b""
+    assert not hasattr(session, "EPISODE_MIN_MINUTES") and not hasattr(session, "EPISODE_MAX_MINUTES")
 
 
-def test_clock_errors(home):
-    fails(home, "clock", {"start": NOW, "now": "2026-10-17T08:59:00+03:00"}, "before start")
-    fails(home, "clock", {"start": NOW, "now": "2026-10-17T09:10:00"}, "offset")
-    fails(home, "clock", {"start": NOW}, "now is required")
-    fails(home, "clock", {"start": "2026-10-17", "now": NOW}, "start must include a time")
+# --- close: the end stamp, once ----------------------------------------------------
+
+def close_args(cdir: Path, now: str, started: str = NOW, log_name: str = "2026-10-17-0900") -> dict:
+    return {"now": now, "term": TERM, "course": cdir.name, "log": log_name, "started": started}
+
+
+def test_close_stamps_the_end_once(home, root):
+    cdir = course(home)
+    log(cdir, "2026-10-17-0900", session_log(NOW))
+    path = cdir / ".state/logs/2026-10-17-0900.md"
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:47:30+03:00"))
+    assert out["ended"] == "2026-10-17T10:47:30+03:00" and out["already_closed"] is False
+    assert (out["minutes"], out["last_session"]) == (107, "2026-10-17 10:47")
+    assert out["line"] == "Session closed after 107 min."
+    assert path.read_text(encoding="utf-8") == session_log(NOW, "2026-10-17T10:47:30+03:00")
+    before = snapshot(home)
+    again = ok(home, "close", close_args(cdir, "2026-10-17T11:30:00+03:00"))  # a second close
+    assert snapshot(home) == before  # writes nothing: one ended stamp per session
+    assert again["ended"] == out["ended"] and again["already_closed"] is True
+    assert (again["minutes"], again["last_session"]) == (107, "2026-10-17 10:47")
+    assert again["line"] == "Session already closed after 107 min."
+
+
+def test_close_refusals_write_nothing(home, root):
+    cdir = course(home)
+    log(cdir, "2026-10-17-0900", session_log(NOW))
+    later = "2026-10-17T09:30:00+03:00"
+    before = snapshot(home)
+    fails(home, "close", close_args(cdir, "2026-10-17T08:59:00+03:00"), "now is before started")
+    fails(home, "close", close_args(cdir, "2026-10-17T09:30:00"), "offset")
+    fails(home, "close", close_args(cdir, later, started="2026-10-17T09:01:00+03:00"), "no started")
+    fails(home, "close", close_args(cdir, later, log_name="2026-10-17-0901"), "not found")
+    fails(home, "close", close_args(cdir, later, log_name="../../profile"), "log must be")
+    fails(home, "close", {**close_args(cdir, later), "course": "NOPE1 X"}, "course")
+    fails(home, "close", {**close_args(cdir, later), "x": 1}, "unknown field 'x'")
+    fails(home, "close", {k: v for k, v in close_args(cdir, later).items() if k != "started"}, "started is required")
+    assert snapshot(home) == before
+
+
+def test_close_never_stamps_over_a_later_session(home, root):
+    cdir = course(home)
+    second = "2026-10-17T09:00:40+03:00"
+    log(cdir, "2026-10-17-0900", session_log(NOW) + session_log(second))
+    before = snapshot(home)
+    fails(home, "close", close_args(cdir, "2026-10-17T10:00:00+03:00"), "later session")
+    assert snapshot(home) == before
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:00:00+03:00", started=second))
+    assert out["minutes"] == 59 and out["already_closed"] is False
+
+
+def test_closed_session_counts_in_the_cram_bill(home, root):
+    cdir = due_course(home, root)
+    started = "2026-11-01T20:00:00+02:00"
+    log(cdir, "2026-11-01-2000", session_log(started, extra=f"first_contact: {started}\n"))
+    for _ in range(2):
+        ok(home, "close", close_args(cdir, "2026-11-01T21:30:00+02:00", started, "2026-11-01-2000"))
+    assert ok(home, "debrief", {"now": DUE_NOW})["cram"]["actual_minutes"] == 90
 
 
 # --- error contract ------------------------------------------------------------------
@@ -448,7 +495,6 @@ def test_bad_inputs(home, root):
     fails(home, "start", {"now": NOW, "term": "Fall"}, "term")
     fails(home, "check", {"now": NOW, "term": TERM, "course": "CS201 Theory", "topics": ["a"], "x": 1},
           "unknown field 'x'")
-    fails(home, "clock", {"start": NOW, "now": NOW, "x": 1}, "unknown field 'x'")
     fails(home, "start", b"not json", "not valid JSON")
 
 
@@ -471,7 +517,6 @@ def _all_commands_write_nothing(home: Path) -> None:
     before = snapshot(home)
     ok(home, "start", {"now": NOW})
     ok(home, "check", {"now": NOW, "term": TERM, "course": "CS201 Theory", "topics": ["Graphs"]})
-    ok(home, "clock", {"start": NOW, "now": NOW})
     fails(home, "start", {"now": NOW, "course": "NOPE1 X"})
     assert snapshot(home) == before
 
@@ -790,7 +835,7 @@ def test_stdlib_only_and_only_now_reads_the_clock():
                    and node.attr in {"now", "today", "utcnow", "time"}
                    and isinstance(node.value, ast.Name) and node.value.id in {"datetime", "date", "time"}]
     assert clock_reads == ["_clock"]  # only the `now` subcommand reads the clock
-    assert (session.STALE_DAYS, session.EPISODE_MIN_MINUTES, session.EPISODE_MAX_MINUTES) == (14, 20, 25)
+    assert session.STALE_DAYS == 14
 
 
 # --- progress ----------------------------------------------------------------------
