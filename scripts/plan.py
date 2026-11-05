@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Mimir planning engine: delivery class, cost of delay, cram bill, first-contact summary, question-type triage.
+"""Mimir planning engine: delivery class, cram bill, first-contact summary, question-type triage.
 
 Deterministic, standard library only, Python 3.11+. Run as::
 
-    python3 plan.py <class|delay|debrief|summary|triage>  < input.json
+    python3 plan.py <class|debrief|summary|triage>  < input.json
 
 Each subcommand reads ONE JSON object on stdin and prints ONE JSON object on
 stdout: structured data plus a ready-to-print ``line``. "Now" is an input
@@ -15,14 +15,9 @@ extended ISO 8601 datetime with ``T``, e.g. "2026-11-05T09:00:00+02:00";
 other ISO forms such as "20261105" or "2026-W45-4" are rejected)
 --------------------------------------------------------------------------
 now            datetime with time, e.g. "2026-10-17T09:00:00+03:00".
-               Required by ``class``, ``delay`` and ``triage``; optional elsewhere.
+               Required by ``class`` and ``triage``; optional elsewhere.
 exam           datetime, date-only, or null (date unknown). Optional, null if
                missing.
-topics         list of {"name": str, "weight": 1..3} -- the remaining route.
-               Required (use [] for an empty route) by class, delay, debrief.
-               ``debrief`` takes the FULL route for that exam, not what is left.
-timed          optional list of {"weight": 1..3, "minutes": > 0}: logged times
-               of finished topics, used to calibrate the estimate.
 sessions       list of {"start": datetime, "end": datetime} (debrief, summary;
                optional, missing or null means none).
 first_contact  datetime or date-only. Required by debrief and summary.
@@ -44,65 +39,33 @@ Date rules
 * DST note: the offset of ``now`` is reused for the exam date, so a daylight
   saving change between now and the exam can shift the result by up to 1 h.
   This is accepted. Callers pass a full datetime when the exam time is known.
-* Calendar days ("exam in 19 days", start days) are counted in ``now``'s offset.
+* Calendar days ("exam in 19 days") are counted in ``now``'s offset.
 * All datetimes must agree: either all carry a UTC offset or none do.
-
-Estimates
----------
-Cold start (fewer than CALIBRATION_THRESHOLD timed topics): each topic costs
-EPISODE_MINUTES x weight, shown +/- COLD_START_SPREAD. Calibrated: point =
-mean(logged minutes / weight) x weight, range = min..max of that ratio x weight.
-Every range carries a confidence statement naming its basis.
 
 Subcommands and examples
 ------------------------
-class -- delivery class with reason.
-    in : {"now": "2026-10-17T09:00:00+03:00", "exam": "2026-11-05",
-          "topics": [{"name": "Heaps", "weight": 2}], "timed": []}
+class -- delivery class with reason. Only exam proximity decides: there is no
+    learning-time estimate and no route-time trigger.
+    in : {"now": "2026-10-17T09:00:00+03:00", "exam": "2026-11-05"}
     out: {"class": "Standard", "reason": "calm", "hours_to_exam": 447,
-          "days_to_exam": 19, "route_minutes": {"low": 25, "point": 50,
-          "high": 75}, "capacity_minutes": 931.25, "confidence": "rough: no
-          topics timed yet, ±50%", "line": "Standard delivery: exam in 19 days"}
+          "days_to_exam": 19, "line": "Standard delivery: exam in 19 days"}
     ``reason`` is one of:
       unknown -- exam date is null: Standard.
       today   -- date-only exam falls on today's date: Urgent. The exam time
-                 is unknown, so hours_to_exam is null; days_to_exam and
-                 capacity_minutes are 0.
+                 is unknown, so hours_to_exam is null; days_to_exam is 0.
       floor   -- hours to exam <= URGENT_FLOOR_HOURS: Urgent.
-      route   -- route point minutes > hours/24 x STANDARD_PACE_MINUTES x
-                 URGENT_FACTOR: Urgent (exactly equal stays Standard).
       calm    -- none of the above: Standard.
 
-delay -- cost of delay: one row per start day from today to the exam eve.
-    in : same as class.
-    out: {"rows": [{"start": "2026-10-17", "days": 19, "minutes_per_day":
-          {"low": 1.32, "high": 3.95}}, ...], "route_minutes": {...},
-          "confidence": "...", "line": "Start today: 19 days × 1–4 min.
-          Start Mon Oct 26: 10 days × 3–8 min. Start Wed Nov 4: 1 day ×
-          25–75 min. (rough: no topics timed yet, ±50%)"}
-    The line compares today, the midpoint row and the eve. Durations show
-    minutes while the low end is under an hour (5-min steps, 1-min steps
-    below 10, "<1 min" for a positive amount that rounds to 0), else hours
-    in 0.5 steps.
-    exam null gives no rows and "Cost of delay: exam date unknown.";
-    an empty route still returns one row per start day, with zero minutes,
-    and the line "Cost of delay: no topics left on the route."
-
-debrief -- cram bill: actual hours vs the counterfactual for the full route.
+debrief -- cram bill: the hours actually studied, with no estimate of what
+    the route should have taken.
     in : {"first_contact": "2026-11-03T20:00:00+02:00", "exam": "2026-11-05",
-          "topics": [{"name": "Heaps", "weight": 2}, {"name": "Graphs",
-          "weight": 3}, {"name": "Sorting", "weight": 1}], "timed": [],
           "sessions": [{"start": "2026-11-03T20:00:00+02:00",
                         "end": "2026-11-03T23:30:00+02:00"}]}
     out: {"actual_minutes": 210, "actual_hours": 3.5, "session_count": 1,
-          "counterfactual_minutes": {"low": 75, "point": 150, "high": 225},
-          "counterfactual_text": "1.5–4 h", "spread_days": {"low": 2,
-          "high": 5}, "days_before_exam": 2, "confidence": "rough: no topics
-          timed yet, ±50%", "line": "Cram bill: 3.5 h studied in 1 session.
-          Counterfactual at 50 min a day: roughly 1.5–4 h over 2–5 days
-          (rough: no topics timed yet, ±50%). First contact: 2 days before
-          the exam."}
-    spread_days = range minutes / STANDARD_PACE_MINUTES, rounded up.
+          "days_before_exam": 2, "line": "Cram bill: 3.5 h studied in 1
+          session. First contact: 2 days before the exam."}
+    No sessions: "Cram bill: no study sessions logged."; exam null drops the
+    first-contact sentence.
 
 summary -- one shareable first-contact line.
     in : {"course": "CS201", "exam_name": "final", "first_contact":
@@ -160,13 +123,8 @@ from datetime import date, datetime, time, timedelta
 from fractions import Fraction
 
 # --- Tunables (constants.md) -------------------------------------------------
-EPISODE_MINUTES = 25                 # one episode; also the cold-start minutes per weight unit
-STANDARD_EPISODES_PER_DAY = 2        # standard pace: 2 episodes/day
-STANDARD_PACE_MINUTES = EPISODE_MINUTES * STANDARD_EPISODES_PER_DAY  # = 50 min/day
-URGENT_FACTOR = Fraction(1)          # urgent rule factor
+EPISODE_MINUTES = 25                 # triage minutes per weight unit
 URGENT_FLOOR_HOURS = 48              # always Urgent within this many hours of the exam
-COLD_START_SPREAD = Fraction(1, 2)   # cold-start range: ±50 %
-CALIBRATION_THRESHOLD = 3            # timed topics needed before using logged times
 WEIGHT_MIN, WEIGHT_MAX = 1, 3        # mark-share weight ×1–×3
 MAX_HORIZON_DAYS = 366               # reject exams further away than this
 URGENT_STUDY_SHARE = Fraction(1, 3)  # share of the hours to the exam spent drilling (triage budget)
@@ -177,10 +135,6 @@ TRIAGE_CLASSES = ("Urgent", "Standard")
 
 _DATE_ONLY = re.compile(r"\d{4}-\d{2}-\d{2}")
 _DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T.+")
-_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-_ONE_DAY = timedelta(days=1)
 
 
 class InputError(Exception):
@@ -265,13 +219,6 @@ def parse_number(value, field: str) -> Fraction:
     return Fraction(value)
 
 
-def parse_weight(value, field: str) -> Fraction:
-    weight = parse_number(value, field)
-    if not WEIGHT_MIN <= weight <= WEIGHT_MAX:
-        raise InputError(f"{field} must be between {WEIGHT_MIN} and {WEIGHT_MAX}")
-    return weight
-
-
 def _object_list(data: dict, field: str, *, required: bool) -> list:
     value = data.get(field)
     if value is None:
@@ -284,22 +231,6 @@ def _object_list(data: dict, field: str, *, required: bool) -> list:
         if not isinstance(item, dict):
             raise InputError(f"{field}[{index}] must be an object")
     return value
-
-
-def parse_topics(data: dict) -> list[Fraction]:
-    topics = _object_list(data, "topics", required=True)
-    return [parse_weight(t.get("weight"), f"topics[{i}].weight") for i, t in enumerate(topics)]
-
-
-def parse_timed(data: dict) -> list[tuple[Fraction, Fraction]]:
-    timed = []
-    for i, item in enumerate(_object_list(data, "timed", required=False)):
-        weight = parse_weight(item.get("weight"), f"timed[{i}].weight")
-        minutes = parse_number(item.get("minutes"), f"timed[{i}].minutes")
-        if minutes <= 0:
-            raise InputError(f"timed[{i}].minutes must be positive")
-        timed.append((weight, minutes))
-    return timed
 
 
 def parse_sessions(data: dict) -> list[tuple[datetime, datetime]]:
@@ -395,59 +326,20 @@ def _minute_text(minutes: Fraction) -> str:
     return "<1" if shown == 0 else _plain(shown)
 
 
-def _hour_text(minutes: Fraction) -> str:
-    return _plain(round_half_up(minutes / 60, Fraction(1, 2)))
-
-
-def fmt_range(low: Fraction, high: Fraction) -> str:
-    """Minutes while the low end, rounded to its 5-min step, is under an hour
-    (5-min steps, 1-min below 10), else hours in 0.5 steps. Equal displays
-    collapse to one value."""
-    if round_half_up(low, Fraction(5)) < 60:
-        lo, hi, unit = _minute_text(low), _minute_text(high), "min"
-    else:
-        lo, hi, unit = _hour_text(low), _hour_text(high), "h"
-    return f"{lo} {unit}" if lo == hi else f"{lo}–{hi} {unit}"
-
-
 def fmt_duration(minutes: Fraction) -> str:
-    return fmt_range(minutes, minutes)
+    """Minutes while the value, rounded to its 5-min step, is under an hour
+    (5-min steps, 1-min below 10, "<1" for a positive amount that rounds to
+    0), else hours in 0.5 steps."""
+    if round_half_up(minutes, Fraction(5)) < 60:
+        return f"{_minute_text(minutes)} min"
+    return f"{_plain(round_half_up(minutes / 60, Fraction(1, 2)))} h"
 
 
 def count(n: int, noun: str) -> str:
     return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
 
-def day_label(day: date) -> str:
-    return f"{_WEEKDAYS[day.weekday()]} {_MONTHS[day.month - 1]} {day.day}"
-
-
-def _spread_text() -> str:
-    return f"±{_plain(COLD_START_SPREAD * 100)}%"
-
-
 # --- Engine --------------------------------------------------------------------
-
-def estimate(weights: list[Fraction], timed: list[tuple[Fraction, Fraction]]) -> dict:
-    """Route minutes {low, point, high} plus a confidence statement."""
-    total_weight = sum(weights, Fraction(0))
-    n = len(timed)
-    if n >= CALIBRATION_THRESHOLD:
-        ratios = [minutes / weight for weight, minutes in timed]
-        mean = sum(ratios, Fraction(0)) / n
-        low, point, high = min(ratios) * total_weight, mean * total_weight, max(ratios) * total_weight
-        confidence = f"based on {n} timed topics"
-    else:
-        point = EPISODE_MINUTES * total_weight
-        low, high = point * (1 - COLD_START_SPREAD), point * (1 + COLD_START_SPREAD)
-        basis = "no topics timed yet" if n == 0 else f"only {count(n, 'topic')} timed so far"
-        confidence = f"rough: {basis}, {_spread_text()}"
-    return {"low": low, "point": point, "high": high, "confidence": confidence}
-
-
-def _route_json(est: dict) -> dict:
-    return {"low": num(est["low"]), "point": num(est["point"]), "high": num(est["high"])}
-
 
 def exam_window(clock: Clock, now: datetime, exam):
     """Return (today, exam_day, hours_to_exam); hours is None for a date-only exam today."""
@@ -465,89 +357,28 @@ def exam_window(clock: Clock, now: datetime, exam):
     return today, exam_day, _minutes(exam_at - now) / 60
 
 
-def _planning_inputs(data: dict):
+def delivery_class(data: dict) -> dict:
     now = required_moment(data, "now", need_time=True)
     exam = optional_moment(data, "exam")
-    weights = parse_topics(data)
-    timed = parse_timed(data)
     clock = Clock(now, exam)
-    return now, exam, clock, estimate(weights, timed), bool(weights)
-
-
-def delivery_class(data: dict) -> dict:
-    now, exam, clock, est, _ = _planning_inputs(data)
-    hours = days = capacity = None
+    hours = days = None
     if exam is None:
         klass, reason, line = "Standard", "unknown", "Standard delivery: exam date unknown"
     else:
         today, exam_day, hours = exam_window(clock, now, exam)
         days = (exam_day - today).days
         if hours is None:  # date-only exam today: exam time unknown
-            capacity = Fraction(0)
             klass, reason, line = "Urgent", "today", "Urgent delivery: exam today"
+        elif hours <= URGENT_FLOOR_HOURS:
+            shown = "under 1 hour" if hours < 1 else count(int(round_half_up(hours, Fraction(1))), "hour")
+            klass, reason, line = "Urgent", "floor", f"Urgent delivery: exam in {shown}"
         else:
-            capacity = hours / 24 * STANDARD_PACE_MINUTES * URGENT_FACTOR
-            if hours <= URGENT_FLOOR_HOURS:
-                shown = "under 1 hour" if hours < 1 else count(int(round_half_up(hours, Fraction(1))), "hour")
-                klass, reason, line = "Urgent", "floor", f"Urgent delivery: exam in {shown}"
-            elif est["point"] > capacity:
-                klass, reason = "Urgent", "route"
-                line = (f"Urgent delivery: about {_hour_text(est['point'])} h of route left, "
-                        f"{count(days, 'day')} to the exam")
-            else:
-                klass, reason, line = "Standard", "calm", f"Standard delivery: exam in {count(days, 'day')}"
+            klass, reason, line = "Standard", "calm", f"Standard delivery: exam in {count(days, 'day')}"
     return {
         "class": klass,
         "reason": reason,
         "hours_to_exam": None if hours is None else num(hours),
         "days_to_exam": days,
-        "route_minutes": _route_json(est),
-        "capacity_minutes": None if capacity is None else num(capacity),
-        "confidence": est["confidence"],
-        "line": line,
-    }
-
-
-def delay_rows(data: dict) -> tuple[list[dict], dict, bool]:
-    """Rows of the cost-of-delay plan as exact values: (rows, estimate, has_route).
-
-    One row {start, days, low, high} per start day from today to the exam eve;
-    no rows when the exam is null.
-    """
-    now, exam, clock, est, has_route = _planning_inputs(data)
-    rows: list[dict] = []
-    if exam is not None:
-        today, exam_day, _ = exam_window(clock, now, exam)
-        last = max(today, exam_day - _ONE_DAY)
-        start = today
-        while start <= last:
-            days = max(1, (exam_day - start).days)
-            rows.append({"start": start, "days": days,
-                         "low": est["low"] / days, "high": est["high"] / days})
-            start += _ONE_DAY
-    return rows, est, has_route
-
-
-def delay_phrase(row: dict, first: bool) -> str:
-    """One start day as said in the cost-of-delay line, e.g. "Start Mon Oct 26: 10 days × 3–8 min."."""
-    when = "today" if first else day_label(row["start"])
-    return f"Start {when}: {count(row['days'], 'day')} × {fmt_range(row['low'], row['high'])}."
-
-
-def cost_of_delay(data: dict) -> dict:
-    rows, est, has_route = delay_rows(data)
-    if not rows:
-        line = "Cost of delay: exam date unknown."
-    elif not has_route:
-        line = "Cost of delay: no topics left on the route."
-    else:
-        picks = sorted({0, len(rows) // 2, len(rows) - 1})
-        line = " ".join(delay_phrase(rows[i], i == 0) for i in picks) + f" ({est['confidence']})"
-    return {
-        "rows": [{"start": r["start"].isoformat(), "days": r["days"],
-                  "minutes_per_day": {"low": num(r["low"]), "high": num(r["high"])}} for r in rows],
-        "route_minutes": _route_json(est),
-        "confidence": est["confidence"],
         "line": line,
     }
 
@@ -583,35 +414,18 @@ def _context(data: dict):
 
 
 def debrief(data: dict) -> dict:
-    weights = parse_topics(data)
-    timed = parse_timed(data)
     clock, first_contact, exam, sessions, studied, days_before = _context(data)
-    est = estimate(weights, timed)
-    spread_low = math.ceil(est["low"] / STANDARD_PACE_MINUTES)
-    spread_high = math.ceil(est["high"] / STANDARD_PACE_MINUTES)
-    counterfactual = fmt_range(est["low"], est["high"])
-
     if sessions:
         sentences = [f"Cram bill: {fmt_duration(studied)} studied in {count(len(sessions), 'session')}."]
     else:
         sentences = ["Cram bill: no study sessions logged."]
-    if weights:
-        spread = count(spread_low, "day") if spread_low == spread_high else f"{spread_low}–{spread_high} days"
-        sentences.append(f"Counterfactual at {STANDARD_PACE_MINUTES} min a day: roughly {counterfactual} "
-                         f"over {spread} ({est['confidence']}).")
-    else:
-        sentences.append("Counterfactual: no topics on the route.")
     if days_before is not None:
         sentences.append(f"First contact: {_first_contact_text(days_before)}.")
     return {
         "actual_minutes": num(studied),
         "actual_hours": num(studied / 60),
         "session_count": len(sessions),
-        "counterfactual_minutes": _route_json(est),
-        "counterfactual_text": counterfactual,
-        "spread_days": {"low": spread_low, "high": spread_high},
         "days_before_exam": days_before,
-        "confidence": est["confidence"],
         "line": " ".join(sentences),
     }
 
@@ -751,8 +565,7 @@ def triage(data: dict) -> dict:
 
 COMMANDS = {
     "class": (delivery_class, "delivery class (Standard/Urgent) with its reason"),
-    "delay": (cost_of_delay, "cost of delay: start today vs later start days"),
-    "debrief": (debrief, "cram bill: actual hours vs the counterfactual for the full route"),
+    "debrief": (debrief, "cram bill: actual hours studied and sessions"),
     "summary": (summary, "one shareable first-contact summary line"),
     "triage": (triage, "triage: question types to drill or skip, by points per hour"),
 }
@@ -766,12 +579,12 @@ def _fail(message: str, code: int = 2) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="plan.py",
-        description=("Mimir planning engine. Subcommands: class (delivery class), delay (cost of "
-                     "delay), debrief (cram bill), summary (first-contact line), triage (urgent "
+        description=("Mimir planning engine. Subcommands: class (delivery class), "
+                     "debrief (cram bill), summary (first-contact line), triage (urgent "
                      "drill/skip by points per hour). Reads one JSON "
                      "object on stdin and prints one JSON object on stdout."),
     )
-    sub = parser.add_subparsers(dest="command", required=True, metavar="{class,delay,debrief,summary,triage}")
+    sub = parser.add_subparsers(dest="command", required=True, metavar="{class,debrief,summary,triage}")
     for name, (_, help_text) in COMMANDS.items():
         sub.add_parser(name, help=help_text)
     args = parser.parse_args(argv)

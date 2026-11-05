@@ -11,7 +11,7 @@ Urgent has no Socratic dial, no frustration override, no episode timer (`session
 Reached from `session.md` Start step 2 only when the opening message names a file path that you can read. No setup question and no ingest table in this section. Write no text at all (no progress note, no "setting up" line) until step 2 gives the class line: the student's first line from Mimir is that class line. The one exception is the single Q0 question "When's the exam?" when step 1 needs it.
 
 1. Q0 first: the `session.md` Start step 4 rules (phrase, `session.py parse-date`, at most one "When's the exam?"), but write nothing yet: keep the date, or `unknown`.
-2. `plan.py class` with `{"now": "<S>", "exam": "<the date, or null when unknown>", "topics": []}`.
+2. `plan.py class` with `{"now": "<S>", "exam": "<the date, or null when unknown>"}`.
    - `class` is not `Urgent`: say the missing-course message from core rules' Resolve the course (action: study) and stop. Nothing is moved.
    - `Urgent`: say its `line` verbatim. It is the session's first line: say nothing before it, and from here to the first drill item say only the lines this file names (no progress or status lines). Say it now, before filing anything.
 3. For each attached file, in message order:

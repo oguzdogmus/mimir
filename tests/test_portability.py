@@ -108,3 +108,15 @@ def test_verification_dispatch_and_provenance_contract():
     assert "once per session" in core
     assert "pdftext.py" in helper and "ambiguous" in helper
     assert "Bash" in frontmatter(ROOT_DIR / "helpers/verifier.md")["tools"]
+
+
+FORECAST = re.compile(r"delay_line|cost.of.delay|counterfactual|route_minutes|capacity_minutes|visual\.py delay"
+                      r"|\bmin(utes)? a day\b|\d+\s*days?\s*×", re.IGNORECASE)
+
+
+def test_no_learning_time_forecasts():
+    """Mimir never promises how fast a student learns: no cost of delay, no
+    "N days × M min" lines, no counterfactual cram estimate."""
+    for path in MARKDOWN + [ROOT_DIR / "README.md"]:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not FORECAST.search(line), f"{path}:{n}: {line.strip()[:80]}"

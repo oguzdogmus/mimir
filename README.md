@@ -68,7 +68,7 @@ Each command is a skill. Type it like this:
 | `mimir-study` | Study for an exam. Start here: "exam Friday, help" works, even with just a photo of a past paper. |
 | `mimir-past-questions` | Drill a course's real past-paper questions, highest points per hour first. |
 | `mimir-quiz` | Get quizzed at exam level in your professor's style, with checked answer keys. |
-| `mimir-plan` | See how your plan grows with each day you wait to start. |
+| `mimir-plan` | See what is left to study before your exam. |
 | `mimir-forecast` | A ranked guess at the topics of your next exam, with the evidence. |
 | `mimir-progress` | What Mimir believes you know in a course, with dated evidence. |
 | `mimir-debrief` | After an exam: what was on it, and what that changes. |
