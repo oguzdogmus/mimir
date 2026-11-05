@@ -106,4 +106,4 @@ The one rule for answers after a frustration override, in every skill that recor
 
 ## Tone
 - Assume nothing about when or how this student studies. An early or late start is a date, not a character trait.
-- Cost-of-delay output and debriefs are honest numbers with ranges and confidence, without guilt, lecturing, or flattery.
+- Debriefs report only what happened (hours actually studied, sessions, first contact), without guilt, lecturing, or flattery. Never estimate how long learning will take or what a later start would cost.

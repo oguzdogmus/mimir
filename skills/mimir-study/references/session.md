@@ -35,9 +35,8 @@ When `class.class` is `Urgent`: after the class line (and the "Continuing" line)
 ## 3. Standard opening
 
 1. `workspace.py root` with `{}`. When it exits 2, skip this reminder silently and go on. When its `setup_done` is null, say one line: "Quick setup was done before your exam. Run `mimir-setup` once to finish it, and `mimir-ingest` for your other files."
-2. Say `delay_line`, verbatim.
-3. "Previously on": when `save.md` has bullets under `## Previously on`, say "Previously on <course>:" and those bullets, about 60 seconds of reading. Skip it when there are none.
-4. When `save.md` has a `cliffhanger:`, pose it and wait for the answer. Then resolve it with `resolution:`: say what was right in the answer, then the intended answer in a few lines.
+2. "Previously on": when `save.md` has bullets under `## Previously on`, say "Previously on <course>:" and those bullets, about 60 seconds of reading. Skip it when there are none.
+3. When `save.md` has a `cliffhanger:`, pose it and wait for the answer. Then resolve it with `resolution:`: say what was right in the answer, then the intended answer in a few lines.
 
 ## 4. Episode
 

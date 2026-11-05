@@ -23,7 +23,6 @@ WS = SCRIPTS / "workspace.py"
 KATEX = ROOT_DIR / "assets" / "vendor" / "katex"
 
 sys.path.insert(0, str(SCRIPTS))
-import session  # noqa: E402
 import visual  # noqa: E402
 
 TERM, COURSE = "2026-Fall", "CS201 Theory"
@@ -692,7 +691,7 @@ def test_stdlib_plus_own_scripts_only():
         elif isinstance(node, ast.ImportFrom):
             assert node.level == 0
             tops.add(node.module.split(".")[0])
-    ours = {"workspace", "ingest", "verify", "plan", "session"}
+    ours = {"workspace", "ingest", "verify"}
     assert ours <= tops
     assert tops - ours <= set(sys.stdlib_module_names) | {"__future__"}, tops
 
@@ -955,78 +954,20 @@ def test_simulator_tree(home, cdir, tmp_path):
     assert cx["verdict"] == {"result": "stuck", "symbol": "x", "read": 2}
 
 
-# --- delay ---------------------------------------------------------------------------
+# --- delay (retired) -----------------------------------------------------------------
 
-def _route(cdir: Path, root: Path, exam: str | None, topics=("Heaps", "Graphs")) -> None:
-    mastery = cdir / ".state" / "mastery.md"
-    mastery.write_text(mastery.read_text() + "".join(f"| {t} | unseen | | | | 0 | 0 | |\n" for t in topics))
-    if exam is not None:
-        profile = root / ".state" / "profile.md"
-        text = profile.read_text().replace("| course | exam | date |\n|---|---|---|\n",
-                                           f"| course | exam | date |\n|---|---|---|\n| CS201 | final | {exam} |\n")
-        profile.write_text(text)
-
-
-NOW = "2026-10-17T09:00:00+03:00"
-DELAY = {"term": TERM, "course": COURSE, "name": "cost-of-delay", "now": NOW}
-
-
-def test_delay_pages(home, root, cdir):
-    _route(cdir, root, "2026-11-05")
-    out = ok(home, "delay", DELAY)
-    start = session.cmd_start({"now": NOW, "term": TERM, "course": COURSE})
-    assert out["delay_line"] == start["delay_line"]
-    html_path, svg_path = Path(out["html"]), Path(out["svg"])
-    assert html_path == cdir / ".state" / "out" / "cost-of-delay.html" and svg_path.suffix == ".svg"
-    assert out["line"] == f"Built {html_path} and {svg_path}."
-    page = html_path.read_text(encoding="utf-8")
-    assert_safe_page(page, 1)
-    texts = json_data(page, "mimir-rows")
-    assert len(texts) == 19 and page.count("<tr><td>") == 19
-    assert texts[0] == "Start today: 19 days × 1–4 min."
-    assert texts[-1] == "Start Wed Nov 4: 1 day × 25–75 min."
-    assert 'type="range"' in page and 'max="18"' in page and f'aria-valuetext="{texts[0]}"' in page
-    assert "<label for=\"mimir-start-day\">Start day</label>" in page
-    assert "Confidence: rough: no topics timed yet, ±50%." in page and "Sat Oct 17 (today)" in page
-    chart = svg_path.read_bytes()
-    visual.check_svg(chart)
-    text = chart.decode()
-    assert text.count('<rect class="low"') == 19 and text.count('<rect class="high"') == 19
-    assert "<desc>" in text and texts[0] in text and "Solid: low estimate. Outline: high estimate." in text
-    assert ">Today</text>" in text and ">Wed Nov 4</text>" in text
-
-
-def test_delay_one_row(home, root, cdir):
-    _route(cdir, root, "2026-10-18")
-    out = ok(home, "delay", DELAY)
-    assert len(json_data(Path(out["html"]).read_text(encoding="utf-8"), "mimir-rows")) == 1
-    visual.check_svg(Path(out["svg"]).read_bytes())
-
-
-def test_delay_without_exam(home, root, cdir):
-    _route(cdir, root, None)
-    fails(home, "delay", DELAY, "no exam date for CS201 Theory")
-
-
-def test_delay_without_route(home, root, cdir):
-    _route(cdir, root, "2026-11-05", topics=())
-    fails(home, "delay", DELAY, "no topics left on the route")
-
-
-@pytest.mark.parametrize("payload, needle", [
-    ({k: v for k, v in DELAY.items() if k != "now"}, "now is required"),
-    ({**DELAY, "extra": 1}, "unknown field 'extra'"),
-    ({**DELAY, "name": "Bad Name"}, "name must match"),
-])
-def test_bad_delay_payload(home, root, cdir, payload, needle):
-    _route(cdir, root, "2026-11-05")
-    fails(home, "delay", payload, needle)
+def test_delay_subcommand_is_gone(home, root, cdir):
+    proc = _run(home, "delay", {"term": TERM, "course": COURSE, "name": "cost-of-delay",
+                                "now": "2026-10-17T09:00:00+03:00"})
+    assert proc.returncode == 2
+    assert proc.stdout == b""
+    assert b"invalid choice: 'delay'" in proc.stderr
+    assert not (cdir / ".state" / "out" / "cost-of-delay.html").exists()
 
 
 def test_new_commands_require_workspace(home):
     fails(home, "steps", THREE_STEPS, "no workspace")
     fails(home, "trace", trace(DFA), "no workspace")
-    fails(home, "delay", DELAY, "no workspace")
 
 
 def test_new_constants_are_the_spec_values():
@@ -1149,26 +1090,6 @@ key("ArrowUp"); byId["mimir-back"].click(); byId["mimir-back"].click(); snap("no
     assert out["none"] == {"hidden": [True, True, True], "status": "No steps are shown."}
 
 
-@pytest.mark.skipif(NODE is None, reason="node not installed")
-def test_slider_ui(home, root, cdir, tmp_path):
-    _route(cdir, root, "2026-11-05")
-    page = Path(ok(home, "delay", DELAY)["html"]).read_text(encoding="utf-8")
-    texts = json_data(page, "mimir-rows")
-    setup = (f'var rows = list("tbody tr", {len(texts)});\n'
-             f'document.getElementById("mimir-rows").textContent = {json.dumps(json.dumps(texts))};\n'
-             'document.getElementById("mimir-start-day").value = "0";')
-    out = run_ui(tmp_path, scripts(page)[-1], setup, r"""
-var slider = byId["mimir-start-day"];
-function snap(tag) { out[tag] = {output: byId["mimir-row"].textContent, valuetext: slider.attrs["aria-valuetext"],
-  current: rows.map(function (r, i) { return r.attrs["aria-current"] ? i : -1; }).filter(function (i) { return i >= 0; })}; }
-out.controls = byId["mimir-controls"].hidden; snap("load");
-slider.value = "9"; slider.fire("input"); snap("nine");
-""")
-    assert out["controls"] is False
-    assert out["load"] == {"output": texts[0], "valuetext": texts[0], "current": [0]}
-    assert out["nine"] == {"output": texts[9], "valuetext": texts[9], "current": [9]}
-
-
 def trace_ui(tmp_path: Path, page: str, text: str, actions: str) -> dict:
     data = json.dumps(json.dumps(json_data(page, "mimir-machine")))
     setup = (f'document.getElementById("mimir-machine").textContent = {data};\n'
@@ -1216,15 +1137,3 @@ def test_step_through_verdicts(home, cdir, tmp_path, machine, text, ending):
     page = build_trace(home, machine)
     out = trace_ui(tmp_path, page, text, 'byId["mimir-start"].click(); for (var i = 0; i < 5; i++) key("ArrowRight"); snap("end");')
     assert out["end"]["status"].endswith(ending), out["end"]["status"]
-
-
-def test_delay_chart_geometry(home, root, cdir):
-    _route(cdir, root, "2026-11-05")
-    chart = Path(ok(home, "delay", DELAY)["svg"]).read_text()
-    rects = re.findall(r'<rect class="(low|high)" x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/>', chart)
-    highs = [(float(x), float(h)) for c, x, _, _, h in rects if c == "high"]
-    lows = [(float(x), float(h)) for c, x, _, _, h in rects if c == "low"]
-    assert [x for x, _ in highs] == sorted(x for x, _ in highs) and [x for x, _ in lows] == [x for x, _ in highs]
-    assert highs[-1][1] == 190.0 and all(lo <= hi for (_, lo), (_, hi) in zip(lows, highs))
-    assert [h for _, h in highs] == sorted(h for _, h in highs)  # waiting longer never needs less a day
-    assert abs(lows[-1][1] - 190 / 3) < 0.01  # low end is a third of the high end (±50 % of the point)

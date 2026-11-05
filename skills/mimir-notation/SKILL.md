@@ -18,7 +18,7 @@ Pick the lowest rung that shows the content faithfully, in the professor's notat
 
 ## Interactive pages
 
-Two pages carry model-written content (the cost-of-delay slider belongs to `mimir-plan`, not here):
+Two pages carry model-written content:
 
 - **Step-reveal (`steps`):** a worked answer shown one step per click. Offered after a worked answer in an Urgent drill, or built when the student asks to go through an answer step by step.
 - **Step-through (`trace`):** a DFA, NFA, PDA or labelled tree (e.g. a trie) the student feeds an input into and watches state by state. Built instead of a plain SVG when running inputs through the structure is the point of the question, or when the student asks to try inputs.
