@@ -33,9 +33,12 @@ class          triage only: "Urgent" (default) or "Standard" -- the session's
 
 Date rules
 ----------
-* A date-only exam means 00:00 that day at ``now``'s UTC offset (or at the
-  first datetime's offset when ``now`` is absent). On the exam's own calendar
-  day it is Urgent with reason ``today``; it is past only from the next day.
+* A date-only exam has an unknown time. ``class`` gives it no hour count:
+  Urgent on its own calendar day (``today``) and the day before
+  (``tomorrow``), Standard earlier. It is past only from the next day.
+  Elsewhere (triage budgets, debrief day counts) it means 00:00 that day at
+  ``now``'s UTC offset (or at the first datetime's offset when ``now`` is
+  absent).
 * DST note: the offset of ``now`` is reused for the exam date, so a daylight
   saving change between now and the exam can shift the result by up to 1 h.
   This is accepted. Callers pass a full datetime when the exam time is known.
@@ -47,14 +50,18 @@ Subcommands and examples
 class -- delivery class with reason. Only exam proximity decides: there is no
     learning-time estimate and no route-time trigger.
     in : {"now": "2026-10-17T09:00:00+03:00", "exam": "2026-11-05"}
-    out: {"class": "Standard", "reason": "calm", "hours_to_exam": 447,
+    out: {"class": "Standard", "reason": "calm", "hours_to_exam": null,
           "days_to_exam": 19, "line": "Standard delivery: exam in 19 days"}
     ``reason`` is one of:
-      unknown -- exam date is null: Standard.
-      today   -- date-only exam falls on today's date: Urgent. The exam time
-                 is unknown, so hours_to_exam is null; days_to_exam is 0.
-      floor   -- hours to exam <= URGENT_FLOOR_HOURS: Urgent.
-      calm    -- none of the above: Standard.
+      unknown  -- exam date is null: Standard.
+      today    -- date-only exam falls on today's date: Urgent, line "Urgent
+                  delivery: exam today, time unknown".
+      tomorrow -- date-only exam falls on tomorrow's date: Urgent, line
+                  "Urgent delivery: exam tomorrow, time unknown".
+      floor    -- exam with a time, hours to exam <= URGENT_FLOOR_HOURS: Urgent.
+      calm     -- none of the above: Standard.
+    A date-only exam has no known time, so ``hours_to_exam`` is null for it
+    (never a countdown to midnight); ``days_to_exam`` is still given.
 
 debrief -- cram bill: the hours actually studied, with no estimate of what
     the route should have taken.
@@ -367,9 +374,12 @@ def delivery_class(data: dict) -> dict:
     else:
         today, exam_day, hours = exam_window(clock, now, exam)
         days = (exam_day - today).days
-        if hours is None:  # date-only exam today: exam time unknown
-            klass, reason, line = "Urgent", "today", "Urgent delivery: exam today"
-        elif hours <= URGENT_FLOOR_HOURS:
+        if is_date_only(exam):  # exam time unknown: no hour count, never a countdown to midnight
+            hours = None
+        if hours is None and days <= 1:
+            when = "today" if days == 0 else "tomorrow"
+            klass, reason, line = "Urgent", when, f"Urgent delivery: exam {when}, time unknown"
+        elif hours is not None and hours <= URGENT_FLOOR_HOURS:
             shown = "under 1 hour" if hours < 1 else count(int(round_half_up(hours, Fraction(1))), "hour")
             klass, reason, line = "Urgent", "floor", f"Urgent delivery: exam in {shown}"
         else:
