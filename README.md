@@ -7,7 +7,7 @@ Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude
 ## What it does
 
 - **Starts from wherever you are.** Type "exam tomorrow, help" and attach a photo of a past paper. Mimir starts drilling right away, with no setup.
-- **Sets the pace from the exam date.** Far from the exam, sessions are short teaching episodes (Standard). Close to it, Mimir drills the question types worth the most points per hour (Urgent). It picks the mode and tells you why.
+- **Sets the pace from the exam date.** Far from the exam, Mimir teaches (Standard). Close to it, it drills the question types worth the most points per hour (Urgent). It picks the mode and tells you why. Sessions run until you say "end session".
 - **Follows your professor.** Mimir reads the outline, slides and past papers, learns how the professor writes questions, and labels every question with where it came from. Answer keys are checked before you see them.
 - **Teaches in your language.** Your course and exams can be in one language and the explanations in another. You choose both during setup.
 - **Remembers you.** It keeps dated evidence of what you solved alone and with help, and picks up where you left off.
