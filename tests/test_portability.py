@@ -189,3 +189,51 @@ def test_plain_practice_is_declared_once_and_other_items_keep_their_label():
         text = (ROOT_DIR / flow).read_text(encoding="utf-8")
         assert "Provenance labels" in text, flow
         assert not re.search(r"each opening with the gate's `label`|each with its label", text), flow
+
+
+URGENT = ROOT_DIR / "skills/mimir-study/references/urgent.md"
+
+
+def urgent_section(heading):
+    return URGENT.read_text(encoding="utf-8").split(heading, 1)[1].split("\n## ", 1)[0]
+
+
+# Urgent teaches before it tests: recipe, then a fresh similar question; after
+# a miss, a correction and a fresh question, never the same one again.
+def test_urgent_teaches_a_recipe_then_a_fresh_question():
+    drill = urgent_section("## 3. ")
+    assert "**Recipe**" in drill
+    assert drill.index("**Recipe**") < drill.index("Check item")
+    assert "correction" in drill and "fresh similar question" in drill
+    assert "never the same question again" in drill
+    for path in MARKDOWN + [ROOT_DIR / "README.md"]:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not re.search(r"answer-first|lesson before the first worked example", line, re.I), \
+                f"{path}:{n}: {line.strip()[:100]}"
+
+
+# Misses are counted per type across the whole session; at three, Mimir cites
+# real frequency when known and asks whether to continue or move on.
+def test_urgent_asks_to_continue_or_move_on_after_three_misses():
+    rule = urgent_section("## 3. ").split("**Continue-or-move-on check**", 1)[1].split("\n\n", 1)[0]
+    assert "per type" in rule and "across the session" in rule and "not only in a row" in rule
+    for miss in ('wrong answer', '"idk"', '"skip"', '"just tell me"'):
+        assert miss in rule, miss
+    assert "right answer after a hint" in rule and "does not reset" in rule
+    assert "dropped" in rule and "not an attempt" in rule
+    assert "three" in rule and "`frequency`" in rule and "never invent" in rule
+    assert '"continue"' in rule and "resets the count to zero" in rule and '"move on"' in rule
+
+
+# Urgent opens with the class line, then the gauge slot, then the triage table,
+# then the drill; a lazy setup still says the class line first.
+def test_urgent_opening_order_and_every_right_answer_is_assisted():
+    cargo = urgent_section("## 2. Urgent cargo")
+    order = cargo.split("**Opening order**", 1)[1].split("\n", 1)[0]
+    steps = ["class line", "gauge", "triage table", "drill"]
+    assert [order.index(s) for s in steps] == sorted(order.index(s) for s in steps), order
+    assert cargo.index("Gauge slot") < cargo.index("`plan.py triage`") < cargo.index("Drill: §3")
+    lazy = urgent_section("## 1. Lazy setup")
+    assert "the student's first line from Mimir is that class line" in lazy
+    assert "right answers always use `assisted`" in urgent_section("## 3. ")
+    assert "No Urgent answer ever sets `mastered`" in URGENT.read_text(encoding="utf-8")
