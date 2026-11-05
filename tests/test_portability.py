@@ -231,3 +231,37 @@ def test_plain_practice_is_declared_once_and_other_items_keep_their_label():
         text = (ROOT_DIR / flow).read_text(encoding="utf-8")
         assert "Provenance labels" in text, flow
         assert not re.search(r"each opening with the gate's `label`|each with its label", text), flow
+
+
+# Exams carry a time when known (issue #34): intake asks for the date and time
+# together, a date-only exam is asked about once more within two days, and a
+# date-only exam today is checked before drilling.
+def _read(rel):
+    return (ROOT_DIR / rel).read_text(encoding="utf-8")
+
+
+def test_exam_intake_asks_date_and_time_together():
+    for rel in ("skills/mimir-setup/SKILL.md", "skills/mimir-study/references/session.md"):
+        text = _read(rel)
+        assert "date and time" in text and "Don't know" in text, rel
+        assert "parse-date" in text and "its `exam`" in text, rel  # the row value keeps the time
+    ingest = _read("skills/mimir-ingest/SKILL.md")
+    assert "| YYYY-MM-DD HH:MM |" in ingest  # an outline's printed time is recorded with the date
+
+
+def test_study_asks_exam_time_within_two_days_and_whether_today_is_still_ahead():
+    session = _read("skills/mimir-study/references/session.md")
+    for field in ("`ask_exam_time`", "`ask_exam_ahead`", "`exam_problems`"):
+        assert field in session, field
+    assert "time unknown" in session  # the marker that stops a second re-ask
+    assert "still ahead" in session
+    core = _read("skills/mimir-core-rules/SKILL.md")
+    assert "within two days" in core and "still ahead" in core  # allowed admin questions
+
+
+BARE_DATE = re.compile(r"`date` of [^.]*parse-date|its `date` is usable")
+
+
+def test_no_skill_writes_a_bare_date_from_parse_date():
+    for path in MARKDOWN:
+        assert not BARE_DATE.search(path.read_text(encoding="utf-8")), path

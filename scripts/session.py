@@ -19,8 +19,13 @@ Datetimes are ISO 8601 with a time, as ``plan.py`` takes them
 Files read (all inside the learning root, see ``workspace.py``)
 ---------------------------------------------------------------
 * ``.state/profile.md``: ``## Exam dates`` rows ``| CODE | exam | date |``
-  (date ``YYYY-MM-DD`` or ``unknown``) and ``## Active courses`` rows
-  ``| CODE | YYYY-Term/CODE Name |``.
+  and ``## Active courses`` rows ``| CODE | YYYY-Term/CODE Name |``. The
+  date cell is one of: ``unknown`` (date unknown); ``YYYY-MM-DD`` (time
+  unknown); ``YYYY-MM-DD time unknown`` (time unknown, already asked for once
+  more); a date with a time, ``YYYY-MM-DD HH:MM[:SS]`` or ``YYYY-MM-DDTHH:MM[:SS]``,
+  optionally followed by ``Z`` or a ``+HH:MM``/``-HH:MM`` offset (no offset:
+  ``now``'s offset). Case and extra spaces are ignored. Any other cell of the
+  course is unreadable and reported in ``exam_problems``, never skipped silently.
 * ``.state/preferences.json``: the global teaching settings, written only
   by ``pref-event``. Before it exists, ``dial_preference:`` in the profile
   (set unless empty, ``none`` or a ``<...>`` placeholder) is the legacy value.
@@ -60,17 +65,24 @@ now -- the local time, the one clock read of a session. Standard library only,
     without ``.md``; ``last_session`` the ``save.md`` stamp; ``term`` the
     fallback term by month: Jan-May Spring, Jun-Aug Summer, Sep-Dec Fall.
 
-parse-date -- the student's exam-date phrase as a date, or a refusal.
-    in : {"now": "2026-10-17T09:00:00+03:00", "phrase": "Friday"}
-    out: {"date": "2026-10-23", "line": "Exam date: 2026-10-23."}
-    Only these phrases, ignoring case and extra spaces: ``YYYY-MM-DD``;
+parse-date -- the student's exam date-and-time phrase as an exam value, or a refusal.
+    in : {"now": "2026-10-17T09:00:00+03:00", "phrase": "12:30 Friday"}
+    out: {"date": "2026-10-23", "time": "12:30", "exam":
+          "2026-10-23T12:30:00+03:00", "line": "Exam: 2026-10-23 at 12:30."}
+    Without a time: {"date": "2026-10-23", "time": null, "exam":
+    "2026-10-23", "line": "Exam date: 2026-10-23."}. ``exam`` is the value
+    for the ``## Exam dates`` cell (a time is at ``now``'s offset).
+    Only these date phrases, ignoring case and extra spaces: ``YYYY-MM-DD``;
     ``today``; ``tomorrow``; a full English weekday name (``friday``), the
     next such day counting today, so today's own weekday name means today;
     ``N days`` or ``in N days`` (N a whole number). Today is
-    ``now``'s own calendar date. This is not natural-language date parsing:
-    anything else ("Nov 5", "5/11", "next friday", "fri") exits 2 as
-    unsupported. A date that does not exist, is before today, or is more than
-    plan.MAX_HORIZON_DAYS days after today also exits 2.
+    ``now``'s own calendar date. A time may come before the date phrase or
+    after it (optionally after ``at``): ``H:MM`` or ``HH:MM`` (24-hour), or
+    with ``am``/``pm`` (``2pm``, ``12:30 am``). This is not natural-language
+    date parsing: anything else ("Nov 5", "5/11", "next friday", "fri",
+    "noon", a time alone) exits 2 as unsupported. A date that does not exist,
+    a time that does not exist, a date before today, a time not after ``now``,
+    or a date more than plan.MAX_HORIZON_DAYS days after today also exits 2.
 
 start -- pick the course, the exam and the class for a new session.
     in : {"now": "2026-10-17T09:00:00+03:00"}
@@ -81,7 +93,8 @@ start -- pick the course, the exam and the class for a new session.
           "course": "CS201 Theory", "course_dir": "..."}], "term":
           "2026-Fall", "course": "CS201 Theory", "course_dir": "...",
           "code": "CS201", "inferred": true, "exam": "2026-11-05",
-          "exam_name": "final", "q0": false, "remaining": [{"name": "Heaps",
+          "exam_date": "2026-11-05", "exam_name": "final", "q0": false, "exam_problems": [],
+          "ask_exam_time": false, "ask_exam_ahead": false, "remaining": [{"name": "Heaps",
           "status": "gap"}, {"name": "Graphs", "status": "unseen"}],
           "class": {<plan.py class output>},
           "topic": {"name": "Graphs", "status": "unseen", "evidence_date":
@@ -93,11 +106,18 @@ start -- pick the course, the exam and the class for a new session.
     Active courses`` row whose folder exists; else the last course in
     term/name order (year, then Spring < Summer < Fall < other words
     alphabetically, then course name). ``code`` is the first word of the
-    course name. Exam: the earliest ``## Exam dates`` row for ``code`` dated
-    today or later; else, when a row for ``code`` says ``unknown``, exam null
-    with ``q0`` false; else exam null with ``q0`` true (ask "When's the
-    exam?"). Rows dated more than plan.MAX_HORIZON_DAYS days ahead are
-    ignored like past ones. Route: ``mastery.md`` rows in order; when the
+    course name. Exam: the earliest upcoming ``## Exam dates`` row for
+    ``code``: a date-only row dated today or later (ordered as 00:00 that day),
+    or a row with a time after ``now``. ``exam`` is ``YYYY-MM-DD`` for a
+    date-only row, else the ISO datetime at ``now``'s offset (as ``plan.py``
+    takes it); ``exam_date`` is its calendar day. With none, when a row for
+    ``code`` says ``unknown``, exam null with ``q0`` false; else exam null with
+    ``q0`` true (ask "When's the exam?"). Rows more than plan.MAX_HORIZON_DAYS days ahead are ignored like
+    past ones. ``exam_problems``: the unreadable cells of ``code``, as
+    [{"exam", "date"}] in file order. ``ask_exam_time``: the exam is date-only,
+    not marked ``time unknown``, and at most TIME_ASK_DAYS days ahead (ask for
+    its time once more). ``ask_exam_ahead``: the exam is date-only and today
+    (ask whether it is still ahead). Route: ``mastery.md`` rows in order; when the
     ``INDEX.md`` registry has no ``outline`` row, each ``## Topics`` name not
     yet listed (ignoring case and repeated spaces) follows as an unseen row,
     in ``INDEX.md`` order. ``remaining`` = route rows not
@@ -259,7 +279,7 @@ from __future__ import annotations
 import re
 import json
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta, tzinfo
 from pathlib import Path
 
 import ingest
@@ -280,6 +300,7 @@ STATUSES = ("unseen", "gap", "shaky", "mastered")
 _EXAM_TABLE = ("Exam dates", ("course", "exam", "date"))
 _ACTIVE_TABLE = ("Active courses", ("course", "path"))
 _DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+_EXAM_AT = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})[T ]([0-9]{2}:[0-9]{2}(?::[0-9]{2})?)(Z|[+-][0-9]{2}:[0-9]{2})?")
 _LAST_SESSION = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})(?: ([0-9]{2}:[0-9]{2}))?")
 _COUNT = re.compile(r"[0-9]+")
 _RELATIVE = re.compile(r"(?:in )?([0-9]+) days?")
@@ -508,41 +529,87 @@ def _usable(root: Path, course: dict) -> bool:
     return True
 
 
-def _exam(profile: str, code: str, today: date) -> tuple[str | None, str | None, bool]:
-    """(exam date, exam name, q0) for the course code."""
-    best, unknown = None, False
+_TIME_ASKED = re.compile(r"(.*\S)\s+time\s+unknown", re.IGNORECASE)
+TIME_ASK_DAYS = 2  # ask once more for a date-only exam's time within this many days
+
+
+def exam_value(cell: str, tz: tzinfo | None) -> date | datetime | str | None:
+    """An ``## Exam dates`` cell: "unknown", a date (time unknown; also
+    ``YYYY-MM-DD time unknown``), a datetime (a time without a UTC offset is
+    taken at ``tz``), or None when unreadable."""
+    text = " ".join(cell.split())
+    if text.casefold() == "unknown":
+        return "unknown"
+    asked = _TIME_ASKED.fullmatch(text)
+    day = _valid_date(asked.group(1) if asked else text)
+    if day is not None or asked:
+        return day
+    m = _EXAM_AT.fullmatch(text)
+    if not m:
+        return None
+    try:
+        moment = datetime.fromisoformat(f"{m.group(1)}T{m.group(2)}{m.group(3) or ''}")
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=tz)
+    return moment.astimezone(tz) if tz is not None else moment.replace(tzinfo=None)
+
+
+def _exam_day(value: date | datetime, tz: tzinfo | None) -> date:
+    return value if plan.is_date_only(value) else value.astimezone(tz).date() if tz else value.date()
+
+
+def _exam(profile: str, code: str, now: datetime) -> dict:
+    """``start``'s exam fields for the course code: exam, exam_date, exam_name, q0,
+    exam_problems, ask_exam_time, ask_exam_ahead."""
+    best, unknown, today, problems = None, False, now.date(), []
     for course, exam, when in _section_rows(profile, _EXAM_TABLE):
         if course.strip().casefold() != code.casefold():
             continue
-        when = when.strip()
-        if when.lower() == "unknown":
+        value = exam_value(when, now.tzinfo)
+        if value == "unknown":
             unknown = True
             continue
-        day = _valid_date(when)
-        if (day is not None and 0 <= (day - today).days <= plan.MAX_HORIZON_DAYS
-                and (best is None or day < best[0])):
-            best = (day, exam.strip())
+        if value is None:
+            problems.append({"exam": " ".join(exam.split()), "date": " ".join(when.split())})
+            continue
+        if plan.is_date_only(value):
+            at = datetime.combine(value, time(0), tzinfo=now.tzinfo)  # orders before a timed exam that day
+            upcoming = 0 <= (value - today).days <= plan.MAX_HORIZON_DAYS
+        else:
+            at = value
+            upcoming = timedelta(0) < value - now <= timedelta(days=plan.MAX_HORIZON_DAYS)
+        if upcoming and (best is None or at < best[0]):
+            best = (at, value, exam.strip(), bool(_TIME_ASKED.fullmatch(" ".join(when.split()))))
+    out = {"exam": None, "exam_date": None, "exam_name": None, "q0": not unknown, "exam_problems": problems,
+           "ask_exam_time": False, "ask_exam_ahead": False}
     if best:
-        return best[0].isoformat(), best[1] or None, False
-    return None, None, not unknown
+        _, value, name, asked = best
+        dated = plan.is_date_only(value)
+        out.update(exam=value.isoformat(), exam_date=_exam_day(value, now.tzinfo).isoformat(),
+                   exam_name=name or None, q0=False,
+                   ask_exam_time=dated and not asked and (value - today).days <= TIME_ASK_DAYS,
+                   ask_exam_ahead=dated and value == today)
+    return out
 
 
 # --- Debrief ------------------------------------------------------------------------
 
-_PENDING = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\s+(.*))?")
+_PENDING = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})(?:T\S*)?(?:\s+(.*))?")  # a time is ignored
 _CLOSE_LOG = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}(?:-[A-Za-z0-9-]+)?")
 _LOG_NAME = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})-[0-9]{4}(?:-[^/]*)?\.md")
 _NO_CRAM_LINE = "Cram bill: no study sessions logged."
 NO_COURSE_LINE = "No course yet: run mimir-setup, then mimir-ingest."
 
 
-def _code_exams(profile: str, code: str) -> list[tuple[date, str]]:
-    """Dated ``## Exam dates`` rows of a course code, in file order."""
+def _code_exams(profile: str, code: str, tz: tzinfo | None) -> list[tuple[date, str]]:
+    """Dated ``## Exam dates`` rows of a course code as (day in ``tz``, name), in file order."""
     out = []
     for course, exam, when in _section_rows(profile, _EXAM_TABLE):
-        day = _valid_date(when.strip())
-        if course.strip().casefold() == code.casefold() and day is not None:
-            out.append((day, " ".join(exam.split())))
+        value = exam_value(when, tz)
+        if course.strip().casefold() == code.casefold() and isinstance(value, date):
+            out.append((_exam_day(value, tz), " ".join(exam.split())))
     return out
 
 
@@ -556,7 +623,7 @@ def _pending(save: str) -> tuple[date, str | None] | None:
 
 
 def _debrief_target(profile: str, code: str, pending: date, pending_name: str | None,
-                    today: date) -> tuple[date, str | None, date | None]:
+                    now: datetime) -> tuple[date, str | None, date | None]:
     """(target exam date, its name, previous exam date or None).
 
     Target: the latest row of the code dated from the day after ``pending``
@@ -564,7 +631,7 @@ def _debrief_target(profile: str, code: str, pending: date, pending_name: str | 
     else ``pending`` itself, named by ``pending_name``, else by the first named
     row dated ``pending``. Previous: the latest row of the code dated before
     the target."""
-    rows = _code_exams(profile, code)
+    rows, today = _code_exams(profile, code, now.tzinfo), now.date()
     passed = [(day, exam) for day, exam in rows if pending < day < today]
     target, name = pending, pending_name
     if passed:
@@ -576,7 +643,7 @@ def _debrief_target(profile: str, code: str, pending: date, pending_name: str | 
     return target, name, max(before) if before else None
 
 
-def debrief_state(profile: str, save: str, code: str, today: date,
+def debrief_state(profile: str, save: str, code: str, now: datetime,
                   klass: str | None) -> tuple[dict | None, tuple[date, date | None] | None]:
     """(``start``'s ``debrief``, the due window (target, previous exam) or None).
     The state is null with no valid pending value."""
@@ -584,9 +651,9 @@ def debrief_state(profile: str, save: str, code: str, today: date,
     if pending is None:
         return None, None
     day, name = pending
-    if day >= today:  # a date-only exam is past only from the next day
+    if day >= now.date():  # a date-only exam is past only from the next day
         return {"exam": day.isoformat(), "exam_name": name, "due": False, "deferred": False}, None
-    target, target_name, previous = _debrief_target(profile, code, day, name, today)
+    target, target_name, previous = _debrief_target(profile, code, day, name, now)
     deferred = klass == "Urgent"
     state = {"exam": target.isoformat(), "exam_name": target_name, "due": not deferred,
              "deferred": deferred}
@@ -710,30 +777,30 @@ def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
     now, root, profile, courses, chosen, inferred, course_dir = _course_pick(data)
     if chosen is None:
         return {"root": str(root), "courses": courses, "term": None, "course": None, "course_dir": None,
-                "code": None, "inferred": None, "exam": None, "exam_name": None, "q0": None,
+                "code": None, "inferred": None, "exam": None, "exam_date": None, "exam_name": None, "q0": None,
+                "exam_problems": None, "ask_exam_time": None, "ask_exam_ahead": None,
                 "remaining": [], "class": None, "topic": None, "route_line": None,
                 "first_contact": None, "debrief": None, "line": NO_COURSE_LINE}, None
     code = chosen["course"].split()[0]
     today = now.date()
-    exam, exam_name, q0 = _exam(profile, code, today)
+    exam = _exam(profile, code, now)
     rows = route(course_dir)
     remaining = [r for r in rows if r["status"] != "mastered"]
-    klass = _plan(plan.delivery_class, {"now": data["now"], "exam": exam})
+    klass = _plan(plan.delivery_class, {"now": data["now"], "exam": exam["exam"]})
     save = _memory(course_dir, "save.md")
     next_topic = _norm(_key(save, "next_topic"))
     # Nothing unmastered left: a stale mastered topic gets the one-question recheck.
     candidates = remaining or [r for r in rows if topic_state(r, r["name"], today)["stale"]]
     pick = next((r for r in candidates if next_topic and _norm(r["name"]) == next_topic),
                 candidates[0] if candidates else None)
-    debrief, window = debrief_state(profile, save, code, today, klass["class"])
+    debrief, window = debrief_state(profile, save, code, now, klass["class"])
     topic = None
     if pick is not None:
         state = topic_state(pick, pick["name"], today)
         topic = {k: state[k] for k in ("name", "status", "evidence_date", "stale", "attempt_first")}
     route_line = None if pick is not None else ROUTE_DONE_LINE if rows else NO_ROUTE_LINE
     return {"root": str(root), "courses": courses, "term": chosen["term"], "course": chosen["course"],
-            "course_dir": str(course_dir), "code": code, "inferred": inferred, "exam": exam,
-            "exam_name": exam_name, "q0": q0,
+            "course_dir": str(course_dir), "code": code, "inferred": inferred, **exam,
             "remaining": [{"name": r["name"], "status": r["status"]} for r in remaining],
             "class": klass, "topic": topic, "route_line": route_line,
             "first_contact": _first_contact(course_dir),
@@ -896,38 +963,72 @@ def cmd_now(data: dict) -> dict:
             "line": f"Now: {stamp}."}
 
 
+_CLOCK = r"[0-9]{1,2}(?::[0-9]{2} ?(?:am|pm)?| ?(?:am|pm))"
+_TIME_FIRST = re.compile(rf"({_CLOCK}) (.+)")
+_TIME_LAST = re.compile(rf"(.+?) (?:at )?({_CLOCK})")
+_CLOCK_PARTS = re.compile(r"([0-9]{1,2})(?::([0-9]{2}))? ?(am|pm)?")
+
+
+def _clock_time(text: str, phrase: str) -> time:
+    hour, minute, half = _CLOCK_PARTS.fullmatch(text).groups()
+    hour, minute = int(hour), int(minute or 0)
+    if hour > (12 if half else 23) or minute > 59 or (half and hour == 0):
+        raise InputError(f"phrase {_short(phrase)} is not a real time")
+    if half:
+        hour = hour % 12 + (12 if half == "pm" else 0)
+    return time(hour, minute)
+
+
+def _phrase_day(text: str, today: date, phrase: str) -> date:
+    relative = _RELATIVE.fullmatch(text)
+    if text == "today":
+        return today
+    if text == "tomorrow":
+        return today + timedelta(days=1)
+    if relative:
+        count = int(relative.group(1))
+        return today + timedelta(days=min(count, plan.MAX_HORIZON_DAYS + 1))
+    if text in WEEKDAYS:
+        return today + timedelta(days=(WEEKDAYS.index(text) - today.weekday()) % 7)
+    if _DATE.fullmatch(text):
+        day = _valid_date(text)
+        if day is None:
+            raise InputError(f"phrase {_short(phrase)} is not a real date")
+        return day
+    raise InputError(f"phrase {_short(phrase)} is unsupported (use YYYY-MM-DD, today, tomorrow, "
+                     "a weekday name or \"in N days\", optionally with a time such as 12:30 or 2pm)")
+
+
 def cmd_parse_date(data: dict) -> dict:
     _check_keys(data, {"now", "phrase"})
-    today = _moment(data, "now").date()
+    now = _moment(data, "now")
+    today = now.date()
     phrase = data.get("phrase")
     if not isinstance(phrase, str):
         raise InputError("phrase is required (the student's exam-date phrase)")
     text = " ".join(phrase.split()).casefold()
     if not text:
         raise InputError("phrase is empty")
-    relative = _RELATIVE.fullmatch(text)
-    horizon = today + timedelta(days=plan.MAX_HORIZON_DAYS)
-    if text == "today":
-        day = today
-    elif text == "tomorrow":
-        day = today + timedelta(days=1)
-    elif relative:
-        count = int(relative.group(1))
-        day = today + timedelta(days=count) if count <= plan.MAX_HORIZON_DAYS else horizon + timedelta(days=1)
-    elif text in WEEKDAYS:
-        day = today + timedelta(days=(WEEKDAYS.index(text) - today.weekday()) % 7)
-    elif _DATE.fullmatch(text):
-        day = _valid_date(text)
-        if day is None:
-            raise InputError(f"phrase {_short(phrase)} is not a real date")
-    else:
-        raise InputError(f"phrase {_short(phrase)} is unsupported (use YYYY-MM-DD, today, tomorrow, "
-                         "a weekday name or \"in N days\")")
+    clock = None
+    if m := _TIME_FIRST.fullmatch(text):
+        clock, text = m.group(1), m.group(2)
+    elif m := _TIME_LAST.fullmatch(text):
+        text, clock = m.group(1), m.group(2)
+    day = _phrase_day(text, today, phrase)
+    at = None if clock is None else _clock_time(clock, phrase)
     if day < today:
         raise InputError(f"phrase {_short(phrase)} is in the past ({day.isoformat()})")
-    if day > horizon:
+    if day > today + timedelta(days=plan.MAX_HORIZON_DAYS):
         raise InputError(f"phrase {_short(phrase)} is more than {plan.MAX_HORIZON_DAYS} days ahead")
-    return {"date": day.isoformat(), "line": f"Exam date: {day.isoformat()}."}
+    if at is None:
+        return {"date": day.isoformat(), "time": None, "exam": day.isoformat(),
+                "line": f"Exam date: {day.isoformat()}."}
+    moment = datetime.combine(day, at, tzinfo=now.tzinfo)
+    if moment <= now:
+        raise InputError(f"phrase {_short(phrase)} is in the past ({moment.isoformat()})")
+    shown = at.strftime("%H:%M")
+    return {"date": day.isoformat(), "time": shown, "exam": moment.isoformat(),
+            "line": f"Exam: {day.isoformat()} at {shown}."}
 
 
 def _record_state(text: str) -> dict:
@@ -1180,7 +1281,7 @@ COMMANDS = {
     "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, legacy import)"),
     "record": (cmd_record, "record mastery evidence and frustration overrides"),
     "now": (cmd_now, "the local time: ISO timestamp, evidence date, log name, last_session stamp and term"),
-    "parse-date": (cmd_parse_date, "the student's exam-date phrase as a YYYY-MM-DD date, or a refusal"),
+    "parse-date": (cmd_parse_date, "the student's exam date-and-time phrase as an exam value, or a refusal"),
     "start": (cmd_start, "pick the course, exam, delivery class and first topic for a session"),
     "check": (cmd_check, "status, counts and staleness for named topics"),
     "close": (cmd_close, "stamp the end of a session in its log once and report its length"),

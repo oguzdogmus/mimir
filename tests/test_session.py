@@ -113,17 +113,26 @@ def test_calm(home, root):
     assert set(out["class"]) == {"class", "reason", "hours_to_exam", "days_to_exam", "line"}
     assert (out["exam"], out["exam_name"], out["q0"], out["code"]) == ("2026-11-05", "final", False, "CS201")
     assert out["inferred"] is True and out["first_contact"] is None
+    assert (out["exam_problems"], out["ask_exam_time"], out["ask_exam_ahead"]) == ([], False, False)
+    assert out["exam_date"] == "2026-11-05"
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
-                        "exam_name", "q0", "remaining", "class", "topic", "route_line",
-                        "first_contact", "debrief", "line"}
+                        "exam_date", "exam_name", "q0", "exam_problems", "ask_exam_time", "ask_exam_ahead", "remaining",
+                        "class", "topic", "route_line", "first_contact", "debrief", "line"}
 
 
 def test_near_exam_is_urgent_floor(home, root):
     course(home, mastery=TWO_LEFT)
-    profile(root, exams=[("CS201", "final", "2026-10-19")])
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
     out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})
     assert out["class"]["class"] == "Urgent" and out["class"]["reason"] == "floor"
     assert out["class"]["hours_to_exam"] == 30
+
+
+def test_date_only_exam_two_days_ahead_is_standard(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-10-19")])
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})
+    assert (out["class"]["class"], out["class"]["hours_to_exam"]) == ("Standard", None)
 
 
 def test_no_date_row_asks_q0(home, root):
@@ -162,7 +171,96 @@ def test_exam_today_is_urgent(home, root):
     course(home, mastery=TWO_LEFT)
     profile(root, exams=[("CS201", "final", "2026-10-17")])
     out = ok(home, "start", {"now": NOW})
-    assert out["class"]["reason"] == "today"
+    assert out["class"]["reason"] == "today" and out["class"]["hours_to_exam"] is None
+    assert out["line"] == "Urgent delivery: exam today, time unknown"
+
+
+# --- start: exam date and time -----------------------------------------------------
+
+EVE = "2026-11-02T21:14:46+02:00"
+
+
+def test_issue_29_exam_time_is_used_not_skipped(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "midterm", "2026-11-03T12:30:00+02:00"), ("CS201", "final", "2027-01-04")])
+    out = ok(home, "start", {"now": EVE})
+    assert (out["exam"], out["exam_name"], out["q0"]) == ("2026-11-03T12:30:00+02:00", "midterm", False)
+    assert out["exam_date"] == "2026-11-03"  # the calendar day, for forecast blocks and pending_debrief
+    assert (out["class"]["class"], out["class"]["reason"]) == ("Urgent", "floor")
+    assert out["class"]["hours_to_exam"] == 15.25
+    assert out["line"] == "Urgent delivery: exam in 15 hours"
+
+
+@pytest.mark.parametrize("cell,klass,reason,hours,line", [
+    ("2026-11-03T13:00:00+02:00", "Urgent", "floor", 16, "Urgent delivery: exam in 16 hours"),
+    ("2026-11-03 13:00", "Urgent", "floor", 16, "Urgent delivery: exam in 16 hours"),  # now's offset
+    ("2026-11-03T11:00:00Z", "Urgent", "floor", 16, "Urgent delivery: exam in 16 hours"),  # 13:00 at +02:00
+    ("2026-11-03", "Urgent", "tomorrow", None, "Urgent delivery: exam tomorrow, time unknown"),
+    ("2026-11-05", "Standard", "calm", None, "Standard delivery: exam in 3 days"),
+    ("2026-11-04T21:00:00+02:00", "Urgent", "floor", 48, "Urgent delivery: exam in 48 hours"),
+    ("2026-11-04T21:01:00+02:00", "Standard", "calm", 48.02, "Standard delivery: exam in 2 days"),
+])
+def test_exam_cell_with_time_date_only_and_48_hour_boundary(home, root, cell, klass, reason, hours, line):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "midterm", cell)])
+    out = ok(home, "start", {"now": "2026-11-02T21:00:00+02:00"})
+    assert out["exam_name"] == "midterm"
+    assert (out["class"]["class"], out["class"]["reason"], out["class"]["hours_to_exam"]) == (klass, reason, hours)
+    assert out["line"] == line
+
+
+def test_exam_earlier_today_has_passed(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "quiz", "2026-11-02T09:00:00+02:00"), ("CS201", "final", "2027-01-04")])
+    out = ok(home, "start", {"now": EVE})
+    assert (out["exam"], out["exam_name"]) == ("2027-01-04", "final")
+
+
+def test_date_only_exam_orders_before_a_timed_exam_that_day(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "lab", "2026-11-03T09:00:00+02:00"), ("CS201", "quiz", "2026-11-03")])
+    out = ok(home, "start", {"now": EVE})
+    assert out["exam_name"] == "quiz" and out["class"]["reason"] == "tomorrow"
+
+
+def test_unreadable_exam_cell_is_reported_not_ignored(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "midterm", "Nov 3 12:30"), ("CS201", "quiz", "2026-11-03T25:00"),
+                         ("MATH1", "final", "soon"), ("CS201", "final", "2027-01-04")])
+    out = ok(home, "start", {"now": EVE})
+    assert out["exam_problems"] == [{"exam": "midterm", "date": "Nov 3 12:30"},
+                                    {"exam": "quiz", "date": "2026-11-03T25:00"}]
+    assert out["exam_name"] == "final"
+    profile(root, exams=[("CS201", "final", "2027-01-04")])
+    assert ok(home, "start", {"now": EVE})["exam_problems"] == []
+
+
+@pytest.mark.parametrize("cell,ask_time,ask_ahead", [
+    ("2026-11-02", True, True),               # date only, today: time and "still ahead?"
+    ("2026-11-03", True, False),              # tomorrow
+    ("2026-11-04", True, False),              # within two days
+    ("2026-11-05", False, False),             # three days ahead: not yet
+    ("2026-11-03 time unknown", False, False),  # asked once already: never again
+    ("2026-11-02 Time  Unknown", False, True),  # still asked whether it is ahead
+    ("2026-11-03T12:30:00+02:00", False, False),
+])
+def test_two_day_time_ask_and_exam_day_ahead_ask(home, root, cell, ask_time, ask_ahead):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "midterm", cell)])
+    out = ok(home, "start", {"now": EVE})
+    assert (out["ask_exam_time"], out["ask_exam_ahead"]) == (ask_time, ask_ahead)
+    assert out["exam_problems"] == [] and out["exam_name"] == "midterm"
+    if "time unknown" in cell.casefold():
+        assert out["exam"] == cell.split()[0]
+        assert out["class"]["hours_to_exam"] is None
+
+
+def test_no_exam_asks_nothing_about_its_time(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "unknown")])
+    out = ok(home, "start", {"now": EVE})
+    assert (out["ask_exam_time"], out["ask_exam_ahead"]) == (False, False)
+    assert out["exam_date"] is None
 
 
 def test_course_pick_latest_last_session(home, root):
@@ -690,6 +788,15 @@ def test_debrief_superseded_by_later_passed_exam(home, root):
     assert st["debrief"]["due"] is True
 
 
+def test_debrief_reads_timed_exam_rows_and_pending_value(home, root):
+    # session-close writes pending_debrief from start's exam, which may carry a time.
+    due_course(home, root, pending="2026-10-20T09:00:00+03:00 midterm",
+               exams=[("CS201", "midterm", "2026-10-20T09:00:00+03:00"),
+                      ("CS201", "final", "2026-11-10 13:00"), ("CS201", "quiz", "2026-11-20T09:00:00+02:00")])
+    st = ok(home, "start", {"now": DUE_NOW})
+    assert st["debrief"] == {"exam": "2026-11-10", "exam_name": "final", "due": True, "deferred": False}
+
+
 def test_debrief_superseded_window_uses_target(home, root):
     cdir = due_course(home, root, pending="2026-10-20 midterm",
                       exams=[("CS201", "midterm", "2026-10-20"), ("CS201", "final", "2026-11-10")])
@@ -1034,6 +1141,41 @@ def test_parse_date_weekdays_and_offsets(home, now, phrase, expected):
 ])
 def test_parse_date_refusals(home, phrase, needle):
     fails(home, "parse-date", {"now": NOW, "phrase": phrase}, needle)
+
+
+@pytest.mark.parametrize("phrase,exam,line", [
+    ("12:30 tomorrow", "2026-11-03T12:30:00+02:00", "Exam: 2026-11-03 at 12:30."),
+    ("tomorrow at 12:30", "2026-11-03T12:30:00+02:00", "Exam: 2026-11-03 at 12:30."),
+    ("Tomorrow 9:05", "2026-11-03T09:05:00+02:00", "Exam: 2026-11-03 at 09:05."),
+    ("2026-11-03 12:30", "2026-11-03T12:30:00+02:00", "Exam: 2026-11-03 at 12:30."),
+    ("friday at 2pm", "2026-11-06T14:00:00+02:00", "Exam: 2026-11-06 at 14:00."),
+    ("12:30 am in 3 days", "2026-11-05T00:30:00+02:00", "Exam: 2026-11-05 at 00:30."),
+    ("12 PM tomorrow", "2026-11-03T12:00:00+02:00", "Exam: 2026-11-03 at 12:00."),
+    ("today 23:00", "2026-11-02T23:00:00+02:00", "Exam: 2026-11-02 at 23:00."),
+    ("tomorrow", "2026-11-03", "Exam date: 2026-11-03."),
+])
+def test_parse_date_with_time(home, phrase, exam, line):
+    out = ok(home, "parse-date", {"now": EVE, "phrase": phrase})
+    assert (out["exam"], out["line"]) == (exam, line)
+    assert out["date"] == exam[:10]
+    assert out["time"] == (exam[11:16] if "T" in exam else None)
+    assert set(out) == {"date", "time", "exam", "line"}
+
+
+@pytest.mark.parametrize("phrase,needle", [
+    ("today 21:00", "in the past"),      # earlier today than now
+    ("today at 9am", "in the past"),
+    ("tomorrow 25:00", "not a real time"),
+    ("tomorrow 12:60", "not a real time"),
+    ("tomorrow 13:00 pm", "not a real time"),
+    ("tomorrow 0am", "not a real time"),
+    ("tomorrow noon", "unsupported"),
+    ("12:30", "unsupported"),           # a time needs a date
+    ("12:30 tomorrow 13:00", "unsupported"),
+    ("tomorrow at", "unsupported"),
+])
+def test_parse_date_time_refusals(home, phrase, needle):
+    fails(home, "parse-date", {"now": EVE, "phrase": phrase}, needle)
 
 
 def test_parse_date_bad_input(home):

@@ -15,7 +15,7 @@ All workspace changes go through `python3 "<mimir>/scripts/workspace.py" <cmd>`.
 3. Ask everything in one numbered message, then wait for one reply:
    1. Learning folder: currently `<root>`. Keep it, or give another path?
    2. Which language are your courses and exams in, and which language do you want explanations in?
-   3. Exam dates you already know (course code, exam, date), or "none".
+   3. Exams you already know, each with its date and time (course code, exam, date, time; "Don't know" is fine for the time), or "none".
    For anything left unanswered, pick a default and declare it: keep the folder; teaching language = the language the student writes in; course language = the teaching language; no exam dates.
 4. Apply the folder choice:
    - Kept: `init` with `{}`.
@@ -26,6 +26,6 @@ All workspace changes go through `python3 "<mimir>/scripts/workspace.py" <cmd>`.
 5. Edit `.state/profile.md` under the `root` from the last returned JSON, keeping the template's shape:
    - `course_language:` and `teaching_language:`.
    - First run `python3 "<mimir>/scripts/session.py" now` with `{}` on stdin once: `N` is its `now`.
-   - One `| CODE | exam | YYYY-MM-DD |` row per known exam under `## Exam dates`, the date being the `date` of `python3 "<mimir>/scripts/session.py" parse-date` with `{"now": "<N>", "phrase": "<the date as the student gave it>"}` (escape it as a JSON string). It accepts only `YYYY-MM-DD`, today, tomorrow, an English weekday name (today's own weekday means today) and "N days" or "in N days". When it exits 2, ask for the date as YYYY-MM-DD in the same setup exchange. Never do date arithmetic yourself. Replace `|` and newlines in cell values with spaces.
+   - One `| CODE | exam | <exam> |` row per known exam under `## Exam dates`, `<exam>` being its `exam` from `python3 "<mimir>/scripts/session.py" parse-date` with `{"now": "<N>", "phrase": "<the date and time as the student gave them>"}` (escape it as a JSON string; leave the time out when they don't know it). It accepts only `YYYY-MM-DD`, today, tomorrow, an English weekday name (today's own weekday means today) and "N days" or "in N days", each optionally with a time such as `12:30` or `2pm` before or after it ("12:30 tomorrow"). Its `exam` keeps the time when one was given, else it is the date alone. When it exits 2, ask for the date as YYYY-MM-DD and the time as HH:MM in the same setup exchange. Never do date arithmetic yourself. Replace `|` and newlines in cell values with spaces.
    - Last, `setup_done:` set to the `date` of that `session.py now` call.
 6. Say: "Drop your course outline and past papers into `<root>/_inbox/`." Teaching can start right after.
