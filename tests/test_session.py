@@ -1384,3 +1384,157 @@ def test_start_class_ignores_route_size_and_topic_times(home, root):
     out = ok(home, "start", {"now": NOW, "term": TERM, "course": c.name})
     assert (out["class"]["class"], out["class"]["reason"]) == ("Standard", "calm")
     assert "delay_line" not in out
+
+
+# --- teaching settings (preference state) ------------------------------------------
+
+DEFAULT_AXES = {"support": {"level": "method-first", "provenance": "default", "wording": None},
+                "frequency": {"level": "key decisions", "provenance": "default", "wording": None},
+                "depth": {"level": "why", "provenance": "default", "wording": None}}
+
+
+def test_prefs_defaults_without_state(home, root):
+    profile(root)
+    before = snapshot(home)
+    out = ok(home, "prefs", {})
+    assert out["axes"] == DEFAULT_AXES and out["saved"] is False
+    assert out["line"] == ("Teaching settings: support method-first (default), guiding-question frequency "
+                           "key decisions (default), guiding-question depth why (default).")
+    assert snapshot(home) == before
+
+
+def test_prefs_needs_a_workspace(home):
+    fails(home, "prefs", {}, "no workspace")
+
+
+def _legacy_profile(root: Path, dial: str) -> None:
+    profile(root)
+    text = (root / ".state" / "profile.md").read_text(encoding="utf-8")
+    text = text.replace("level:\n", f"level:\ndial_preference: {dial}\n")
+    text += "\n## Rung hints\n| topic type | rung that worked |\n|---|---|\n| Recursion | analogy |\n"
+    (root / ".state" / "profile.md").write_text(text, encoding="utf-8")
+
+
+LEGACY_AXES = {**DEFAULT_AXES, "frequency": {"level": "checks only", "provenance": "legacy", "wording": None}}
+
+
+@pytest.mark.parametrize("dial", ["", "none", "<none, or the preference saved after a frustration override>"])
+def test_prefs_unset_dial_preference_is_default(home, root, dial):
+    _legacy_profile(root, dial)
+    assert ok(home, "prefs", {})["axes"] == DEFAULT_AXES
+
+
+def test_legacy_dial_preference_reads_as_checks_only(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    before = snapshot(home)
+    out = ok(home, "prefs", {})
+    assert out["axes"] == LEGACY_AXES and out["saved"] is False  # rung hints ignored: support stays default
+    assert snapshot(home) == before
+
+
+def test_legacy_import_saves_once_and_leaves_memory_untouched(home, root):
+    cdir = course(home, mastery=TWO_LEFT, save={"next_topic": "Sorting"})
+    (cdir / ".state" / "logs" / "2026-10-01-0900.md").write_text("started: 2026-10-01T09:00:00+03:00\n",
+                                                                  encoding="utf-8")
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    memory = {p: p.read_bytes() for p in [root / ".state" / "profile.md", cdir / ".state" / "mastery.md",
+                                          cdir / ".state" / "save.md", cdir / ".state" / "logs" / "2026-10-01-0900.md"]}
+    out = ok(home, "pref-event", {"event": "legacy-import"})
+    assert out["axes"] == LEGACY_AXES and out["saved"] is True and out["changed"] is True
+    assert out["line"] == "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
+    state = root / ".state" / "preferences.json"
+    saved = state.read_bytes()
+    assert json.loads(saved) == {"version": 1, "axes": LEGACY_AXES}
+    assert {p: p.read_bytes() for p in memory} == memory  # dial_preference and rung hints stay in place
+    again = ok(home, "pref-event", {"event": "legacy-import"})
+    assert again["changed"] is False and again["axes"] == LEGACY_AXES
+    assert again["line"] == "Teaching settings already saved."
+    assert state.read_bytes() == saved
+    assert ok(home, "prefs", {})["saved"] is True
+    assert list((root / ".state").glob(".preferences.json.*")) == []  # no temp file left behind
+
+
+def test_legacy_import_without_dial_preference_saves_defaults(home, root):
+    _legacy_profile(root, "none")
+    out = ok(home, "pref-event", {"event": "legacy-import"})
+    assert out["axes"] == DEFAULT_AXES and out["changed"] is True
+    assert out["line"] == "Teaching settings saved with the defaults."
+
+
+@pytest.mark.parametrize("axis,level,wording", [
+    ("support", "example-first", "for math, always show an example first"),
+    ("frequency", "checks only", "ask fewer questions"),
+    ("depth", "what-if", "from now on ask me what-if questions"),
+])
+def test_explicit_request_changes_only_its_axis(home, root, axis, level, wording):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    out = ok(home, "pref-event", {"event": "explicit", "axis": axis, "level": level, "wording": wording})
+    expected = {**LEGACY_AXES, axis: {"level": level, "provenance": "explicit", "wording": wording}}
+    assert out["axes"] == expected and out["changed"] is True
+    names = {"support": "support", "frequency": "guiding-question frequency", "depth": "guiding-question depth"}
+    assert out["line"] == f"Saved for every course: {names[axis]} is now {level}."
+    assert ok(home, "prefs", {})["axes"] == expected
+    saved = (root / ".state" / "preferences.json").read_bytes()
+    again = ok(home, "pref-event", {"event": "explicit", "axis": axis, "level": level, "wording": wording})
+    assert again["changed"] is False and again["axes"] == expected
+    assert (root / ".state" / "preferences.json").read_bytes() == saved  # byte-identical rerun
+
+
+def test_explicit_request_moves_any_distance_and_keeps_latest_wording(home, root):
+    profile(root)
+    ok(home, "pref-event", {"event": "explicit", "axis": "support", "level": "try-first",
+                            "wording": "let me try first"})
+    out = ok(home, "pref-event", {"event": "explicit", "axis": "support", "level": "example-first",
+                                  "wording": "  always   explain with an example first "})
+    assert out["axes"]["support"] == {"level": "example-first", "provenance": "explicit",
+                                      "wording": "always explain with an example first"}
+    assert out["axes"]["frequency"] == DEFAULT_AXES["frequency"]
+
+
+@pytest.mark.parametrize("payload,needle", [
+    ({"event": "explicit", "axis": "support", "level": "checks only", "wording": "x"}, "level for support"),
+    ({"event": "explicit", "axis": "pace", "level": "why", "wording": "x"}, "axis must be"),
+    ({"event": "explicit", "axis": "depth", "level": "why"}, "wording"),
+    ({"event": "explicit", "axis": "depth", "level": "why", "wording": "  "}, "wording"),
+    ({"event": "explicit", "axis": "depth", "level": "why", "wording": "a\nb"}, "wording"),
+    ({"event": "explicit", "axis": "depth", "level": "why", "wording": "w" * 201}, "wording"),
+    ({"event": "explicit", "axis": "depth", "level": "why", "wording": "x", "course": "CS201"}, "course"),
+    ({"event": "legacy-import", "axis": "depth"}, "axis"),
+    ({"event": "frustrated"}, "event must be"),
+    ({}, "event must be"),
+])
+def test_pref_event_rejects_invalid_input_and_writes_nothing(home, root, payload, needle):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    before = snapshot(home)
+    fails(home, "pref-event", payload, needle)
+    assert snapshot(home) == before
+
+
+def test_prefs_reads_nothing_extra(home, root):
+    profile(root)
+    fails(home, "prefs", {"axis": "support"}, "axis")
+
+
+@pytest.mark.parametrize("content", ["not json", '{"version": 1}', '{"version": 2, "axes": {}}',
+                                     json.dumps({"version": 1, "axes": {**{a: dict(v) for a, v in
+                                                 DEFAULT_AXES.items()}, "depth": {"level": "deep",
+                                                 "provenance": "default", "wording": None}}}),
+                                     json.dumps({"version": 1, "axes": {**DEFAULT_AXES, "support": {
+                                         "level": "try-first", "provenance": "explicit", "wording": None}}})])
+def test_damaged_preference_state_is_refused(home, root, content):
+    profile(root)
+    state = root / ".state" / "preferences.json"
+    state.write_text(content, encoding="utf-8")
+    before = snapshot(home)
+    fails(home, "prefs", {}, "preferences.json is damaged")
+    fails(home, "pref-event", {"event": "explicit", "axis": "depth", "level": "why", "wording": "x"}, "damaged")
+    assert snapshot(home) == before
+
+
+def test_symlinked_preference_state_is_refused(home, root, tmp_path):
+    profile(root)
+    target = tmp_path / "elsewhere.json"
+    target.write_text(json.dumps({"version": 1, "axes": DEFAULT_AXES}), encoding="utf-8")
+    (root / ".state" / "preferences.json").symlink_to(target)
+    fails(home, "prefs", {}, "symlink")
+    fails(home, "pref-event", {"event": "legacy-import"}, "symlink")

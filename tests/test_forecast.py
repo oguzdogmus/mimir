@@ -458,7 +458,7 @@ def test_scored_suffix_counts():
 def test_profile_record_replaced_only_in_its_section(root, home):
     course(home, root)
     prof = root / ".state" / "profile.md"
-    prof.write_text(prof.read_text().replace("dial_preference:", "dial_preference:\nforecast_record: stray"))
+    prof.write_text(prof.read_text().replace("setup_done:", "setup_done:\nforecast_record: stray"))
     ok(home, "write", write())
     ok(home, "score", score([1]))
     lines = prof.read_text().splitlines()
