@@ -30,10 +30,16 @@ Use this block wherever a skill resolves a course; keep the caller's action word
 - The student never picks a mode, and no command selects one. A command picks an action, never Standard or Urgent.
 - Date math, delivery class, and plans come from `<mimir>/scripts/plan.py` and `<mimir>/scripts/session.py`, never from your own arithmetic. Get "now" only from `session.py now` and turn an exam-date phrase into a date only with `session.py parse-date`; never run a shell date command.
 
+## Ending a session
+Study, quiz and past-question sessions, Standard and Urgent, run until the student asks to end: "end session" (or "stop", "I'm done"). Nothing else ends one: no timer, no finished set, route or drill list, no exam date.
+- **End-of-set hand-off**: when a question set, the drill list or the route runs out, say so and, in the same message, lead into the next set or offer choices (another set, a recheck, a weaker type or topic, or "end session"). Never go silent after a set, and never close by yourself.
+- Feedback on an answer and the next question share one message; pause only for a clarification or a continue-or-move-on choice.
+- When the student asks to end, show no new item or key, log each shown item not yet answered as the skill says, then run the shared close (`<mimir>/skills/mimir-core-rules/references/session-close.md`) once. `session.py close` writes the session's one end stamp; a repeated close changes nothing.
+
 ## Question budget
 - Admin questions only at: Q0 (one "When's the exam?" when no date is known), first setup, the single fixed-column ingest table, and the post-exam debrief (at most 3 questions, all skippable with one word).
 - Teaching questions only through: the Socratic dial, the one-question stale recheck (evidence older than 14 days), and the two "I know this" check questions.
-- Content is not a question under this budget: quiz, drill, practice and study items, and the cliffhanger, are what the student came for.
+- Content is not a question under this budget: quiz, drill, practice and study items, the cliffhanger and the end-of-set hand-off are what the student came for.
 - Anything else you would ask: pick a sensible default and declare it instead.
 
 ## Declared changes

@@ -120,3 +120,28 @@ def test_no_learning_time_forecasts():
     for path in MARKDOWN + [ROOT_DIR / "README.md"]:
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             assert not FORECAST.search(line), f"{path}:{n}: {line.strip()[:80]}"
+
+
+# Sessions end only when the student says "end session": no episode timer and
+# no close the agent triggers itself (a finished set, route or drill list).
+AUTO_CLOSE = re.compile(r"session\.py clock|`clock`|episode timer|20 to 25 min|Good luck|"
+                        r"\bthen close\b|Then close|None left: close|: close\.|and close \(|close now", re.I)
+SESSION_FLOWS = ["skills/mimir-study/references/session.md", "skills/mimir-study/references/urgent.md",
+                 "skills/mimir-quiz/SKILL.md", "skills/mimir-past-questions/SKILL.md"]
+
+
+def test_no_episode_clock_or_automatic_close():
+    for path in MARKDOWN:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not AUTO_CLOSE.search(line), f"{path}:{n}: {line.strip()[:100]}"
+
+
+def test_sessions_close_only_on_end_session_with_a_set_hand_off():
+    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text(encoding="utf-8")
+    assert "## Ending a session" in core and "**End-of-set hand-off**" in core
+    assert '"end session"' in core
+    close = (ROOT_DIR / "skills/mimir-core-rules/references/session-close.md").read_text(encoding="utf-8")
+    assert "session.py close" in close  # the script writes the one end stamp
+    for flow in SESSION_FLOWS:
+        text = (ROOT_DIR / flow).read_text(encoding="utf-8")
+        assert "End-of-set hand-off" in text and '"end session"' in text, flow

@@ -4,11 +4,12 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <now|parse-date|start|check|clock|debrief|progress|record>  < input.json
+    python3 session.py <now|parse-date|start|check|close|debrief|progress|record>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
-``line``. Only record writes mastery.md atomically; other commands are read-only. Only ``now``
+``line``. Only record (mastery.md) and close (a session log) write, atomically; other commands
+are read-only. Only ``now``
 reads the clock; every other subcommand takes "now" as an input (``now``, from
 ``session.py now``), so the same input and files always give the same output.
 
@@ -133,12 +134,24 @@ check -- staleness and counts for named topics.
     topic or one whose status reads as ``unseen``):
     the student tries a practice item before any hint or explanation.
 
-clock -- where an episode stands.
-    in : {"start": "2026-10-17T09:00:00+03:00", "now": "2026-10-17T09:21:30+03:00"}
-    out: {"elapsed_minutes": 21, "phase": "wrap", "line": "Episode: 21 min, wrap up."}
-    ``elapsed_minutes`` is whole minutes, rounded down. ``phase``: ``teach``
-    under EPISODE_MIN_MINUTES, ``wrap`` from it to under EPISODE_MAX_MINUTES,
-    ``over`` from EPISODE_MAX_MINUTES. ``now`` before ``start`` exits 2.
+close -- stamp a session's end in its log, once.
+    in : {"now": "2026-10-17T10:47:30+03:00", "term": "2026-Fall", "course":
+          "CS201 Theory", "log": "2026-10-17-0900", "started": "2026-10-17T09:00:00+03:00"}
+    out: {"log": ".../.state/logs/2026-10-17-0900.md", "started": "...", "ended":
+          "2026-10-17T10:47:30+03:00", "minutes": 107, "last_session":
+          "2026-10-17 10:47", "already_closed": false,
+          "line": "Session closed after 107 min."}
+    ``log`` is ``session.py now``'s ``log_name``; ``started`` the session's
+    ``started:`` value in that log, matched exactly. When that session's block
+    (up to the next ``started:`` line) has no ``ended:`` line, appends ``ended:
+    <now>`` to the log; when it has one, writes nothing and reports that stamp
+    with ``already_closed`` true ("Session already closed after N min."), so a
+    session gets one end stamp however often it is closed. ``minutes`` is whole
+    minutes from started to ended, rounded down; ``last_session`` the end stamp
+    as the ``save.md`` value. Exits 2 when the log is missing or a symlink,
+    has no such ``started:`` line, a later session already started in it
+    while this one is open, its ``ended:`` line is not a datetime, or ``now``
+    is before ``started`` or mixes offset and no-offset with it.
 
 debrief -- what the post-exam debrief needs. Read-only, like the rest.
     in : as ``start`` ({"now": ..., optional "term" and "course"}).
@@ -220,8 +233,6 @@ import workspace
 from workspace import InputError, _check_keys, _has_control, _short, parse_segment, parse_term
 
 STALE_DAYS = 14
-EPISODE_MIN_MINUTES = 20
-EPISODE_MAX_MINUTES = 25
 ATTEMPT_FIRST_ASSISTED = 3
 
 NO_ROUTE_LINE = ("No topics on the route yet: drop the outline, slides or past papers into `_inbox/` "
@@ -484,6 +495,7 @@ def _exam(profile: str, code: str, today: date) -> tuple[str | None, str | None,
 # --- Debrief ------------------------------------------------------------------------
 
 _PENDING = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\s+(.*))?")
+_CLOSE_LOG = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}(?:-[A-Za-z0-9-]+)?")
 _LOG_NAME = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})-[0-9]{4}(?:-[^/]*)?\.md")
 _NO_CRAM_LINE = "Cram bill: no study sessions logged."
 NO_COURSE_LINE = "No course yet: run mimir-setup, then mimir-ingest."
@@ -783,22 +795,52 @@ def cmd_check(data: dict) -> dict:
     return {"course_dir": str(course_dir), "topics": out, "line": line}
 
 
-def cmd_clock(data: dict) -> dict:
-    _check_keys(data, {"start", "now"})
-    start, now = _moment(data, "start"), _moment(data, "now")
-    if (start.tzinfo is None) != (now.tzinfo is None):
-        raise InputError("now and start mix values with and without a UTC offset")
-    if now < start:
-        raise InputError("now is before start")
-    seconds = (now - start).total_seconds()
-    minutes = int(seconds // 60)
-    if seconds < EPISODE_MIN_MINUTES * 60:
-        phase, what = "teach", "keep teaching"
-    elif seconds < EPISODE_MAX_MINUTES * 60:
-        phase, what = "wrap", "wrap up"
-    else:
-        phase, what = "over", "close now"
-    return {"elapsed_minutes": minutes, "phase": phase, "line": f"Episode: {minutes} min, {what}."}
+def cmd_close(data: dict) -> dict:
+    """Stamp a session's end in its log once; a repeated close reuses the stamp and writes nothing."""
+    _check_keys(data, {"now", "term", "course", "log", "started"})
+    now, started = _moment(data, "now"), _moment(data, "started")
+    term, course = parse_term(data), parse_segment(data, "course")
+    name = data.get("log")
+    if not isinstance(name, str) or not _CLOSE_LOG.fullmatch(name):
+        raise InputError("log must be a log name from `session.py now` (YYYY-MM-DD-HHMM)")
+    course_dir = workspace.course_folder(ingest._workspace_root(), term, course)
+    if not (course_dir / "INDEX.md").is_file():
+        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
+    path = course_dir / ".state" / "logs" / f"{name}.md"
+    if path.is_symlink() or not path.is_file():
+        raise InputError(f"log {name} not found in {_short(course)}")
+    text = _text(path)
+    ended, found, inside = None, False, False
+    for line in text.splitlines():
+        m = re.fullmatch(r"(started|ended):(.*)", line.strip())
+        if not m:
+            continue
+        value = m.group(2).strip()
+        if m.group(1) == "started":
+            if inside and ended is None:
+                raise InputError(f"a later session started in log {name} before this one was closed")
+            inside = value == data["started"]
+            found = found or inside
+        elif inside and ended is None:
+            try:
+                ended = plan.parse_moment(value, "ended", need_time=True)
+            except plan.InputError:
+                raise InputError(f"log {name} has an ended line that is not a datetime") from None
+    if not found:
+        raise InputError(f"log {name} has no started: {data['started']} line")
+    already = ended is not None
+    if not already:
+        if (started.tzinfo is None) != (now.tzinfo is None):
+            raise InputError("now and started mix values with and without a UTC offset")
+        if now < started:
+            raise InputError("now is before started")
+        ended = now
+        ingest._write_atomic(path, text + ("" if text.endswith("\n") or not text else "\n")
+                             + f"ended: {data['now']}\n")
+    minutes = max(0, int((ended - started).total_seconds() // 60))
+    line = f"Session {'already closed' if already else 'closed'} after {minutes} min."
+    return {"log": str(path), "started": data["started"], "ended": ended.isoformat(), "minutes": minutes,
+            "last_session": ended.strftime("%Y-%m-%d %H:%M"), "already_closed": already, "line": line}
 
 
 def _clock() -> datetime:
@@ -995,7 +1037,7 @@ COMMANDS = {
     "parse-date": (cmd_parse_date, "the student's exam-date phrase as a YYYY-MM-DD date, or a refusal"),
     "start": (cmd_start, "pick the course, exam, delivery class and first topic for a session"),
     "check": (cmd_check, "status, counts and staleness for named topics"),
-    "clock": (cmd_clock, "elapsed episode minutes and phase (teach, wrap, over)"),
+    "close": (cmd_close, "stamp the end of a session in its log once and report its length"),
     "debrief": (cmd_debrief, "post-exam debrief state, cram bill, verifier disagreements and next-course flag"),
     "progress": (cmd_progress, "every mastery row with its evidence, counts and staleness, as a table"),
 }
@@ -1003,8 +1045,8 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
-                             ("Mimir session runner. Subcommands: now, parse-date, start, check, clock, debrief, progress, record. Reads one JSON "
-                              "object on stdin and prints one JSON object on stdout. Only record writes mastery state."),
+                             ("Mimir session runner. Subcommands: now, parse-date, start, check, debrief, progress, record. Reads one JSON "
+                              "object on stdin and prints one JSON object on stdout. Only record and close write."),
                              COMMANDS, argv)
 
 
