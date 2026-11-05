@@ -1,6 +1,6 @@
 # Release check
 
-Mimir opens the pages it builds (math sheets, step pages, the cost-of-delay slider and chart) through `open_in_browser` in `scripts/visual.py`. The tests cover it with fake openers only, so before a release run the same live check by hand on each OS: Linux, macOS, Windows and WSL.
+Mimir opens the pages it builds (math sheets, step pages and step-through pages) through `open_in_browser` in `scripts/visual.py`. The tests cover it with fake openers only, so before a release run the same live check by hand on each OS: Linux, macOS, Windows and WSL.
 
 `scripts/release_check.py` is a dev-only script (standard library, Python 3.11+); no skill uses it. It writes `mimir-release-check.html` and `mimir-release-check.svg` into a new temp folder whose name contains a space, opens each one through the shipped `visual.open_in_browser`, and prints one JSON object: `platform`, `html`, `svg`, `opened_html`, `opened_svg`, `line`. It exits 0 when both files opened, else 1. `--no-open` only builds the files.
 

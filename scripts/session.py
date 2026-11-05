@@ -83,7 +83,7 @@ start -- pick the course, the exam and the class for a new session.
           "code": "CS201", "inferred": true, "exam": "2026-11-05",
           "exam_name": "final", "q0": false, "remaining": [{"name": "Heaps",
           "status": "gap"}, {"name": "Graphs", "status": "unseen"}],
-          "class": {<plan.py class output>}, "delay_line": "Start today: ...",
+          "class": {<plan.py class output>},
           "topic": {"name": "Graphs", "status": "unseen", "evidence_date":
           null, "stale": false, "attempt_first": false}, "route_line": null, "first_contact":
           "2026-10-10T20:00:00+03:00",
@@ -101,8 +101,8 @@ start -- pick the course, the exam and the class for a new session.
     ``INDEX.md`` registry has no ``outline`` row, each ``## Topics`` name not
     yet listed (ignoring case and repeated spaces) follows as an unseen row,
     in ``INDEX.md`` order. ``remaining`` = route rows not
-    ``mastered``, weighted from matching fingerprint marks, sent to ``plan.py class`` (and ``delay``,
-    using logged Topic timings; whose ``line`` is ``delay_line`` for Standard only, else null). ``topic``:
+    ``mastered``. ``class``: ``plan.py class`` with ``now`` and the exam only (exam
+    proximity alone decides; the route's size never does). ``topic``:
     ``save.md`` ``next_topic`` when it is remaining, else the first remaining
     topic; with none remaining, the same pick among the stale mastered topics
     (stale as in ``check``: the one-question recheck); else null. Its
@@ -171,10 +171,9 @@ debrief -- what the post-exam debrief needs. Read-only, like the rest.
     session: today is for your exam."; no course: ``start``'s line). Due,
     with target T and previous exam B (the latest row of ``code`` dated
     before T, none when there is none):
-    * ``cram``: ``plan.py debrief`` with ``first_contact`` (as in ``start``),
-      ``exam`` T, every route row weighted as in ``start``, logged timing evidence and the
-      sessions: each log's ``started:`` and the next ``ended:`` after it,
-      kept when the start's own calendar date is after B and on or before T;
+    * ``cram``: ``plan.py debrief`` (actual hours studied only) with
+      ``first_contact`` (as in ``start``), ``exam`` T and the sessions:
+      each log's ``started:`` and the next ``ended:`` after it, kept when the start's own calendar date is after B and on or before T;
       a pair that ends before it starts, overlaps an earlier kept pair or
       mixes offset/no-offset with ``now`` is dropped. ``cram`` is null (line
       "Cram bill: no study sessions logged.") when ``first_contact`` is null,
@@ -211,6 +210,8 @@ record -- persist an eligible answer or a frustration override.
     result), outcome (unassisted|assisted|wrong), real_past_paper (boolean),
     session (unique identity), date (YYYY-MM-DD). Optional override and
     explanation_only booleans distinguish control events from item attempts.
+    Per session, item and event, the first wrong answer records once (later
+    misses return duplicate) and a right answer after it records as assisted.
     Alternatively {term, course, topic, initialize: true} adds an unseen topic.
     Returns status, recorded, duplicate and line. See the shared recording
     reference for examples and audit D2/D5 for exact transition semantics.
@@ -257,7 +258,6 @@ from __future__ import annotations
 
 import re
 import json
-from fractions import Fraction
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -662,65 +662,12 @@ def _cram(course_dir: Path, logs, first_contact: str | None, target: date,
     contact_day = contact if plan.is_date_only(contact) else contact.date()
     if contact_day > target:
         return None
-    payload = plan_payload(now.isoformat(), target.isoformat(), route(course_dir), course_dir)
-    payload.update(first_contact=first_contact, sessions=_sessions(logs, previous, target, aware))
-    return _plan(plan.debrief, payload)
+    return _plan(plan.debrief, {"now": now.isoformat(), "exam": target.isoformat(),
+                                "first_contact": first_contact,
+                                "sessions": _sessions(logs, previous, target, aware)})
 
 
 # --- Subcommands ----------------------------------------------------------------------
-
-def planning_evidence(course_dir: Path, now: str) -> tuple[dict, list[dict]]:
-    """Exact topic matches only; malformed/ambiguous evidence stays uncalibrated.
-
-    Fingerprint marks use the triage engine's ceil(3 * marks / maximum) rule.
-    Timings are nonoverlapping intervals, averaged once per distinct topic.
-    Offset/no-offset mixtures are ambiguous and excluded, like debrief sessions.
-    """
-    marks = {}
-    for name, frequency, value in _section_rows(
-            _memory(course_dir, "fingerprint.md"), ("Question types", ("type", "frequency", "marks"))):
-        if "(tentative)" in name or "(prior term)" in name:
-            continue
-        name = _norm(name.split(" (source:", 1)[0])
-        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?%?", value):
-            continue
-        number = Fraction(value.rstrip("%"))
-        if number > 0:
-            marks.setdefault(name, number)
-    top = max(marks.values(), default=1)
-    weights = {name: plan.mark_weight(value, top) for name, value in marks.items()}
-    clock = plan.parse_moment(now, "now", need_time=True)
-    intervals = []
-    for _, text in _logs(course_dir):
-        for name, start, end in _section_rows(text, ("Topic timings", ("topic", "started", "ended"))):
-            try:
-                start = plan.parse_moment(start, "started", need_time=True)
-                end = plan.parse_moment(end, "ended", need_time=True)
-                if name and start < end <= clock:
-                    intervals.append((start, end, _norm(name)))
-            except (plan.InputError, TypeError, ValueError):
-                continue
-    totals = {}
-    counts = {}
-    last = None
-    for start, end, name in sorted(intervals):
-        if last is not None and start < last:
-            continue
-        totals[name] = totals.get(name, Fraction(0)) + Fraction((end - start).total_seconds()) / 60
-        counts[name] = counts.get(name, 0) + 1
-        last = end
-    return weights, [{"weight": weights.get(name, 1), "minutes": minutes / counts[name]}
-                     for name, minutes in totals.items()]
-
-
-def plan_payload(now: str, exam: str | None, remaining: list[dict],
-                 course_dir: Path | None = None) -> dict:
-    """Planner input, with explicit cold-start fallback for absent evidence."""
-    weights, timed = planning_evidence(course_dir, now) if course_dir else ({}, [])
-    return {"now": now, "exam": exam,
-            "topics": [{"name": r["name"], "weight": weights.get(_norm(r["name"]), 1)} for r in remaining],
-            "timed": timed}
-
 
 def cmd_start(data: dict) -> dict:
     return _start(data)[0]
@@ -764,16 +711,14 @@ def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
     if chosen is None:
         return {"root": str(root), "courses": courses, "term": None, "course": None, "course_dir": None,
                 "code": None, "inferred": None, "exam": None, "exam_name": None, "q0": None,
-                "remaining": [], "class": None, "delay_line": None, "topic": None, "route_line": None,
+                "remaining": [], "class": None, "topic": None, "route_line": None,
                 "first_contact": None, "debrief": None, "line": NO_COURSE_LINE}, None
     code = chosen["course"].split()[0]
     today = now.date()
     exam, exam_name, q0 = _exam(profile, code, today)
     rows = route(course_dir)
     remaining = [r for r in rows if r["status"] != "mastered"]
-    payload = plan_payload(data["now"], exam, remaining, course_dir)
-    klass = _plan(plan.delivery_class, payload)
-    delay_line = _plan(plan.cost_of_delay, payload)["line"] if klass["class"] == "Standard" else None
+    klass = _plan(plan.delivery_class, {"now": data["now"], "exam": exam})
     save = _memory(course_dir, "save.md")
     next_topic = _norm(_key(save, "next_topic"))
     # Nothing unmastered left: a stale mastered topic gets the one-question recheck.
@@ -790,7 +735,7 @@ def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
             "course_dir": str(course_dir), "code": code, "inferred": inferred, "exam": exam,
             "exam_name": exam_name, "q0": q0,
             "remaining": [{"name": r["name"], "status": r["status"]} for r in remaining],
-            "class": klass, "delay_line": delay_line, "topic": topic, "route_line": route_line,
+            "class": klass, "topic": topic, "route_line": route_line,
             "first_contact": _first_contact(course_dir),
             "debrief": debrief, "line": klass["line"]}, window
 
@@ -1073,9 +1018,18 @@ def cmd_record(data: dict) -> dict:
     entry = state.get(key, _initial_record(legacy))
     row = entry["row"]
     result = {"status": row["status"], "duplicate": False, "recorded": False}
-    identity = [data["session"], data["item"], bool(data.get("override"))]
-    if identity in entry["attempts"]:
+    # One miss and one right answer per session, item and event: retries after a
+    # miss record nothing more until the right answer, which counts as assisted.
+    # Three-element identities predate this split and block both.
+    base = [data["session"], data["item"], bool(data.get("override"))]
+    outcome = data["outcome"]
+    kind = "wrong" if outcome == "wrong" else "right"
+    blocking = [base, base + ["right"]] + ([base + ["wrong"]] if kind == "wrong" else [])
+    if any(identity in entry["attempts"] for identity in blocking):
         return {**result, "duplicate": True, "line": "Attempt already recorded."}
+    if kind == "right" and base + ["wrong"] in entry["attempts"]:
+        outcome = "assisted"
+    identity = base + [kind]
     override = data.get("override", False)
     explanation = override and data.get("explanation_only", False) and gate["decision"] == "drop"
     if not explanation and (gate["decision"] != "show" or not gate["counts_for_mastery"]):
@@ -1086,7 +1040,6 @@ def cmd_record(data: dict) -> dict:
         raise InputError("date precedes the latest recorded attempt")
     entry["attempts"].append(identity)
     entry["last_date"] = data["date"]
-    outcome = data["outcome"]
     if override:
         row["status"] = "shaky"
         row["frustration_override"] = data["date"]

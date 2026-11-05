@@ -107,15 +107,14 @@ def test_calm(home, root):
     assert out["class"]["class"] == "Standard" and out["class"]["reason"] == "calm"
     assert out["class"]["days_to_exam"] == 19
     assert out["line"] == out["class"]["line"] == "Standard delivery: exam in 19 days"
-    assert out["delay_line"].startswith("Start today: 19 days")
     assert out["topic"] == {"name": "Sorting", "status": "unseen", "evidence_date": None, "stale": False,
                             "attempt_first": False}
     assert out["remaining"] == [{"name": "Graphs", "status": "gap"}, {"name": "Sorting", "status": "unseen"}]
-    assert out["class"]["route_minutes"]["point"] == 50  # weight 1 each, 2 topics
+    assert set(out["class"]) == {"class", "reason", "hours_to_exam", "days_to_exam", "line"}
     assert (out["exam"], out["exam_name"], out["q0"], out["code"]) == ("2026-11-05", "final", False, "CS201")
     assert out["inferred"] is True and out["first_contact"] is None
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
-                        "exam_name", "q0", "remaining", "class", "delay_line", "topic", "route_line",
+                        "exam_name", "q0", "remaining", "class", "topic", "route_line",
                         "first_contact", "debrief", "line"}
 
 
@@ -125,7 +124,6 @@ def test_near_exam_is_urgent_floor(home, root):
     out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})
     assert out["class"]["class"] == "Urgent" and out["class"]["reason"] == "floor"
     assert out["class"]["hours_to_exam"] == 30
-    assert out["delay_line"] is None
 
 
 def test_no_date_row_asks_q0(home, root):
@@ -234,7 +232,6 @@ def test_topic_null_when_route_done(home, root):
     profile(root, exams=[("CS201", "final", "2026-11-05")])
     out = ok(home, "start", {"now": NOW})
     assert out["topic"] is None and out["remaining"] == []
-    assert out["delay_line"] == "Cost of delay: no topics left on the route."
     assert out["route_line"] == ROUTE_DONE
 
 
@@ -541,7 +538,6 @@ def test_duplicate_topic_row_first_wins(home, root):
                           ("Sorting", "unseen", "", 0, 0)])
     out = ok(home, "start", {"now": NOW})
     assert [r["name"] for r in out["remaining"]] == ["Graphs", "Sorting"]
-    assert out["class"]["route_minutes"]["point"] == 50
     got = ok(home, "check", {"now": NOW, "term": TERM, "course": "CS201 Theory", "topics": ["Graphs"]})
     assert got["topics"][0]["status"] == "gap" and got["topics"][0]["assisted"] == 1
 
@@ -755,8 +751,9 @@ def test_debrief_session_window(home, root):
     log(cdir, "2026-11-06-0900", session_log("2026-11-06T09:00:00+02:00", "2026-11-06T10:00:00+02:00"))  # after
     out = ok(home, "debrief", {"now": DUE_NOW})
     assert out["cram"]["session_count"] == 3 and out["cram"]["actual_minutes"] == 30 + 45 + 60
-    assert out["cram"]["counterfactual_minutes"]["point"] == 75  # all 3 mastery rows, weight 1
     assert out["cram"]["days_before_exam"] == 35
+    assert set(out["cram"]) == {"actual_minutes", "actual_hours", "session_count", "days_before_exam", "line"}
+    assert out["cram"]["line"] == "Cram bill: 2.5 h studied in 3 sessions. First contact: 35 days before the exam."
 
 
 def test_debrief_disagreements_in_window_distinct(home, root):
@@ -958,7 +955,7 @@ def test_progress_writes_nothing_and_skips_plan(home, root, monkeypatch):
 
     def boom(*_):
         raise AssertionError("plan.py called")
-    for name in ("delivery_class", "cost_of_delay", "debrief"):
+    for name in ("delivery_class", "debrief"):
         monkeypatch.setattr(session.plan, name, boom)
     monkeypatch.setenv("HOME", str(home))
     assert session.cmd_progress({"now": NOW})["course"] == "CS201 Theory"
@@ -1132,6 +1129,42 @@ def test_record_requires_distinct_items_and_day(home, root):
     assert ok(home, "record", {**payload, "item": "c", "date": "2026-10-18", "session": "s2"})["status"] == "mastered"
 
 
+def test_record_first_miss_once_then_right_after_guidance_as_assisted(home, root):
+    """Standard retries: the first wrong answer on an item records once, repeated
+    misses on it record nothing, and the later right answer records as assisted."""
+    course(home)
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "show", "counts_for_mastery": True},
+             outcome="wrong", real_past_paper=False, session="s1", date="2026-10-17")
+    assert ok(home, "record", p)["status"] == "gap"
+    for _ in range(2):
+        again = ok(home, "record", p)
+        assert (again["recorded"], again["duplicate"]) == (False, True)
+    right = ok(home, "record", {**p, "outcome": "assisted"})
+    assert (right["recorded"], right["status"]) == (True, "shaky")
+    assert ok(home, "record", {**p, "outcome": "assisted"})["duplicate"] is True
+    assert ok(home, "record", p)["duplicate"] is True
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"]) == (1, 0)
+    assert row["evidence"].count(": wrong") == 1 and row["evidence"].endswith(": assisted")
+
+
+def test_record_right_after_a_miss_on_the_same_item_never_counts_unassisted(home, root):
+    course(home)
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "show", "counts_for_mastery": True},
+             outcome="wrong", real_past_paper=False, session="s1", date="2026-10-17")
+    ok(home, "record", p)
+    assert ok(home, "record", {**p, "outcome": "unassisted"})["recorded"] is True
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"], row["status"]) == (1, 0, "shaky")
+    # a miss in an earlier session does not taint a later session's solve
+    assert ok(home, "record", {**p, "outcome": "unassisted", "session": "s2",
+                               "date": "2026-10-18"})["recorded"] is True
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"]) == (1, 1)
+
+
 @pytest.mark.parametrize("change,status,recorded", [
     ({"item": "b", "real_past_paper": True}, "mastered", True),
     ({"item": "a", "real_past_paper": True, "session": "s2"}, "shaky", True),
@@ -1199,28 +1232,16 @@ def test_record_initialization_and_legacy_evidence(home, root):
                               "gate": {"decision": "drop", "counts_for_mastery": False}})["recorded"]
 
 
-def test_start_uses_fingerprint_weights_and_logged_topic_times(home, root):
-    c = course(home, mastery=[(n, 'gap', '', 0, 0) for n in ('A', 'B', 'C')])
-    args = {'now': NOW, 'term': TERM, 'course': c.name}
-    profile(root, exams=[('CS201', 'final', '2026-11-05')])
-    cold = ok(home, 'start', args)
-    assert cold['class']['route_minutes']['point'] == 75
-    assert cold['class']['confidence'].startswith('rough:')
-    (c / '.state/fingerprint.md').write_text(
-        '## Question types\n| type | frequency | marks |\n|---|---|---|\n'
-        '| A (source: past-papers/a.pdf) | 1 of 1 papers | 30 |\n'
-        '| B (source: past-papers/a.pdf) | 1 of 1 papers | 10 |\n')
-    weighted = ok(home, 'start', args)
-    assert weighted['class']['route_minutes']['point'] == 125
-    (c / '.state/logs/timing.md').write_text(
-        '## Topic timings\n| topic | started | ended |\n|---|---|---|\n'
-        '| A | 2026-10-16T09:00:00+03:00 | 2026-10-16T09:30:00+03:00 |\n'
-        '| B | 2026-10-16T10:00:00+03:00 | 2026-10-16T10:10:00+03:00 |\n'
-        '| C | 2026-10-16T11:00:00+03:00 | 2026-10-16T11:10:00+03:00 |\n')
-    calibrated = ok(home, 'start', args)
-    assert calibrated['class']['route_minutes']['point'] == 50
-    assert calibrated['class']['confidence'] == 'based on 3 timed topics'
-    assert calibrated['delay_line'] != weighted['delay_line']
+def test_start_class_ignores_route_size_and_topic_times(home, root):
+    # A long, slow route four days out used to switch to Urgent; only exam proximity decides now.
+    c = course(home, mastery=[(f"T{i}", "gap", "", 0, 0) for i in range(30)])
+    profile(root, exams=[("CS201", "final", "2026-10-21")])
+    (c / ".state/logs/timing.md").write_text(
+        "## Topic timings\n| topic | started | ended |\n|---|---|---|\n"
+        + "".join(f"| T{i} | 2026-10-16T0{i}:00:00+03:00 | 2026-10-16T0{i}:50:00+03:00 |\n" for i in range(3)))
+    out = ok(home, "start", {"now": NOW, "term": TERM, "course": c.name})
+    assert (out["class"]["class"], out["class"]["reason"]) == ("Standard", "calm")
+    assert "delay_line" not in out
 
 
 # --- teaching settings (preference state) ------------------------------------------

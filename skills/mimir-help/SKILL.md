@@ -22,7 +22,7 @@ Print this table and stop:
 | `mimir-study` | Study for an exam. Start here: "exam Friday, help" works, even with just a photo of a past paper. |
 | `mimir-past-questions` | Drill a course's real past-paper questions, highest points per hour first. |
 | `mimir-quiz` | Get quizzed at exam level in your professor's style, with checked answer keys. |
-| `mimir-plan` | See how your plan grows with each day you wait to start. |
+| `mimir-plan` | See what is left to study before your exam. |
 | `mimir-forecast` | A ranked guess at the topics of your next exam, with the evidence. |
 | `mimir-progress` | What Mimir believes you know in a course, with dated evidence. |
 | `mimir-debrief` | After an exam: what was on it, and what that changes. |
@@ -47,7 +47,7 @@ When several rows match, the first matching row wins.
 | Has files to add (outline, slides, past papers in `_inbox/`) | `mimir-ingest` (after `mimir-setup` if never set up) |
 | Wants to practise old exams or past papers | `mimir-past-questions` |
 | Wants to be tested or quizzed | `mimir-quiz` |
-| Asks how much time they need, or what happens if they start later | `mimir-plan` |
+| Asks what is left to study before an exam | `mimir-plan` |
 | Asks what will be on the next exam | `mimir-forecast` |
 | Asks what they know or how they are doing | `mimir-progress` |
 | Just came back from an exam | `mimir-debrief` |

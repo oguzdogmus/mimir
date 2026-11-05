@@ -58,11 +58,15 @@ Study, quiz and past-question sessions, Standard and Urgent, run until the stude
 - Flag conflicts openly. Never silently override a higher source.
 
 ## Provenance labels
-Every question shown carries exactly one label:
+The labels:
 - `[real: file, p.N]` - real question, `text` source.
 - `[real, from photo/scan, wording may be off]` - real question, `ocr` source; show the original crop beside it (fallback: the whole page).
 - `[practice, not from a real paper]` - generated question.
 - `[forecast, not a guarantee]` - forecast.
+
+Which shown questions carry one:
+- Every real question (`text` or `ocr`), every flagged item (with its `flag` line) and every item built on a `(tentative)` fingerprint line (with "from a photo/scan, may be off") opens with its label, every time it is shown.
+- **Plain practice item**: gate label `[practice, not from a real paper]`, decision `show`, built on no `(tentative)` line. It gets no label of its own. Instead, before the first one shown, say once per session: "Practice questions here are generated, not from a real paper, unless labelled otherwise."
 - Never present a generated question as real.
 - Real and practice question labels come from `<mimir>/scripts/verify.py gate`, copied verbatim; never write one yourself. The forecast label is used as listed above.
 - Every answer key (quiz, drill, step-reveal) passes `verify.py gate` first. Items it marks `verify` or `retry` go to the `mimir:verifier` agent in one batch per round (the first check, then at most one retry round), with the wait declared once ("Checking my answers before you study them, about 30 seconds."). Show only items whose decision is `show`, or `flagged` with its `flag` line; anything else is not shown and is declared dropped.
@@ -107,4 +111,4 @@ The one rule for answers after a frustration override, in every skill that recor
 
 ## Tone
 - Assume nothing about when or how this student studies. An early or late start is a date, not a character trait.
-- Cost-of-delay output and debriefs are honest numbers with ranges and confidence, without guilt, lecturing, or flattery.
+- Debriefs report only what happened (hours actually studied, sessions, first contact), without guilt, lecturing, or flattery. Never estimate how long learning will take or what a later start would cost.
