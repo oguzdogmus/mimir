@@ -227,6 +227,8 @@ record -- persist an eligible answer or a frustration override.
     result), outcome (unassisted|assisted|wrong), real_past_paper (boolean),
     session (unique identity), date (YYYY-MM-DD). Optional override and
     explanation_only booleans distinguish control events from item attempts.
+    Per session, item and event, the first wrong answer records once (later
+    misses return duplicate) and a right answer after it records as assisted.
     Alternatively {term, course, topic, initialize: true} adds an unseen topic.
     Returns status, recorded, duplicate and line. See the shared recording
     reference for examples and audit D2/D5 for exact transition semantics.
@@ -1084,9 +1086,18 @@ def cmd_record(data: dict) -> dict:
     entry = state.get(key, _initial_record(legacy))
     row = entry["row"]
     result = {"status": row["status"], "duplicate": False, "recorded": False}
-    identity = [data["session"], data["item"], bool(data.get("override"))]
-    if identity in entry["attempts"]:
+    # One miss and one right answer per session, item and event: retries after a
+    # miss record nothing more until the right answer, which counts as assisted.
+    # Three-element identities predate this split and block both.
+    base = [data["session"], data["item"], bool(data.get("override"))]
+    outcome = data["outcome"]
+    kind = "wrong" if outcome == "wrong" else "right"
+    blocking = [base, base + ["right"]] + ([base + ["wrong"]] if kind == "wrong" else [])
+    if any(identity in entry["attempts"] for identity in blocking):
         return {**result, "duplicate": True, "line": "Attempt already recorded."}
+    if kind == "right" and base + ["wrong"] in entry["attempts"]:
+        outcome = "assisted"
+    identity = base + [kind]
     override = data.get("override", False)
     explanation = override and data.get("explanation_only", False) and gate["decision"] == "drop"
     if not explanation and (gate["decision"] != "show" or not gate["counts_for_mastery"]):
@@ -1097,7 +1108,6 @@ def cmd_record(data: dict) -> dict:
         raise InputError("date precedes the latest recorded attempt")
     entry["attempts"].append(identity)
     entry["last_date"] = data["date"]
-    outcome = data["outcome"]
     if override:
         row["status"] = "shaky"
         row["frustration_override"] = data["date"]

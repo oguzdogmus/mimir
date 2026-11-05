@@ -15,7 +15,7 @@ extended ISO 8601 datetime with ``T``, e.g. "2026-11-05T09:00:00+02:00";
 other ISO forms such as "20261105" or "2026-W45-4" are rejected)
 --------------------------------------------------------------------------
 now            datetime with time, e.g. "2026-10-17T09:00:00+03:00".
-               Required by ``class`` and ``triage``; optional elsewhere.
+               Required by ``class``; optional elsewhere; not read by ``triage``.
 exam           datetime, date-only, or null (date unknown). Optional, null if
                missing.
 sessions       list of {"start": datetime, "end": datetime} (debrief, summary;
@@ -35,15 +35,16 @@ Date rules
 ----------
 * A date-only exam has an unknown time. ``class`` gives it no hour count:
   Urgent on its own calendar day (``today``) and the day before
-  (``tomorrow``), Standard earlier. It is past only from the next day.
-  Elsewhere (triage budgets, debrief day counts) it means 00:00 that day at
-  ``now``'s UTC offset (or at the first datetime's offset when ``now`` is
-  absent).
+  (``tomorrow``), Standard earlier. It is past only from the next day. Day
+  counts use its calendar date.
 * DST note: the offset of ``now`` is reused for the exam date, so a daylight
   saving change between now and the exam can shift the result by up to 1 h.
   This is accepted. Callers pass a full datetime when the exam time is known.
 * Calendar days ("exam in 19 days") are counted in ``now``'s offset.
 * All datetimes must agree: either all carry a UTC offset or none do.
+
+Numbers: every JSON number must be finite and within the range of a double
+(about 1.8e308), integers included; anything larger exits 2.
 
 Subcommands and examples
 ------------------------
@@ -84,34 +85,34 @@ summary -- one shareable first-contact line.
     A missing or empty sessions list drops the hours clause; exam null gives
     "<label>: exam date unknown."; no course or exam_name gives label "Exam".
 
-triage -- question-type triage: rank question types by points per hour, drill or skip.
-    in : {"now": "2026-11-04T21:00:00+02:00", "exam": "2026-11-05T09:00:00+02:00",
-          "basis": "papers", "types": [
+triage -- question-type triage: every type in one ranked table, none cut.
+    in : {"basis": "papers", "class": "Urgent", "types": [
             {"name": "Pumping lemma proof", "marks": 20, "seen": 2, "papers": 2, "status": "gap"},
-            {"name": "DFA construction", "marks": 10, "seen": 1, "papers": 2, "status": "unseen"},
+            {"name": "DFA construction", "marks": null, "seen": 1, "papers": 2, "status": "unseen"},
             {"name": "Regex", "marks": 5, "seen": 2, "papers": 2, "status": "mastered"}]}
-    out: {"drill": [{"name": "Pumping lemma proof", "marks": 20, "frequency": 1,
-          "weight": 3, "minutes": 75, "pph": 16}, {"name": "DFA construction",
-          ..., "minutes": 50, "pph": 6}], "skip": [{"name": "Regex", "reason":
-          "mastered"}], "budget_minutes": 240, "basis": "papers", "line":
-          "Drilling: Pumping lemma proof, DFA construction. Skipping: Regex
-          (mastered)."}
-    Per type: ``marks`` null = mean of the known marks, else 1; frequency =
-    seen/papers when papers > 0, else 1; weight = ceil(3 x marks / max marks)
-    clamped WEIGHT_MIN..WEIGHT_MAX (1 when every mark is 0); minutes =
-    EPISODE_MINUTES x weight, x SHAKY_TIME_FACTOR when ``shaky``; pph = marks x
-    frequency / (minutes / 60). ``class`` Urgent (default): ``mastered`` types
-    are skipped (``mastered``); Standard: they are ranked with the rest.
-    The rest are ranked by pph, highest first, ties in input order. Budget =
-    hours_to_exam x 60 x URGENT_STUDY_SHARE (either class): types are drilled in rank order
-    while the cumulative minutes fit, always at least one. Drilling stops at
-    the first type that does not fit: no smaller later type is packed into
-    the remaining budget. The rest are skipped (``lower yield``). Type names
-    must be unique (ignoring case and repeated spaces). Exam null: every type not skipped as mastered is drilled
-    (budget_minutes null). Date-only exam today: only the top type
-    (budget_minutes null). ``basis`` "outline" appends "No past papers, so the
-    forecast is weaker." to ``line``. ``drill`` is in rank order; ``skip``
-    lists lower-yield types in rank order, then mastered ones in input order.
+    out: {"rows": [
+            {"name": "Pumping lemma proof", "marks": 20, "marks_source": "printed",
+             "frequency": "2 of 2 papers", "decision": "drill", "reason": "gap"},
+            {"name": "DFA construction", "marks": 12.5, "marks_source": "estimated",
+             "frequency": "1 of 2 papers", "decision": "drill", "reason": "not studied yet"},
+            {"name": "Regex", "marks": 5, "marks_source": "printed",
+             "frequency": "2 of 2 papers", "decision": "skip", "reason": "mastered"}],
+          "drill": ["Pumping lemma proof", "DFA construction"], "basis": "papers",
+          "line": "Ranked by marks × how often each type appeared in past papers."}
+    One row per type. ``marks`` null is estimated as the mean of the known
+    marks, else 1 (``marks_source`` "estimated"; otherwise "printed").
+    ``frequency`` is "<seen> of <papers> papers", or null (unknown) when
+    ``papers`` is 0. Rank score = marks x seen/papers, an unknown frequency
+    counting as 1; higher first, ties in input order. There is no minutes
+    budget, exam countdown or cut-off: every type is drilled except, for
+    ``class`` Urgent (default), ``mastered`` types, which are skipped with
+    reason "mastered" and listed after every drilled type. For Standard they
+    are drilled with reason "mastered: revision". Other reasons are the status:
+    "not studied yet" (unseen), "gap", "shaky". ``drill`` is the drilled names
+    in rank order. ``line`` states the ranking basis, or "Nothing to drill:
+    ..." when no type is drilled; ``basis`` "outline" gives "No past papers:
+    ranked from the course outline, without paper statistics." Type names must
+    be unique (ignoring case and repeated spaces).
 
 Exit codes: invalid input exits 2 with one line on stderr
 (``plan.py: <message>``) and nothing on stdout. An unexpected internal error
@@ -130,12 +131,8 @@ from datetime import date, datetime, time, timedelta
 from fractions import Fraction
 
 # --- Tunables (constants.md) -------------------------------------------------
-EPISODE_MINUTES = 25                 # triage minutes per weight unit
 URGENT_FLOOR_HOURS = 48              # always Urgent within this many hours of the exam
-WEIGHT_MIN, WEIGHT_MAX = 1, 3        # mark-share weight ×1–×3
 MAX_HORIZON_DAYS = 366               # reject exams further away than this
-URGENT_STUDY_SHARE = Fraction(1, 3)  # share of the hours to the exam spent drilling (triage budget)
-SHAKY_TIME_FACTOR = Fraction(1, 2)   # a shaky type takes half the minutes of an unseen one
 TRIAGE_STATUSES = ("unseen", "gap", "shaky", "mastered")
 TRIAGE_BASES = ("papers", "outline")
 TRIAGE_CLASSES = ("Urgent", "Standard")
@@ -148,6 +145,9 @@ class InputError(Exception):
     """Invalid input; reported as one stderr line with exit code 2."""
 
 
+_TOO_LARGE = "a number in the input is too large to compute with"
+
+
 # --- Input parsing -------------------------------------------------------------
 
 def _parse_float(text: str) -> Fraction:
@@ -155,6 +155,13 @@ def _parse_float(text: str) -> Fraction:
     if not math.isfinite(value):
         raise InputError("numbers must be finite")
     return Fraction(repr(value))
+
+
+def _parse_int(text: str) -> int:
+    value = int(text)
+    if abs(value) > sys.float_info.max:  # same range as a JSON float
+        raise InputError(_TOO_LARGE)
+    return value
 
 
 def _reject_constant(name: str):
@@ -167,7 +174,8 @@ def read_input(raw: bytes) -> dict:
     except UnicodeDecodeError:
         raise InputError("input is not valid UTF-8") from None
     try:
-        data = json.loads(text, parse_float=_parse_float, parse_constant=_reject_constant)
+        data = json.loads(text, parse_float=_parse_float, parse_int=_parse_int,
+                          parse_constant=_reject_constant)
     except RecursionError:
         raise InputError("input is too deeply nested") from None
     except json.JSONDecodeError as exc:
@@ -301,9 +309,6 @@ def _minutes(delta: timedelta) -> Fraction:
 
 def round_half_up(value: Fraction, step: Fraction) -> Fraction:
     return math.floor(value / step + Fraction(1, 2)) * step
-
-
-_TOO_LARGE = "a number in the input is too large to compute with"
 
 
 def num(value: Fraction):
@@ -493,18 +498,14 @@ def parse_types(data: dict) -> list[dict]:
         if status not in TRIAGE_STATUSES:
             raise InputError(f"types[{i}].status must be one of {', '.join(TRIAGE_STATUSES)}")
         types.append({"name": " ".join(name.split()), "marks": marks, "status": status,
-                      "frequency": Fraction(seen, papers) if papers > 0 else Fraction(1)})
+                      "seen": seen, "papers": papers})
     return types
 
 
-def mark_weight(marks, top) -> int:
-    """Shared mark-share policy for triage and session planning."""
-    return min(WEIGHT_MAX, max(WEIGHT_MIN, math.ceil(3 * marks / top))) if top > 0 else WEIGHT_MIN
+_STATUS_REASONS = {"unseen": "not studied yet", "gap": "gap", "shaky": "shaky", "mastered": "mastered: revision"}
 
 
 def triage(data: dict) -> dict:
-    now = required_moment(data, "now", need_time=True)
-    exam = optional_moment(data, "exam")
     types = parse_types(data)
     basis = data.get("basis")
     basis = "papers" if basis is None else basis
@@ -514,70 +515,48 @@ def triage(data: dict) -> dict:
     klass = "Urgent" if klass is None else klass
     if klass not in TRIAGE_CLASSES:
         raise InputError(f"class must be one of {', '.join(TRIAGE_CLASSES)}")
-    clock = Clock(now, exam)
-    hours = None
-    today_only = False
-    if exam is not None:
-        _, _, hours = exam_window(clock, now, exam)
-        today_only = hours is None
 
     known = [t["marks"] for t in types if t["marks"] is not None]
     fill = sum(known, Fraction(0)) / len(known) if known else Fraction(1)
+    rows = []
     for t in types:
-        if t["marks"] is None:
-            t["marks"] = fill
-    top = max((t["marks"] for t in types), default=Fraction(0))
-    for t in types:
-        t["weight"] = mark_weight(t["marks"], top)
-        t["minutes"] = EPISODE_MINUTES * t["weight"] * (SHAKY_TIME_FACTOR if t["status"] == "shaky" else 1)
-        t["pph"] = t["marks"] * t["frequency"] / (t["minutes"] / 60)
-
-    # Urgent spends the time left on gaps; Standard practice revises mastered types too.
-    skip_mastered = klass == "Urgent"
-    mastered = [t for t in types if skip_mastered and t["status"] == "mastered"]
-    ranked = sorted((t for t in types if not (skip_mastered and t["status"] == "mastered")),
-                    key=lambda t: -t["pph"])
-    budget = None if hours is None else hours * 60 * URGENT_STUDY_SHARE
-    drill, lower = [], []
-    for t in ranked:
-        if not drill:
-            fits = True
-        elif today_only:
-            fits = False
-        elif budget is None:
-            fits = True
-        else:
-            fits = not lower and sum((d["minutes"] for d in drill), t["minutes"]) <= budget
-        (drill if fits else lower).append(t)
-
-    skip = [{"name": t["name"], "reason": "lower yield"} for t in lower]
-    skip += [{"name": t["name"], "reason": "mastered"} for t in mastered]
-    if drill:
-        parts = ["Drilling: " + ", ".join(t["name"] for t in drill) + "."]
-    elif types:
-        parts = ["Nothing to drill: every question type is mastered."]
+        printed = t["marks"] is not None
+        marks = t["marks"] if printed else fill
+        frequency = Fraction(t["seen"], t["papers"]) if t["papers"] else Fraction(1)
+        # Urgent spends the time left on gaps; Standard practice revises mastered types too.
+        skip = klass == "Urgent" and t["status"] == "mastered"
+        rows.append({
+            "score": marks * frequency,
+            "skip": skip,
+            "row": {
+                "name": t["name"],
+                "marks": num(marks),
+                "marks_source": "printed" if printed else "estimated",
+                "frequency": f"{t['seen']} of {count(t['papers'], 'paper')}" if t["papers"] else None,
+                "decision": "skip" if skip else "drill",
+                "reason": "mastered" if skip else _STATUS_REASONS[t["status"]],
+            },
+        })
+    # Every type is listed: drilled types by score, highest first (ties in input
+    # order), then the skipped mastered ones in the same order. Nothing is cut.
+    rows.sort(key=lambda r: (r["skip"], -r["score"]))
+    drill = [r["row"]["name"] for r in rows if not r["skip"]]
+    if not types:
+        line = "Nothing to drill: no question types."
+    elif not drill:
+        line = "Nothing to drill: every question type is mastered."
+    elif basis == "outline":
+        line = "No past papers: ranked from the course outline, without paper statistics."
     else:
-        parts = ["Nothing to drill: no question types."]
-    if skip:
-        parts.append("Skipping: " + ", ".join(f"{s['name']} ({s['reason']})" for s in skip) + ".")
-    if basis == "outline":
-        parts.append("No past papers, so the forecast is weaker.")
-    return {
-        "drill": [{"name": t["name"], "marks": num(t["marks"]), "frequency": num(t["frequency"]),
-                   "weight": t["weight"], "minutes": num(t["minutes"]), "pph": num(t["pph"])}
-                  for t in drill],
-        "skip": skip,
-        "budget_minutes": None if budget is None else num(budget),
-        "basis": basis,
-        "line": " ".join(parts),
-    }
+        line = "Ranked by marks × how often each type appeared in past papers."
+    return {"rows": [r["row"] for r in rows], "drill": drill, "basis": basis, "line": line}
 
 
 COMMANDS = {
     "class": (delivery_class, "delivery class (Standard/Urgent) with its reason"),
     "debrief": (debrief, "cram bill: actual hours studied and sessions"),
     "summary": (summary, "one shareable first-contact summary line"),
-    "triage": (triage, "triage: question types to drill or skip, by points per hour"),
+    "triage": (triage, "triage: every question type ranked by marks x frequency, none cut"),
 }
 
 
@@ -590,8 +569,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="plan.py",
         description=("Mimir planning engine. Subcommands: class (delivery class), "
-                     "debrief (cram bill), summary (first-contact line), triage (urgent "
-                     "drill/skip by points per hour). Reads one JSON "
+                     "debrief (cram bill), summary (first-contact line), triage (question "
+                     "types ranked by marks x frequency). Reads one JSON "
                      "object on stdin and prints one JSON object on stdout."),
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="{class,debrief,summary,triage}")

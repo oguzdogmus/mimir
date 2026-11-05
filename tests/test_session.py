@@ -1271,6 +1271,42 @@ def test_record_requires_distinct_items_and_day(home, root):
     assert ok(home, "record", {**payload, "item": "c", "date": "2026-10-18", "session": "s2"})["status"] == "mastered"
 
 
+def test_record_first_miss_once_then_right_after_guidance_as_assisted(home, root):
+    """Standard retries: the first wrong answer on an item records once, repeated
+    misses on it record nothing, and the later right answer records as assisted."""
+    course(home)
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "show", "counts_for_mastery": True},
+             outcome="wrong", real_past_paper=False, session="s1", date="2026-10-17")
+    assert ok(home, "record", p)["status"] == "gap"
+    for _ in range(2):
+        again = ok(home, "record", p)
+        assert (again["recorded"], again["duplicate"]) == (False, True)
+    right = ok(home, "record", {**p, "outcome": "assisted"})
+    assert (right["recorded"], right["status"]) == (True, "shaky")
+    assert ok(home, "record", {**p, "outcome": "assisted"})["duplicate"] is True
+    assert ok(home, "record", p)["duplicate"] is True
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"]) == (1, 0)
+    assert row["evidence"].count(": wrong") == 1 and row["evidence"].endswith(": assisted")
+
+
+def test_record_right_after_a_miss_on_the_same_item_never_counts_unassisted(home, root):
+    course(home)
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "show", "counts_for_mastery": True},
+             outcome="wrong", real_past_paper=False, session="s1", date="2026-10-17")
+    ok(home, "record", p)
+    assert ok(home, "record", {**p, "outcome": "unassisted"})["recorded"] is True
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"], row["status"]) == (1, 0, "shaky")
+    # a miss in an earlier session does not taint a later session's solve
+    assert ok(home, "record", {**p, "outcome": "unassisted", "session": "s2",
+                               "date": "2026-10-18"})["recorded"] is True
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"]) == (1, 1)
+
+
 @pytest.mark.parametrize("change,status,recorded", [
     ({"item": "b", "real_past_paper": True}, "mastered", True),
     ({"item": "a", "real_past_paper": True, "session": "s2"}, "shaky", True),
