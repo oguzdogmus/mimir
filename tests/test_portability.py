@@ -189,6 +189,19 @@ def test_urgent_quiz_and_past_questions_ignore_teaching_settings():
         assert "session.py pref" not in text, flow
 
 
+def test_triage_is_rendered_as_a_ranked_table_not_a_paragraph():
+    """Urgent study and past-question practice show `plan.py triage` rows as a
+    table; nothing ranks by points per hour or says a drill/skip paragraph."""
+    urgent = (ROOT_DIR / "skills/mimir-study/references/urgent.md").read_text(encoding="utf-8")
+    past = (ROOT_DIR / "skills/mimir-past-questions/SKILL.md").read_text(encoding="utf-8")
+    assert "`rows`" in urgent and "| Question type | Marks | Seen in papers | Reason |" in urgent
+    assert "urgent.md" in past and "table" in past
+    for path in MARKDOWN + [ROOT_DIR / "README.md"]:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not re.search(r"points.per.hour|lower yield|`line` said verbatim", line, re.I), \
+                f"{path}:{n}: {line.strip()[:100]}"
+
+
 # Standard retries: unlimited guided attempts, the answer only on request, the
 # first miss recorded once and a later right answer recorded as assisted.
 def test_standard_study_has_unlimited_retries_and_the_recording_rule():

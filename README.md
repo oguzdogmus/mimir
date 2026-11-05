@@ -7,7 +7,7 @@ Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude
 ## What it does
 
 - **Starts from wherever you are.** Type "exam tomorrow, help" and attach a photo of a past paper. Mimir starts drilling right away, with no setup.
-- **Sets the pace from the exam date.** Far from the exam, Mimir teaches (Standard). Close to it, it drills the question types worth the most points per hour (Urgent). It picks the mode and tells you why. Sessions run until you say "end session".
+- **Sets the pace from the exam date.** Far from the exam, Mimir teaches (Standard). Close to it, it drills question types ranked by marks and by how often they appeared in past papers (Urgent), shown as a table with nothing cut. It picks the mode and tells you why. Sessions run until you say "end session".
 - **Follows your professor.** Mimir reads the outline, slides and past papers, learns how the professor writes questions, and labels every question with where it came from. Answer keys are checked before you see them.
 - **Teaches in your language.** Your course and exams can be in one language and the explanations in another. You choose both during setup.
 - **Remembers you.** It keeps dated evidence of what you solved alone and with help, and picks up where you left off.
@@ -66,7 +66,7 @@ Each command is a skill. Type it like this:
 | `mimir-setup` | One-time setup: your learning folder, languages and any exam dates you know. |
 | `mimir-ingest` | File everything in your `_inbox/` into course folders. |
 | `mimir-study` | Study for an exam. Start here: "exam Friday, help" works, even with just a photo of a past paper. |
-| `mimir-past-questions` | Drill a course's real past-paper questions, highest points per hour first. |
+| `mimir-past-questions` | Drill a course's real past-paper questions, most marks and most often asked first. |
 | `mimir-quiz` | Get quizzed at exam level in your professor's style, with checked answer keys. |
 | `mimir-plan` | See what is left to study before your exam. |
 | `mimir-forecast` | A ranked guess at the topics of your next exam, with the evidence. |

@@ -309,6 +309,7 @@ BASE = {"now": NOW, "exam": "2026-11-05"}
     ("triage", b'{"now": "2026-10-17T09:00:00+03:00", "types": [{"name": "A", "marks": Infinity}]}',
      "non-finite"),
     ("triage", b'{"now": "2026-10-17T09:00:00+03:00", "types": [{"name": "A", "marks": 1e999}]}', "finite"),
+    ("triage", b'{"types": [{"name": "A", "marks": 1' + b"0" * 4000 + b'}]}', "too large"),
 ])
 def test_invalid_input_exits_2(cmd, payload, message):
     proc = run(cmd, payload)
@@ -348,131 +349,102 @@ def names(out, key="drill"):
     return [t["name"] for t in out[key]]
 
 
-def test_triage_rank():
-    out = ok("triage", {"now": NOW, "exam": None,
-                        "types": [qtype("B", 10, 1, 2), qtype("A", 20, 2, 2)]})
-    assert names(out) == ["A", "B"]
-    a, b = out["drill"]
-    assert (a["weight"], a["minutes"], a["frequency"], a["pph"]) == (3, 75, 1, 16)
-    assert (b["weight"], b["minutes"], b["frequency"], b["pph"]) == (2, 50, 0.5, 6)
-    assert set(out) == {"drill", "skip", "budget_minutes", "basis", "line"}
+def test_triage_rows_rank_every_type_by_marks_times_frequency():
+    out = ok("triage", {"types": [qtype("B", 10, 1, 2), qtype("A", 20, 2, 2, "gap"), qtype("C", 8, 3, 3, "shaky")]})
+    assert out["rows"] == [
+        {"name": "A", "marks": 20, "marks_source": "printed", "frequency": "2 of 2 papers",
+         "decision": "drill", "reason": "gap"},
+        {"name": "C", "marks": 8, "marks_source": "printed", "frequency": "3 of 3 papers",
+         "decision": "drill", "reason": "shaky"},
+        {"name": "B", "marks": 10, "marks_source": "printed", "frequency": "1 of 2 papers",
+         "decision": "drill", "reason": "not studied yet"},
+    ]
+    assert out["drill"] == ["A", "C", "B"]
+    assert out["line"] == "Ranked by marks × how often each type appeared in past papers."
+    assert set(out) == {"rows", "drill", "basis", "line"}
 
 
-def test_triage_shaky_ranks_first_with_half_minutes():
-    out = ok("triage", {"now": NOW, "exam": None,
-                        "types": [qtype("A"), qtype("B", status="shaky")]})
-    assert names(out) == ["B", "A"]
-    assert out["drill"][0]["minutes"] == 37.5
+def rows(out):
+    return [(r["name"], r["decision"], r["reason"]) for r in out["rows"]]
 
 
-def test_triage_mastered_is_skipped():
-    out = ok("triage", {"now": NOW, "exam": None,
-                        "types": [qtype("A", status="mastered"), qtype("B")]})
-    assert names(out) == ["B"]
-    assert out["skip"] == [{"name": "A", "reason": "mastered"}]
-    assert out["line"] == "Drilling: B. Skipping: A (mastered)."
-    urgent = ok("triage", {"now": NOW, "exam": None, "class": "Urgent",
-                           "types": [qtype("A", status="mastered"), qtype("B")]})
+def test_triage_ties_keep_input_order_and_shaky_gets_no_time_bonus():
+    out = ok("triage", {"types": [qtype("A"), qtype("B", status="shaky"), qtype("C", 20, 1, 2)]})
+    assert out["drill"] == ["A", "B", "C"]
+
+
+def test_triage_mastered_is_skipped_but_still_listed():
+    out = ok("triage", {"types": [qtype("A", 30, status="mastered"), qtype("B")]})
+    assert rows(out) == [("B", "drill", "not studied yet"), ("A", "skip", "mastered")]
+    assert out["drill"] == ["B"]
+    urgent = ok("triage", {"class": "Urgent", "types": [qtype("A", 30, status="mastered"), qtype("B")]})
     assert urgent == out  # Urgent is the default
 
 
 def test_triage_standard_includes_mastered():
     types = [qtype("A", 20, status="mastered"), qtype("B", 10, status="gap"), qtype("C", status="mastered")]
-    out = ok("triage", {"now": NOW, "exam": None, "class": "Standard", "types": types})
-    assert names(out) == ["A", "B", "C"] and out["skip"] == []  # ranked by pph like the rest
-    assert out["line"] == "Drilling: A, B, C."
-    only = ok("triage", {"now": NOW, "exam": None, "class": "Standard", "types": [qtype("A", status="mastered")]})
-    assert names(only) == ["A"]
+    out = ok("triage", {"class": "Standard", "types": types})
+    assert rows(out) == [("A", "drill", "mastered: revision"), ("B", "drill", "gap"),
+                         ("C", "drill", "mastered: revision")]
 
 
-
-def test_triage_budget():
-    out = ok("triage", {"now": NOW, "exam": in_hours(8),
-                        "types": [qtype("A"), qtype("B"), qtype("C")]})
-    assert out["budget_minutes"] == 160
-    assert [t["minutes"] for t in out["drill"]] == [75, 75]
-    assert names(out) == ["A", "B"]
-    assert out["skip"] == [{"name": "C", "reason": "lower yield"}]
-    assert out["line"] == "Drilling: A, B. Skipping: C (lower yield)."
-
-
-def test_triage_floor_one():
-    out = ok("triage", {"now": NOW, "exam": in_hours(3), "types": [qtype("A"), qtype("B")]})
-    assert out["budget_minutes"] == 60
-    assert names(out) == ["A"]
-    assert out["skip"] == [{"name": "B", "reason": "lower yield"}]
+def test_triage_cuts_nothing_however_close_the_exam():
+    # Eight question types three hours before the exam (and on a date-only exam day):
+    # no minutes budget, no floor of one, no stop at the first type that does not fit.
+    types = [qtype(n, 30 - i) for i, n in enumerate("ABCDEFGH")]
+    expected = ok("triage", {"types": types})
+    assert expected["drill"] == list("ABCDEFGH")
+    assert [r["decision"] for r in expected["rows"]] == ["drill"] * 8
+    for when in ({"now": NOW, "exam": in_hours(3)}, {"now": "2026-11-05T07:00:00+02:00", "exam": "2026-11-05"},
+                 {"now": NOW, "exam": None}):
+        assert ok("triage", {**when, "types": types}) == expected
 
 
-def test_triage_stops_at_first_type_that_does_not_fit():
-    # Budget 180: A 75 and B 75 fit (150); C would make 225, so drilling stops there.
-    # D (weight 1, 25 min, lowest pph) would fit the remaining 30 min but is not packed in.
-    types = [qtype("A", 30), qtype("B", 30), qtype("C", 30), qtype("D", 1)]
-    out = ok("triage", {"now": NOW, "exam": in_hours(9), "types": types})
-    assert out["budget_minutes"] == 180
-    assert [t["minutes"] for t in out["drill"]] == [75, 75]
-    assert names(out) == ["A", "B"]
-    assert names(out, "skip") == ["C", "D"]
+def test_triage_zero_marks_type_ranks_last_but_is_drilled():
+    out = ok("triage", {"types": [qtype("A", 0), qtype("B", 10)]})
+    assert rows(out) == [("B", "drill", "not studied yet"), ("A", "drill", "not studied yet")]
 
 
-def test_triage_zero_marks_type():
-    out = ok("triage", {"now": NOW, "exam": None, "types": [qtype("A", 10), qtype("B", 0)]})
-    b = {t["name"]: t for t in out["drill"]}["B"]
-    assert (b["weight"], b["minutes"], b["pph"]) == (1, 25, 0)
-    assert names(out) == ["A", "B"]
+def test_triage_skipped_mastered_types_come_after_every_drilled_type():
+    types = [qtype("M1", 50, status="mastered"), qtype("A", 30), qtype("B", 15),
+             qtype("M2", 40, status="mastered"), qtype("C", 25)]
+    out = ok("triage", {"types": types})
+    assert [r["name"] for r in out["rows"]] == ["A", "C", "B", "M1", "M2"]
+    assert out["drill"] == ["A", "C", "B"]
 
 
-def test_triage_skip_order():
-    types = [qtype("M1", status="mastered"), qtype("A", 30), qtype("B", 15),
-             qtype("M2", status="mastered"), qtype("C", 25)]
-    # pph: A 24 (75 min), C 20 (75 min), B 18 (50 min); budget 60 -> only A.
-    out = ok("triage", {"now": NOW, "exam": in_hours(3), "types": types})
-    assert names(out) == ["A"]
-    assert out["skip"] == [{"name": "C", "reason": "lower yield"}, {"name": "B", "reason": "lower yield"},
-                           {"name": "M1", "reason": "mastered"}, {"name": "M2", "reason": "mastered"}]
-    assert out["line"] == ("Drilling: A. Skipping: C (lower yield), B (lower yield), "
-                           "M1 (mastered), M2 (mastered).")
-
-
-def test_triage_no_papers_outline():
-    out = ok("triage", {"now": NOW, "exam": None, "basis": "outline",
-                        "types": [qtype("A", None, 0, 0), qtype("B", None, 0, 0)]})
-    assert [(t["marks"], t["weight"], t["frequency"]) for t in out["drill"]] == [(1, 3, 1), (1, 3, 1)]
-    assert names(out) == ["A", "B"]
-    assert out["line"] == "Drilling: A, B. No past papers, so the forecast is weaker."
+def test_triage_no_papers_outline_names_no_statistics():
+    out = ok("triage", {"basis": "outline", "types": [qtype("A", None, 0, 0), qtype("B", None, 0, 0)]})
+    assert [(r["marks"], r["marks_source"], r["frequency"]) for r in out["rows"]] == [
+        (1, "estimated", None), (1, "estimated", None)]
+    assert out["drill"] == ["A", "B"]
+    assert out["line"] == "No past papers: ranked from the course outline, without paper statistics."
     assert out["basis"] == "outline"
 
 
-def test_triage_null_marks_take_mean_of_known():
-    out = ok("triage", {"now": NOW, "exam": None,
-                        "types": [qtype("A", 20), qtype("B", None), qtype("C", 10)]})
-    assert {t["name"]: t["marks"] for t in out["drill"]}["B"] == 15
-
-
-def test_triage_exam_null_drills_all_non_mastered():
-    types = [qtype(n) for n in "ABCDEFG"] + [qtype("M", status="mastered")]
-    out = ok("triage", {"now": NOW, "exam": None, "types": types})
-    assert names(out) == list("ABCDEFG")
-    assert out["budget_minutes"] is None
-    assert out["skip"] == [{"name": "M", "reason": "mastered"}]
-
-
-def test_triage_date_only_exam_today_drills_top_only():
-    out = ok("triage", {"now": "2026-11-05T07:00:00+02:00", "exam": "2026-11-05",
-                        "types": [qtype("A", 5), qtype("B", 20)]})
-    assert names(out) == ["B"]
-    assert out["budget_minutes"] is None
-    assert out["skip"] == [{"name": "A", "reason": "lower yield"}]
+def test_triage_null_marks_take_mean_of_known_and_unknown_frequency_counts_as_one():
+    out = ok("triage", {"types": [qtype("A", 20, 1, 4), qtype("B", None, 0, 0), qtype("C", 10, 1, 1)]})
+    by_name = {r["name"]: r for r in out["rows"]}
+    assert (by_name["B"]["marks"], by_name["B"]["marks_source"], by_name["B"]["frequency"]) == (15, "estimated", None)
+    assert by_name["A"]["frequency"] == "1 of 4 papers" and by_name["C"]["frequency"] == "1 of 1 paper"
+    assert out["drill"] == ["B", "C", "A"]  # 15 x 1, 10 x 1, 20 x 1/4
 
 
 def test_triage_edge_cases():
-    out = ok("triage", {"now": NOW, "exam": None, "types": []})
-    assert out["drill"] == [] and out["line"] == "Nothing to drill: no question types."
-    out = ok("triage", {"now": NOW, "exam": None, "types": [qtype("A", status="mastered")]})
-    assert out["drill"] == []
-    assert out["line"] == "Nothing to drill: every question type is mastered. Skipping: A (mastered)."
-    out = ok("triage", {"now": NOW, "exam": None, "types": [qtype("A", 0), qtype("B", 0)]})
-    assert [t["weight"] for t in out["drill"]] == [1, 1]
-    assert ok("triage", {"now": NOW, "exam": None, "types": [{"name": "A"}]})["drill"][0]["frequency"] == 1
+    out = ok("triage", {"types": []})
+    assert out["rows"] == [] and out["drill"] == [] and out["line"] == "Nothing to drill: no question types."
+    out = ok("triage", {"types": [qtype("A", status="mastered")]})
+    assert out["drill"] == [] and rows(out) == [("A", "skip", "mastered")]
+    assert out["line"] == "Nothing to drill: every question type is mastered."
+    only = ok("triage", {"types": [{"name": "A"}]})["rows"]
+    assert only == [{"name": "A", "marks": 1, "marks_source": "estimated", "frequency": None,
+                     "decision": "drill", "reason": "not studied yet"}]
+
+
+def test_triage_marks_near_the_float_limit_still_rank():
+    out = ok("triage", {"types": [qtype("A", 1.7e308, 1, 3), qtype("B", None, 0, 0)]})
+    assert out["drill"] == ["B", "A"]  # B's estimate is A's marks, at frequency 1
+    assert out["rows"][0]["marks"] == out["rows"][1]["marks"] == 17 * 10 ** 307
 
 
 def test_triage_is_deterministic():
@@ -497,8 +469,6 @@ TRIAGE = {"now": NOW, "exam": None}
     ({**TRIAGE}, "types is required"),
     ({**TRIAGE, "types": [], "basis": "slides"}, "basis must be one of"),
     ({**TRIAGE, "types": [], "class": "standard"}, "class must be one of"),
-    ({"exam": None, "types": []}, "now is required"),
-    ({"now": NOW, "exam": "2026-10-16", "types": []}, "exam is not in the future"),
 ])
 def test_triage_invalid_input_exits_2(payload, message):
     proc = run("triage", payload)
