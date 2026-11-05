@@ -110,6 +110,18 @@ def test_verification_dispatch_and_provenance_contract():
     assert "Bash" in frontmatter(ROOT_DIR / "helpers/verifier.md")["tools"]
 
 
+FORECAST = re.compile(r"delay_line|cost.of.delay|counterfactual|route_minutes|capacity_minutes|visual\.py delay"
+                      r"|\bmin(utes)? a day\b|\d+\s*days?\s*×", re.IGNORECASE)
+
+
+def test_no_learning_time_forecasts():
+    """Mimir never promises how fast a student learns: no cost of delay, no
+    "N days × M min" lines, no counterfactual cram estimate."""
+    for path in MARKDOWN + [ROOT_DIR / "README.md"]:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not FORECAST.search(line), f"{path}:{n}: {line.strip()[:80]}"
+
+
 # Sessions end only when the student says "end session": no episode timer and
 # no close the agent triggers itself (a finished set, route or drill list).
 AUTO_CLOSE = re.compile(r"session\.py clock|`clock`|episode timer|20 to 25 min|Good luck|"
