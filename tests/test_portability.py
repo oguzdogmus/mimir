@@ -133,3 +133,34 @@ def test_sessions_close_only_on_end_session_with_a_set_hand_off():
     for flow in SESSION_FLOWS:
         text = (ROOT_DIR / flow).read_text(encoding="utf-8")
         assert "End-of-set hand-off" in text and '"end session"' in text, flow
+
+
+# Standard retries: unlimited guided attempts, the answer only on request, the
+# first miss recorded once and a later right answer recorded as assisted.
+def test_standard_study_has_unlimited_retries_and_the_recording_rule():
+    session = (ROOT_DIR / "skills/mimir-study/references/session.md").read_text(encoding="utf-8")
+    assert "**Retries**" in session and "unlimited" in session
+    assert "only when the student asks" in session
+    assert "`duplicate`" in session  # repeated misses add no log line either
+    assert not re.search(r'"idk": show the key', session)  # "idk" gets guidance, not the key
+    recording = (ROOT_DIR / "skills/mimir-core-rules/references/recording.md").read_text(encoding="utf-8")
+    assert "first wrong answer" in recording and "records as assisted" in recording
+
+
+# Per-item labels only for real, flagged, OCR and tentative items; plain
+# practice is declared once per session.
+LABEL_FLOWS = ["skills/mimir-study/references/session.md", "skills/mimir-study/references/teaching.md",
+               "skills/mimir-study/references/urgent.md", "skills/mimir-quiz/SKILL.md"]
+
+
+def test_plain_practice_is_declared_once_and_other_items_keep_their_label():
+    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text(encoding="utf-8")
+    labels = core.split("## Provenance labels", 1)[1].split("\n## ", 1)[0]
+    assert "Every question shown carries exactly one label" not in labels
+    assert "**Plain practice item**" in labels and "once per session" in labels
+    for kind in ("real", "`ocr`", "flagged", "`(tentative)`"):
+        assert kind in labels, kind
+    for flow in LABEL_FLOWS:
+        text = (ROOT_DIR / flow).read_text(encoding="utf-8")
+        assert "Provenance labels" in text, flow
+        assert not re.search(r"each opening with the gate's `label`|each with its label", text), flow

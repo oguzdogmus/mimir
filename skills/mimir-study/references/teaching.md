@@ -44,7 +44,7 @@ A frustration signal:
 - a message in all caps, only when it has at least 3 words and is not an answer to the item or guiding question showing ("OK", "BFS", "O(N)", "NP" never count);
 - "idk" twice in a row (to guiding questions or items alike), except before an attempt-first attempt (§5 governs "hint", "skip" and "idk" there, and they never count toward this signal).
 
-An "idk" on an item still follows the Questions rule (key shown, counts as wrong) and also counts toward this signal.
+An "idk" on an item still follows the Questions rule (guidance, not the key; recorded as `wrong`) and also counts toward this signal.
 
 The override applies to topic `U`: the topic of the item or explanation in progress when the signal came. That is usually `T`; a recheck item on a stale prerequisite makes `U` that prerequisite, and its line is overridden, not `T`'s.
 
@@ -63,7 +63,7 @@ When `attempt_first` is true:
 1. Say "You've solved <T> with help 3+ times, so try this one before any hint."
 2. Pose the first practice item before any explanation: one item `{"topic": "<T>", "origin": "practice"}`, built, gated and shown per the Questions rule.
 3. No hint and no explanation until the student attempts. Any attempt counts, right or wrong, complete or not.
-4. Before an attempt, this step governs "hint", "skip" and "idk" entirely; they never count toward the "idk twice" frustration signal (§4). The first "hint", "idk" or "skip" gets exactly "Any start counts, even a guess." The second: "hint" gives the prepared hint (Questions rule; a right answer is then assisted); "idk" or "skip" shows the key, and it counts as wrong. A "just tell me"-type or all-caps signal goes to §4.
+4. Before an attempt, this step governs "hint", "skip" and "idk" entirely; they never count toward the "idk twice" frustration signal (§4). The first "hint", "idk" or "skip" gets exactly "Any start counts, even a guess." The second: "hint" or "idk" gives the prepared hint (Questions rule; a right answer is then assisted); "skip" shows the key, and it counts as wrong. A "just tell me"-type or all-caps signal goes to §4.
 5. Record the answer per Recording (a right answer with no hint is an unassisted solve).
 6. Then teach from the attempt: start the ladder (§2) at the step where the attempt went wrong or stopped (or the key, when it was shown). When the attempt was right and complete, give one short confirmation in the professor's notation instead, then go to the drill.
 
@@ -73,6 +73,6 @@ The practice after teaching: ONE underlying problem on `T` in `DISGUISE_VARIANTS
 
 1. Build 2 variants from the fingerprint's `## Disguise types` (fallback when it has none: renamed symbols, reworded text, reversed direction), in the professor's notation and phrasing. A `(tentative)` disguise type is used with "from a photo/scan, may be off" once.
 2. Each variant is an item `{"topic": "<T>", "origin": "practice"}` with its own key and hint. Gate both as ONE batch (`verified-items.md`).
-3. Show both shown items, each with its label. Socratic dial: ask one guiding question, "What do these two have in common underneath?" Then confirm or correct the shared structure in the professor's notation. Fewer questions: state the shared structure yourself instead of asking.
+3. Show both shown items, labelled per core rules' Provenance labels. Socratic dial: ask one guiding question, "What do these two have in common underneath?" Then confirm or correct the shared structure in the professor's notation. Fewer questions: state the shared structure yourself instead of asking.
 4. The student solves each variant, one at a time. Record each answer per Recording (and §4 step 3 after an override).
 5. When the gate leaves fewer than 2 items to show, skip step 3; a single remaining item is asked as a plain practice item. When it leaves none, say each dropped line, record nothing, skip the drill and go on (`session.md` §4 step 4).
