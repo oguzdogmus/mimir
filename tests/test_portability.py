@@ -133,3 +133,45 @@ def test_sessions_close_only_on_end_session_with_a_set_hand_off():
     for flow in SESSION_FLOWS:
         text = (ROOT_DIR / flow).read_text(encoding="utf-8")
         assert "End-of-set hand-off" in text and '"end session"' in text, flow
+
+
+# Teaching settings: three global axes with named levels, read once per Standard
+# session through session.py; the frustration override saves no preference.
+LEVELS = ["example-first", "method-first", "try-first", "checks only", "key decisions", "every step",
+          "next step", "why", "what-if"]
+TEACHING = ROOT_DIR / "skills/mimir-study/references/teaching.md"
+STUDY_SESSION = ROOT_DIR / "skills/mimir-study/references/session.md"
+
+
+def test_every_teaching_level_has_a_does_and_a_must_not_row():
+    text = TEACHING.read_text(encoding="utf-8")
+    assert text.count("| Level | Does | Must not |") == 3
+    for level in LEVELS:
+        rows = [l for l in text.splitlines() if l.startswith(f"| {level} | ")]
+        assert len(rows) == 1 and rows[0].count(" | ") == 2, level
+
+
+def test_teaching_settings_are_read_once_and_changed_only_through_the_script():
+    session = STUDY_SESSION.read_text(encoding="utf-8")
+    teaching = TEACHING.read_text(encoding="utf-8")
+    assert session.count("session.py prefs") == 1
+    assert "session.py pref-event" in teaching and '"event": "explicit"' in teaching
+    assert "legacy-import" not in teaching + session  # prefs already shows the legacy value
+    for path in MARKDOWN:
+        text = path.read_text(encoding="utf-8")
+        assert "preferences.json" not in text, path  # the script owns the file
+
+
+def test_frustration_override_saves_no_preference():
+    for path in MARKDOWN:
+        text = path.read_text(encoding="utf-8")
+        assert "Fewer questions from now on" not in text, path
+        assert "dial_preference" not in text, path
+        assert "Rung hints" not in text, path
+
+
+def test_urgent_quiz_and_past_questions_ignore_teaching_settings():
+    for flow in ["skills/mimir-study/references/urgent.md", "skills/mimir-quiz/SKILL.md",
+                 "skills/mimir-past-questions/SKILL.md"]:
+        text = (ROOT_DIR / flow).read_text(encoding="utf-8")
+        assert "session.py pref" not in text, flow

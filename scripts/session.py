@@ -4,12 +4,12 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <now|parse-date|start|check|close|debrief|progress|record>  < input.json
+    python3 session.py <now|parse-date|start|check|close|debrief|progress|record|prefs|pref-event>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
-``line``. Only record (mastery.md) and close (a session log) write, atomically; other commands
-are read-only. Only ``now``
+``line``. Only record (mastery.md), close (a session log) and pref-event
+(``.state/preferences.json``) write, atomically; other commands are read-only. Only ``now``
 reads the clock; every other subcommand takes "now" as an input (``now``, from
 ``session.py now``), so the same input and files always give the same output.
 
@@ -21,6 +21,9 @@ Files read (all inside the learning root, see ``workspace.py``)
 * ``.state/profile.md``: ``## Exam dates`` rows ``| CODE | exam | date |``
   (date ``YYYY-MM-DD`` or ``unknown``) and ``## Active courses`` rows
   ``| CODE | YYYY-Term/CODE Name |``.
+* ``.state/preferences.json``: the global teaching settings, written only
+  by ``pref-event``. Before it exists, ``dial_preference:`` in the profile
+  (set unless empty, ``none`` or a ``<...>`` placeholder) is the legacy value.
 * ``<course>/.state/save.md``: ``last_session:`` (``YYYY-MM-DD HH:MM`` or
   ``YYYY-MM-DD``), ``next_topic:`` and ``pending_debrief:`` (``YYYY-MM-DD
   <exam name>``; ``no``, empty or anything else means none pending).
@@ -213,6 +216,36 @@ record -- persist an eligible answer or a frustration override.
     reference for examples and audit D2/D5 for exact transition semantics.
     Legacy Markdown is retained; recorder-owned JSON in a trailing comment
     supplies authoritative rows to check, start and progress.
+
+prefs -- the global teaching settings. Read-only.
+    in : {}
+    out: {"axes": {"support": {"level": "method-first", "provenance":
+          "default", "wording": null}, "frequency": {...}, "depth": {...}},
+          "saved": false, "line": "Teaching settings: support method-first
+          (default), ..."}
+    Axes and levels, more guided to more independent: support example-first,
+    method-first, try-first; frequency checks only, key decisions, every
+    step; depth next step, why, what-if. Provenance is default, sampler,
+    learned, explicit or legacy; ``wording`` is the student's words for an
+    explicit value, else null. ``saved`` = ``preferences.json`` exists. Before
+    it does, every axis is at its middle level with provenance default, except
+    that a set profile ``dial_preference:`` reads as frequency checks only with
+    provenance legacy (``## Rung hints`` are ignored). A damaged or symlinked
+    ``preferences.json`` exits 2.
+
+pref-event -- apply one teaching-settings event and save the state.
+    in : {"event": "explicit", "axis": "frequency", "level": "checks only",
+          "wording": "ask fewer questions"}
+         or {"event": "legacy-import"}
+    out: as ``prefs`` plus "changed", with ``saved`` true; line e.g.
+         "Saved for every course: guiding-question frequency is now checks only."
+    ``explicit``: the student's lasting request sets that axis to that level
+    (any distance), provenance explicit, wording kept with spaces collapsed;
+    other axes are untouched. ``legacy-import``: saves the state ``prefs``
+    shows (the legacy value included) when nothing is saved yet; otherwise
+    changes nothing. A state that would not change is not rewritten, so a
+    rerun leaves the file byte-identical. An unknown event, axis, or a level
+    from another axis exits 2 and writes nothing.
 
 Exit codes: invalid input (bad field, unknown course, no workspace) exits 2
 with one line on stderr (``session.py: <message>``) naming the field, and
@@ -1088,7 +1121,110 @@ def cmd_record(data: dict) -> dict:
             "line": f'{row["name"]}: {row["status"]}.'}
 
 
+# Teaching settings: three global axes, each with three levels from more guided to more independent.
+AXES = {"support": ("example-first", "method-first", "try-first"),
+        "frequency": ("checks only", "key decisions", "every step"),
+        "depth": ("next step", "why", "what-if")}
+AXIS_NAMES = {"support": "support", "frequency": "guiding-question frequency", "depth": "guiding-question depth"}
+PROVENANCES = ("default", "sampler", "learned", "explicit", "legacy")
+PREFS_FILE = "preferences.json"
+PREFS_VERSION = 1
+MAX_WORDING = 200
+
+
+def _default_axes() -> dict:
+    return {axis: {"level": levels[1], "provenance": "default", "wording": None} for axis, levels in AXES.items()}
+
+
+def _prefs_path(root: Path) -> Path:
+    path = root / ".state" / PREFS_FILE
+    if path.is_symlink():
+        raise InputError(f"{PREFS_FILE} must not be a symlink")
+    return path
+
+
+def _prefs_state(root: Path) -> tuple[dict, bool]:
+    """(state, saved): the saved preference state, else defaults with any legacy
+    ``dial_preference`` already imported (what the legacy-import event would save)."""
+    path = _prefs_path(root)
+    if not path.exists():
+        axes = _default_axes()
+        if _set(_key(_text(root / ".state" / "profile.md"), "dial_preference")):
+            axes["frequency"] = {"level": "checks only", "provenance": "legacy", "wording": None}
+        return {"version": PREFS_VERSION, "axes": axes}, False
+    damaged = InputError(f"{PREFS_FILE} is damaged; restore it or delete it to use the defaults")
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        raise damaged from None
+    if not isinstance(state, dict) or state.get("version") != PREFS_VERSION or not isinstance(state.get("axes"), dict) \
+            or set(state["axes"]) != set(AXES):
+        raise damaged
+    for axis, entry in state["axes"].items():
+        if not isinstance(entry, dict) or set(entry) != {"level", "provenance", "wording"} \
+                or entry["level"] not in AXES[axis] or entry["provenance"] not in PROVENANCES \
+                or (entry["wording"] is None) == (entry["provenance"] == "explicit") \
+                or not (entry["wording"] is None or isinstance(entry["wording"], str)):
+            raise damaged
+    return state, True
+
+
+def _set(value: str) -> bool:
+    """A profile value counts as set unless empty, ``none`` or a ``<...>`` template placeholder."""
+    return bool(value) and value.casefold() != "none" and not (value.startswith("<") and value.endswith(">"))
+
+
+def _prefs_out(state: dict, saved: bool) -> dict:
+    axes = state["axes"]
+    parts = ", ".join(f"{AXIS_NAMES[a]} {axes[a]['level']} ({axes[a]['provenance']})" for a in AXES)
+    return {"axes": axes, "saved": saved, "line": f"Teaching settings: {parts}."}
+
+
+def cmd_prefs(data: dict) -> dict:
+    """The global teaching settings; read-only."""
+    _check_keys(data, set())
+    return _prefs_out(*_prefs_state(ingest._workspace_root()))
+
+
+def cmd_pref_event(data: dict) -> dict:
+    """Apply one teaching-settings event and save the state atomically (unchanged state writes nothing)."""
+    event = data.get("event")
+    if event == "legacy-import":
+        _check_keys(data, {"event"})
+    elif event == "explicit":
+        _check_keys(data, {"event", "axis", "level", "wording"})
+    else:
+        raise InputError("event must be explicit or legacy-import")
+    root = ingest._workspace_root()
+    state, saved = _prefs_state(root)
+    before = json.dumps(state, sort_keys=True)
+    line = None
+    if event == "explicit":
+        axis, level, wording = data.get("axis"), data.get("level"), data.get("wording")
+        if axis not in AXES:
+            raise InputError(f"axis must be one of {', '.join(AXES)}")
+        if level not in AXES[axis]:
+            raise InputError(f"level for {axis} must be one of {', '.join(AXES[axis])}")
+        if not isinstance(wording, str) or not wording.strip() or _has_control(wording) \
+                or len(wording) > MAX_WORDING:
+            raise InputError(f"wording must be the student's request, one line of at most {MAX_WORDING} characters")
+        state["axes"][axis] = {"level": level, "provenance": "explicit", "wording": " ".join(wording.split())}
+        line = f"Saved for every course: {AXIS_NAMES[axis]} is now {level}."
+    changed = not saved or json.dumps(state, sort_keys=True) != before
+    if changed:
+        ingest._write_atomic(_prefs_path(root), json.dumps(state, indent=2) + "\n")
+    out = _prefs_out(state, True)
+    if line is None:  # legacy-import: saved now only when nothing was saved before
+        line = ("Teaching settings already saved." if not changed else
+                "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
+                if state["axes"]["frequency"]["provenance"] == "legacy" else
+                "Teaching settings saved with the defaults.")
+    return {**out, "changed": changed, "line": line}
+
+
 COMMANDS = {
+    "prefs": (cmd_prefs, "the global teaching settings: level and provenance per axis"),
+    "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, legacy import)"),
     "record": (cmd_record, "record mastery evidence and frustration overrides"),
     "now": (cmd_now, "the local time: ISO timestamp, evidence date, log name, last_session stamp and term"),
     "parse-date": (cmd_parse_date, "the student's exam-date phrase as a YYYY-MM-DD date, or a refusal"),
@@ -1102,8 +1238,9 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
-                             ("Mimir session runner. Subcommands: now, parse-date, start, check, debrief, progress, record. Reads one JSON "
-                              "object on stdin and prints one JSON object on stdout. Only record and close write."),
+                             ("Mimir session runner. Subcommands: now, parse-date, start, check, close, debrief, progress, record, "
+                              "prefs, pref-event. Reads one JSON object on stdin and prints one JSON object on stdout. "
+                              "Only record, close and pref-event write."),
                              COMMANDS, argv)
 
 

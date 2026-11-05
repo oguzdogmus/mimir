@@ -26,7 +26,7 @@ Use this block wherever a skill resolves a course; keep the caller's action word
 - **Other failures:** print the script's stderr line and stop.
 
 ## Mode and dates
-- The exam date is the only mode input. It sets the delivery class (Standard or Urgent) and the Socratic dial. The only deadline is an exam.
+- The exam date is the only mode input. It sets the delivery class (Standard or Urgent). The only deadline is an exam.
 - The student never picks a mode, and no command selects one. A command picks an action, never Standard or Urgent.
 - Date math, delivery class, and plans come from `<mimir>/scripts/plan.py` and `<mimir>/scripts/session.py`, never from your own arithmetic. Get "now" only from `session.py now` and turn an exam-date phrase into a date only with `session.py parse-date`; never run a shell date command.
 
@@ -36,14 +36,19 @@ Study, quiz and past-question sessions, Standard and Urgent, run until the stude
 - Feedback on an answer and the next question share one message; pause only for a clarification or a continue-or-move-on choice.
 - When the student asks to end, show no new item or key, log each shown item not yet answered as the skill says, then run the shared close (`<mimir>/skills/mimir-core-rules/references/session-close.md`) once. `session.py close` writes the session's one end stamp; a repeated close changes nothing.
 
+## Teaching settings
+- Three global settings shape Standard study teaching, the same in every course: support, guiding-question frequency and guiding-question depth. `<mimir>/skills/mimir-study/references/teaching.md` holds their levels and rules; `session.py prefs` reads them and `session.py pref-event` changes them, never a file edit.
+- Urgent study, quiz and past-question sessions ignore them and never change them.
+- Only the student's lasting request changes a setting. Wrong answers, frustration and struggle never do: they get temporary help.
+
 ## Question budget
 - Admin questions only at: Q0 (one "When's the exam?" when no date is known), first setup, the single fixed-column ingest table, and the post-exam debrief (at most 3 questions, all skippable with one word).
-- Teaching questions only through: the Socratic dial, the one-question stale recheck (evidence older than 14 days), and the two "I know this" check questions.
+- Teaching questions only through: the guiding questions of the teaching settings (Standard study only), the one-question stale recheck (evidence older than 14 days), and the two "I know this" check questions.
 - Content is not a question under this budget: quiz, drill, practice and study items, the cliffhanger and the end-of-set hand-off are what the student came for.
 - Anything else you would ask: pick a sensible default and declare it instead.
 
 ## Declared changes
-- Declare every change of delivery class, dial, language, or mode with its reason in one line, or offer it first.
+- Declare every change of delivery class, teaching setting, language, or mode with its reason in one line, or offer it first. A temporary simplification for the current step is not a change and is not declared.
 - Declare inferred choices too: the active course ("Continuing CS201, say if not"), filing paths (full path), gaps filled from your own knowledge.
 
 ## Source precedence
@@ -86,7 +91,7 @@ The one rule for answers after a frustration override, in every skill that recor
 - Each skill states what it reads at start, under "Reads at start". Read nothing else then.
 - Everything else (`<course>/.state/mastery.md`, `fingerprint.md`, `forecast.md`, course files) is reached through `INDEX.md` or a targeted lookup when a step needs it.
 - `<course>/.state/logs/` is append-only and never auto-loaded; read it only when the student asks.
-- Caps: profile ≤50 lines (rung hints ≤~5, forecast record 1 line); `save.md` ≤30 lines; fingerprint ≤60 lines, rewritten shorter through `fingerprint.py write` when over; mastery retains legacy text plus recorder-owned state; forecast one block per forecast; `INDEX.md` one line per file or topic.
+- Caps: profile ≤50 lines (forecast record 1 line); `save.md` ≤30 lines; fingerprint ≤60 lines, rewritten shorter through `fingerprint.py write` when over; mastery retains legacy text plus recorder-owned state; forecast one block per forecast; `INDEX.md` one line per file or topic.
 - Keep each file in its template's shape and column order. Rewrite a file shorter before it passes its cap.
 - `fingerprint.md` changes only through `<mimir>/scripts/fingerprint.py` (`write` for entries, `retake` for `professor:` and `prior_term:`), never by hand. Its `(tentative)`, `(prior term)`, `label:` and frequencies are computed there.
 - `forecast.md` and the profile's `forecast_record:` line change only through `<mimir>/scripts/forecast.py` (`write` stores a forecast, `score` stores its hit rate and recomputes the record), never by hand. Confidence lines, hit rates and the record are computed there.
