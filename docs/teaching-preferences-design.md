@@ -1,14 +1,14 @@
 # Teaching preferences — design interview
 
-Status: design complete, not implemented. Records agreed intentions from the design conversation, not shipped behavior.
+Status: design complete and implemented under issue #30. Records the agreed intentions from the design conversation; the skills and the script docstrings hold the exact shipped behavior.
 
-Naming: this design uses **Standard** and **Urgent**, the delivery class names in the shipped code. Earlier drafts said "Normal" for Standard.
+Naming: this design uses **Standard** and **Urgent**, the delivery class names in the shipped code. Earlier drafts said "Normal" for Standard. The shipped skills and scripts call the teaching preference **teaching settings** and a preference probe a **probe trial** (`GLOSSARY.md`); this document keeps its interview wording.
 
 ## Agreed direction
 
 - One global teaching preference carries across every course; no course overrides. It governs Standard teaching in study sessions only. Quiz and past-question sessions keep their current behavior.
 - Urgent bypasses all three preference axes and does not update saved preferences, accumulate preference evidence, or run preference probes. Cramming behavior never influences later Standard sessions.
-- Standard sessions held within 48 hours of an exam also contribute no preference evidence and run no probes, so exam stress does not shape lasting preferences.
+- Standard sessions held within 48 hours of an exam also contribute no preference evidence and run no probes, so exam stress does not shape lasting preferences. Every course's exams count. A date-only exam counts when its day is at most two calendar days after today, since some moment of that day is within 48 hours (the conservative reading). A running trial is paused in such a session: teaching uses the saved levels, and the trial continues at the next eligible session.
 - Three independent axes: support, guiding-question frequency and guiding-question depth. Each axis has three named levels (below). Named behavior contracts and examples provide consistency across models; vague decimal instructions are insufficient.
 - Frequency follows key decisions (defined under Level examples), not mechanical question counts.
 - A request to ask fewer questions changes guiding-question frequency only; preserve support and depth unless the student also requests changes to those axes.
@@ -130,7 +130,7 @@ Not comfortable (no probe for now):
 ## Transition for existing users
 
 - Existing courses get the knowledge gauge once (see Knowledge gauge). Existing `dial_preference` and `## Rung hints` follow Existing mechanics.
-- At the first study session after the update, say one short line, once: "New: sessions run until you say 'end session'. You can also ask to cram or to study normally." A global seen marker stops it repeating. No longer what's-new list; the other changes explain themselves when they happen.
+- At the first study session after the update, say one short line, once: "New: sessions run until you say 'end session'. You can also ask to cram or to study normally." A global seen marker stops it repeating. An existing user is one with evidence of use before the update: setup is done, or some course has a session log (a lazy setup leaves no `setup_done`). New users never hear it: setup marks it seen when there is no such evidence, and so does every first study session. No longer what's-new list; the other changes explain themselves when they happen.
 - Existing date-only exam rows are not asked about in bulk. The two-day rule in Exam dates and times asks for each exam's time before it matters.
 
 ## Study flow
@@ -169,10 +169,12 @@ Issue #45 (part 2 of #29). Settled in a short follow-up interview.
 
 - **Storage.** When the student states a scope ("the midterm covers sessions 1–19"), the agent resolves it once into a list of in-scope question types and topics, using the course's session notes and syllabus. It shows the list ("In scope: … Out: …") and the student confirms or edits it. The confirmed list is saved with the exam, together with the student's original words, and used unchanged in every later session. The agent never reinterprets the sentence on its own.
 - **Out-of-scope types.** Listed at the bottom of the triage table, marked "not on this exam", and never drilled, gauged or used for recipes unless the student asks. They stay visible so a wrong scope list is easy to spot.
-- **Capture.** Asked when the exam is added, together with its date and time ("What does it cover? 'don't know' is fine"). If still unknown when the exam is within two days, asked once more in the same question as the missing time. When the syllabus or outline states an exam's coverage, the agent proposes that list for confirmation. The student may give or change the scope at any time; a change goes through the same show-and-confirm step.
+- **Capture.** Asked when the exam is added, together with its date and time ("What does it cover? 'don't know' is fine"). At setup the course has no files yet, so the student's words are noted by course code and the first study session of the course runs the show-and-confirm step with them. A lazy setup does not ask. If still unknown when the exam is within two days, asked once more in the same question as the missing time. When the syllabus or outline states an exam's coverage, the agent proposes that list for confirmation. The student may give or change the scope at any time; a change goes through the same show-and-confirm step.
 - **Unknown scope.** Every question type is ranked as before and nothing is marked. No guessing from paper names (they are unreliable: a file of finals may not say so).
 - **Standard study.** The scope of the next exam also orders the Standard route: in-scope topics first, out-of-scope topics last, marked "not on your next exam". Nothing is removed and the student may pick any topic. After that exam passes, the next exam's scope (or none) applies.
 - **New material.** A question type that appears after the scope was confirmed is ranked normally with a "not checked" mark. At the next session the agent asks once, in one line: "New question type 'X' was found. Is it on your <exam>?" The answer updates the saved list.
+- **Unsure.** A "don't know" to that question saves the name as unsure: it is not asked again and is ranked normally with the same "not checked" mark as a new type.
+- **Date changes.** The scope is saved with the exam's date and name. When the exam's date or time changes but its course and name stay, the saved scope follows it: a saved scope whose date no exam row of that name has any more belongs to the moved exam, and the next save moves it to the new date. A passed exam whose row stays keeps its own scope.
 
 ## Learning-time forecasts
 
