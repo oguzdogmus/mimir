@@ -27,6 +27,8 @@ Files read (all inside the learning root, see ``workspace.py``)
   optionally followed by ``Z`` or a ``+HH:MM``/``-HH:MM`` offset (no offset:
   ``now``'s offset). Case and extra spaces are ignored. Any other cell of the
   course is unreadable and reported in ``exam_problems``, never skipped silently.
+  ``setup_done:`` (a date once full setup finished) for ``prefs``' sampler
+  and ``whats_new`` and the sampler events of ``pref-event``.
 * ``.state/preferences.json``: the global teaching settings, written only
   by ``pref-event``. Before it exists, ``dial_preference:`` in the profile
   (set unless empty, ``none`` or a ``<...>`` placeholder) is the legacy value.
@@ -57,12 +59,12 @@ Files read (all inside the learning root, see ``workspace.py``)
 * ``<course>/INDEX.md``: the ``## Registry`` roles and ``## Topics`` names
   (``ingest.py`` rules; a non-UTF-8 one exits 2) for the route.
 * ``<course>/.state/logs/*.md`` (name order): the first ``first_contact:``
-  line whose value is a date or datetime (``plan.py`` rules); for ``debrief``
-  and the first ``gauge_done:`` line whose value is a date or datetime (the
-  gauge-done marker); for ``debrief``
-  also ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
+  line and the first ``gauge_done:`` line (the gauge-done marker) whose
+  value is a date or datetime (``plan.py`` rules); for ``debrief`` also
+  ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
   disagreements``, and ``next_course_offer:`` lines in every course of the
-  term. Symlinked, unreadable or non-UTF-8 logs are skipped.
+  term; for ``prefs``' ``whats_new``, whether any course has a log at all.
+  Symlinked, unreadable or non-UTF-8 logs are skipped.
 * A ``save.md`` or ``mastery.md`` that is itself a symlink reads as empty.
   Unreadable or non-UTF-8 files of courses other than the chosen one, and
   unreadable logs, are skipped. A course whose term, course or ``.state``
@@ -114,14 +116,16 @@ start -- pick the course, the exam and the class for a new session.
           "code": "CS201", "inferred": true, "exam": "2026-11-05",
           "exam_date": "2026-11-05", "exam_name": "final", "q0": false, "exam_problems": [],
           "ask_exam_time": false, "ask_exam_ahead": false, "ask_exam_scope": false,
+          "scope_words": null,
           "remaining": [{"name": "Heaps", "status": "gap", "scope": null},
           {"name": "Graphs", "status": "unseen", "scope": null}],
+          "remaining_line": "Left on your route:\\n- Heaps (gap)\\n- Graphs (unseen)",
           "class": {<plan.py class output>},
           "topic": {"name": "Graphs", "status": "unseen", "evidence_date":
           null, "stale": false, "attempt_first": false}, "route_line": null, "first_contact":
           "2026-10-10T20:00:00+03:00", "scope": null,
-          "gauge": {"done": false, "topics": ["Graphs"]},
-          "line": "Standard delivery: exam in 19 days"}
+          "gauge": {"done": false, "topics": ["Graphs"]}, "debrief": null,
+          "preference_session": true, "line": "Standard delivery: exam in 19 days"}
     (``class`` here includes "decided_by": "exam date".)
     Course: the given one (``inferred`` false); else the latest ``save.md``
     ``last_session:`` (ties: first by course name); else the first ``##
@@ -197,7 +201,8 @@ start -- pick the course, the exam and the class for a new session.
     `mimir-quiz` to keep it fresh?". ``gauge`` (the knowledge gauge): null when the
     route is empty (no gauge; never gauge from the course name); else ``done``
     (the course has a gauge-done marker, set by ``gauge``) and ``topics``, the
-    route's ``unseen`` topic names in route order ([] when done).
+    route's ``unseen`` topic names in route order, without those whose
+    ``scope`` is ``out`` ([] when done).
     ``line`` is the class line. ``debrief``: null when ``pending_debrief:``
     holds no valid date P; else {"exam", "exam_name", "due", "deferred"}.
     P today or later: P with the pending name, due and deferred false (a
@@ -373,7 +378,8 @@ pref-event -- apply one teaching-settings event and save the state.
          or {"event": "positive" | "neutral" | "pushback" | "frustration",
              "session": "<S>"} or {"event": "reopen", "axis": "frequency"}
          or {"event": "whats-new-seen"}
-    out: as ``prefs`` plus "changed", with ``saved`` true; line e.g.
+    out: as ``prefs`` plus "changed" (and "offer" for ``frustration``), with
+         ``saved`` true; line e.g.
          "Saved for every course: guiding-question frequency is now checks only."
     ``explicit``: the student's lasting request sets that axis to that level
     (any distance), provenance explicit, wording kept with spaces collapsed;
