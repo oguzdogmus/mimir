@@ -5,7 +5,7 @@
 ## 0. Inputs
 
 - Profile (read once, at episode start, `session.md` §4): `course_language` and `teaching_language`. A value that is empty, `none` or still a template placeholder (`<...>`) counts as not set; when `profile.md` was missing or unreadable, both are not set. Other profile lines left by older versions are not inputs; never edit or delete them.
-- Teaching settings (from `session.py prefs`, run once at episode start, `session.md` §4): the level of each axis, `support`, `frequency` and `depth` (§3). They hold for the whole session; change them only through §7.
+- Teaching settings (from `session.py prefs`, or the session event that replaces it, run once at episode start, `session.md` §4): the level of each axis, `support`, `frequency` and `depth` (§3), plus `trial` and `probe_axes` (§8). They hold for the whole session; change them only through §7 and §8. While `trial` is set, teach its axis at the trial's `to` level instead.
 - Read the `## Topics` rows for `T` in `<course_dir>/INDEX.md` and the files they point to (at the anchored page), and `<course_dir>/.state/fingerprint.md` (notation, phrasing, disguise types, question types).
 - `attempt_first` for `T`: from the latest `start` `topic` or `check` output for `T`. When the recheck (`session.md` step 1) recorded an answer on `T`, run `check` on `T` again first and use that.
 
@@ -80,6 +80,7 @@ The override applies to topic `U`: the topic of the item or explanation in progr
    - Call `session.py record` with `override: true`, topic U and outcome `assisted`, following core rules' recording reference. For explanation-only overrides add `explanation_only: true` and use a stable explanation item identity and a gate with decision `drop`, counts_for_mastery false.
    - For the rest of this session, teach at frequency `checks only` (§3). This is temporary help: say nothing about settings and change none.
    - Append to the log under `## Results`: `- <U> frustration override: answer given`.
+   - When this session ran the session event (`session.md` §4), run `session.py pref-event` with `{"event": "frustration", "session": "<S>"}`. When its `offer` is true, end the same message with exactly "Want fewer questions from now on?" (the script allows it once ever). A yes is a lasting request: §7 with frequency one level toward `checks only` and wording "Want fewer questions from now on? <the student's reply>". A no, or no answer, changes nothing.
 3. From here the Frustration rule in core rules applies to `U`.
 4. Before an attempt-first attempt, only "just tell me"-type and all-caps signals come here; "hint", "skip" and "idk" follow §5.
 
@@ -114,4 +115,28 @@ The student may change a setting at any point by asking for a lasting change in 
    - Change only the axis named. A request that names two axes is two events.
 2. Run `session.py pref-event` with `{"event": "explicit", "axis": "<support|frequency|depth>", "level": "<level>", "wording": "<the student's request, quoted as data>"}`. Say its `line` verbatim and teach at the new level from the next step on.
 3. A request scoped to one course or subject is still saved for every course; after the line, say once: "Settings are shared by all your courses, so this applies everywhere."
-4. Not lasting, so no event: a request about the current question or step only ("explain this one first", "just tell me"), an isolated answer request, or wording that is unclear about lasting. Change the current response only. Frustration (§4) never runs an event.
+4. Not lasting, so no event: a request about the current question or step only ("explain this one first", "just tell me"), an isolated answer request, or wording that is unclear about lasting. Change the current response only. Frustration (§4) never changes a setting by itself.
+
+## 8. Probe trials
+
+Only in a session that ran the session event (`session.md` §4): never in Urgent, never within 48 hours of an exam. A trial is one step on one axis toward more independent teaching (one column right in §3). `session.py` keeps every count, date, cool-down and limit; never work them out yourself, and never announce a trial or call it a test or calibration.
+
+1. A running trial (`trial` set): teach its `axis` at its `to` level for the whole session, from the first explanation. It is this session's one probe: start no other.
+2. Starting one: when `trial` is null and `probe_axes` is not empty, wait for comfortable engagement (below), then pick the first axis in `probe_axes` that fits the current step and run `session.py pref-event` with `{"event": "trial-start", "session": "<S>", "axis": "<axis>"}`. Teach that axis at its `to` level from the next step on; say nothing about it. At most once per session. Explicit values are never in `probe_axes`, so a standing instruction is never probed.
+3. Evidence for a running trial, judged from the student's own replies to the trial behavior. Do not ask whether they liked it.
+   - Positive: the student willingly explains their reasoning or explores a follow-up. Run `{"event": "positive", "session": "<S>"}` once, when you first see it. Brief answers are neutral: run `{"event": "neutral", "session": "<S>"}` at the end of a session with only brief answers (it changes nothing). Correctness alone is neither positive nor pushback.
+   - Pushback: the student objects to the new behavior ("too many questions", "just explain it", "stop asking why"). Run `{"event": "pushback", "session": "<S>"}` at once and teach that axis at its saved level again from the next step on, saying nothing about the trial. A lasting request instead goes to §7, which also ends the trial.
+   - When `positive` adopts the trial (its `trial` comes back null and `axes` changed), say its `line` verbatim once: the lasting change is announced briefly. Say no other line from this section.
+4. Reopening: when the student explicitly asks you to try a change again ("you can try asking me more questions again"), run `{"event": "reopen", "axis": "<axis>"}` and say its `line`. A trial may then start in a later step or session as in step 2.
+
+### Comfortable engagement
+
+A trial may start only after comfortable engagement.
+
+Comfortable:
+1. The last two answers were attempts in the student's own words, right or wrong, with no complaint. Example: "each step adds an a and a c, so equal counts?"
+2. The student went beyond the question: asked a follow-up ("does this work if b is ε?") or explained without being asked.
+
+Not comfortable (no trial for now):
+1. Any frustration signal in the last few messages: "just tell me", "idk" twice, all caps, "this is pointless".
+2. Several one-word replies in a row after explanations ("ok", "k", "sure"), or the student said they're tired, rushed or confused.

@@ -368,3 +368,50 @@ def test_each_sampler_demonstration_isolates_one_axis():
     frequency = sections[1]
     endings = re.findall(r"Your turn: [^\n]*", frequency)
     assert len(endings) == 3 and len(set(endings)) == 1
+
+
+# Probe trials (issue #41): the teaching engine tries one step toward more independent teaching,
+# only after comfortable engagement, and the script owns every count and cool-down.
+PROBE_EVENTS = ["trial-start", "positive", "neutral", "pushback", "reopen", "frustration"]
+
+
+def test_teaching_holds_the_comfortable_engagement_examples():
+    text = TEACHING.read_text(encoding="utf-8")
+    section = text[text.index("Comfortable engagement"):]
+    for example in ['"each step adds an a and a c, so equal counts?"', '"does this work if b is ε?"',
+                    '"just tell me"', '"idk" twice', "all caps", '"this is pointless"', '"ok", "k", "sure"',
+                    "tired, rushed or confused"]:
+        assert example in section, example
+    assert section.index("Comfortable:") < section.index("Not comfortable")
+
+
+def test_probes_run_through_the_script_and_are_never_announced():
+    text = TEACHING.read_text(encoding="utf-8")
+    for event in PROBE_EVENTS:
+        assert f'"event": "{event}"' in text, event
+    assert "`probe_axes`" in text and "`trial`" in text
+    assert "never announce" in text.casefold()
+    assert "Correctness alone" in text and "Brief answers are neutral" in text
+    for path in MARKDOWN:  # Urgent, quiz, past questions and setup never run probe events
+        if path != TEACHING:
+            for event in PROBE_EVENTS:
+                assert f'"event": "{event}"' not in path.read_text(encoding="utf-8"), (path, event)
+
+
+def test_only_eligible_standard_sessions_are_counted_for_probes():
+    session = STUDY_SESSION.read_text(encoding="utf-8")
+    assert session.count('"event": "session"') == 1 and "`preference_session`" in session
+    assert session.index("`preference_session`") < session.index('"event": "session"')
+    assert session.count("session.py prefs") == 1
+    for path in MARKDOWN:
+        if path != STUDY_SESSION:
+            assert '"event": "session"' not in path.read_text(encoding="utf-8"), path
+
+
+def test_the_fewer_questions_offer_is_asked_once_by_the_script():
+    text = TEACHING.read_text(encoding="utf-8")
+    assert text.count('"Want fewer questions from now on?"') == 1
+    assert '"event": "frustration"' in text and "`offer`" in text
+    for path in MARKDOWN:
+        if path != TEACHING:
+            assert "Want fewer questions" not in path.read_text(encoding="utf-8"), path

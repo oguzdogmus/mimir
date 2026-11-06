@@ -40,7 +40,7 @@ Study, quiz and past-question sessions, Standard and Urgent, run until the stude
 ## Teaching settings
 - Three global settings shape Standard study teaching, the same in every course: support, guiding-question frequency and guiding-question depth. `<mimir>/skills/mimir-study/references/teaching.md` holds their levels and rules; `session.py prefs` reads them and `session.py pref-event` changes them, never a file edit.
 - Urgent study, quiz and past-question sessions ignore them and never change them.
-- Only the student's lasting request changes a setting. Wrong answers, frustration and struggle never do: they get temporary help.
+- Only the student's lasting request or an adopted probe trial (one step toward more independent teaching, `teaching.md` §8) changes a setting. Wrong answers, frustration and struggle never do: they get temporary help.
 
 ## Question budget
 - Admin questions only at: Q0 (one "When's the exam?", asking for its date and time, when no date is known), the exam checks (a date-only exam's time asked once more within two days of it, and whether a date-only exam today is still ahead), first setup, the single fixed-column ingest table, and the post-exam debrief (at most 3 questions, all skippable with one word).
