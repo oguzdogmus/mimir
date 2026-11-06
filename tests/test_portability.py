@@ -514,6 +514,10 @@ def test_whats_new_line_is_said_once_at_session_start_and_setup_marks_it_seen():
     assert start.index("`whats_new`") < start.index('{"event": "whats-new-seen"}')  # said, then marked seen
     setup = _read(SETUP)
     assert setup.index('{"event": "whats-new-seen"}') < setup.index("`setup_done:` set to")
+    # Only a new user is marked seen at setup; a user with earlier sessions still hears the line.
+    assert "`whats_new` null" in setup
+    # Every first session marks it seen, said or not, so a new lazy-setup user never hears it later.
+    assert "either way" in start[start.index("`whats_new`"):start.index('{"event": "whats-new-seen"}')]
     for path in MARKDOWN:
         rel = str(path.relative_to(ROOT_DIR))
         text = path.read_text(encoding="utf-8")

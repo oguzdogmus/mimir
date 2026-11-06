@@ -2367,6 +2367,28 @@ def test_whats_new_line_is_shown_once_and_never_again(home, root):
     assert snapshot(home) == before  # a rerun rewrites nothing
 
 
+def test_a_user_with_only_a_lazy_setup_counts_as_existing(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root)  # no setup_done: the earlier sessions came from a lazy setup
+    (cdir / ".state" / "logs").mkdir(exist_ok=True)
+    (cdir / ".state" / "logs" / "2026-10-01-0900.md").write_text("## Session\nstarted: 2026-10-01T09:00:00+03:00\n",
+                                                                  encoding="utf-8")
+    assert ok(home, "prefs", {})["whats_new"] == WHATS_NEW
+    _setup_done(root, "2026-10-17")  # running setup later does not hide it either
+    assert ok(home, "prefs", {})["whats_new"] == WHATS_NEW
+
+
+def test_a_new_lazy_user_is_marked_seen_at_the_first_session_and_never_sees_it(home, root):
+    cdir = course(home, mastery=TWO_LEFT)  # just filed by the lazy setup: no session log yet
+    profile(root)
+    assert ok(home, "prefs", {})["whats_new"] is None
+    ok(home, "pref-event", {"event": "whats-new-seen"})  # every first session marks it seen
+    (cdir / ".state" / "logs").mkdir(exist_ok=True)
+    (cdir / ".state" / "logs" / "2026-10-17-0900.md").write_text("started: 2026-10-17T09:00:00+03:00\n",
+                                                                  encoding="utf-8")
+    assert ok(home, "prefs", {})["whats_new"] is None
+
+
 def test_new_users_never_see_the_whats_new_line(home, root):
     profile(root)  # a new user in setup: no setup_done yet
     assert ok(home, "prefs", {})["whats_new"] is None

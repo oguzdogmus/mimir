@@ -340,9 +340,11 @@ prefs -- the global teaching settings. Read-only.
     ``probe_axes``: the axes a trial may start on now, in order, else [];
     see the session and trial-start events.
     ``whats_new``: the one-time line "New: sessions run until you say 'end
-    session'. You can also ask to cram or to study normally." while setup is
-    done and the seen marker is unset (users set up before the update), else
-    null. Setup sets the marker for new users, so they never get it.
+    session'. You can also ask to cram or to study normally." while the seen
+    marker is unset and the student used Mimir before (setup is done, or a
+    course has a readable ``.state/logs/*.md`` session log, e.g. from a lazy
+    setup), else null. A new user has neither when setup or the first study
+    session sets the marker, so they never get it.
 
 pref-event -- apply one teaching-settings event and save the state.
     in : {"event": "explicit", "axis": "frequency", "level": "checks only",
@@ -1806,9 +1808,18 @@ def _probe_block(state: dict, axis: str) -> str | None:
     return None
 
 
+def _used_before(root: Path) -> bool:
+    """Evidence the student used Mimir before: setup is done, or some course has a session log."""
+    if workspace.read_setup_done(root) is not None:
+        return True
+    return any(next(_logs(Path(c["course_dir"])), None) is not None
+               for c in ingest._courses(root) if _usable(root, c))
+
+
 def _whats_new(state: dict, root: Path) -> str | None:
-    """The one-time line for users whose setup was done before the update; the seen marker stops it."""
-    return WHATS_NEW if workspace.read_setup_done(root) is not None and not state.get("whats_new_seen") else None
+    """The one-time line for existing users; the seen marker stops it. New users get the marker at
+    setup or at their first session, before any evidence of use exists."""
+    return WHATS_NEW if not state.get("whats_new_seen") and _used_before(root) else None
 
 
 def _prefs_out(state: dict, saved: bool, root: Path, in_session: bool = False) -> dict:
