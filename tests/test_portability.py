@@ -331,3 +331,36 @@ def test_student_chooses_standard_or_urgent_through_session_start():
     assert "delivery_choice:" in _read("assets/templates/save.md")
     for rel in ("skills/mimir-study/references/session.md", "skills/mimir-study/references/urgent.md"):
         assert "pending_debrief and the `delivery_choice:` line" in _read(rel), rel  # the close keeps it
+
+
+# What an exam covers (issue #45): resolved once into in/out lists, confirmed by the
+# student, saved with the exam through session.py scope, then used unchanged.
+def test_exam_scope_is_confirmed_before_it_is_saved_through_session_scope():
+    core = _read("skills/mimir-core-rules/SKILL.md")
+    assert "## Exam scope" in core
+    assert "In scope:" in core and "Out:" in core and "confirm" in core
+    assert "`session.py scope`" in core and "never a file edit" in core
+    assert "never reinterpret" in core  # the saved list is used unchanged
+    assert "not on this exam" in core and "never drilled, gauged or used for a recipe" in core
+    assert "no marks" in core and "paper names" in core  # unknown scope: no guessing
+    assert "New question type '<name>' was found. Is it on your <exam>?" in core
+    assert "`scope.new`" in core and '"unsure"' in core
+    assert "scope" in core.split("## Question budget")[1].split("##")[0]  # an allowed admin question
+
+
+def test_exam_intake_and_the_two_day_check_ask_for_the_scope_with_the_time():
+    session = _read("skills/mimir-study/references/session.md")
+    assert "What does it cover?" in session  # asked with the date and time when the exam is added
+    assert "`ask_exam_scope`" in session
+    assert "and what does it cover?" in session  # the same question as a missing time
+    ingest = _read("skills/mimir-ingest/SKILL.md")
+    assert "covers" in ingest and "Exam scope" in ingest  # an outline's stated coverage is proposed
+
+
+def test_triage_and_the_standard_route_use_the_saved_scope():
+    urgent = _read("skills/mimir-study/references/urgent.md")
+    assert '"scope"' in urgent and "`start`'s `scope`" in urgent  # passed to plan.py triage
+    assert "not on this exam" in urgent and "not checked" in urgent
+    session = _read("skills/mimir-study/references/session.md")
+    assert "not on your next exam" in session and "not checked" in session
+    assert "never removed" in session or "none is removed" in session

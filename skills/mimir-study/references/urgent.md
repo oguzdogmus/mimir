@@ -10,7 +10,7 @@ Urgent ignores the teaching settings and never changes them; it has no frustrati
 
 Reached from `session.md` Start step 2 only when the opening message names a file path that you can read. No setup question and no ingest table in this section. Write no text at all (no progress note, no "setting up" line) until step 2 gives the class line: the student's first line from Mimir is that class line. The one exception is the single Q0 question "When's the exam?" when step 1 needs it.
 
-1. Q0 first: the `session.md` Start step 4 Q0 rules (phrase, `session.py parse-date`, at most one "When's the exam?" asking for the date and time), but write nothing yet: keep parse-date's `exam` (the date with its time, or the date alone), or `unknown`.
+1. Q0 first: the `session.md` Start step 4 Q0 rules (phrase, `session.py parse-date`, at most one "When's the exam?" asking for the date and time only: no scope question in a lazy setup), but write nothing yet: keep parse-date's `exam` (the date with its time, or the date alone), or `unknown`.
 2. `plan.py class` with `{"now": "<S>", "exam": "<that exam value, or null when unknown>"}`.
    - `class` is not `Urgent`: say the missing-course message from core rules' Resolve the course (action: study) and stop. Nothing is moved.
    - `Urgent`: say its `line` verbatim. It is the session's first line: say nothing before it, and from here to the first drill item say only the lines this file names (no progress or status lines). Say it now, before filing anything.
@@ -42,7 +42,7 @@ Reached from `session.md` Start step 2 only when the opening message names a fil
    - No question-type rows: one type per `start` `remaining` topic instead, `marks` null, `seen` and `papers` 0, `status` from `remaining`, `basis` `outline`.
    - No question-type rows and `remaining` empty: one type per distinct topic in the `## Topics` of `INDEX.md`, `marks` null, `seen` and `papers` 0, `status` via `check` as above, `basis` `outline` (e.g. a lazy setup from a notes-only photo).
    A type from a `(tentative)` row is said "from a photo/scan, may be off" whenever you name it beyond the triage table.
-3. `plan.py triage` with `{"types": [...], "basis": "...", "class": "<start's class.class>"}`. It ranks every type by marks × how often it appeared in past papers and cuts none (Standard practice includes mastered types; Urgent skips them, still listed). Show its `rows` as one table (none when `rows` is empty), every row in the given order, never a paragraph:
+3. `plan.py triage` with `{"types": [...], "basis": "...", "class": "<start's class.class>", "scope": {"in": [...], "out": [...]}}`, `scope` holding `start`'s `scope` `in` and `out` lists (null when `start`'s `scope` is null). It ranks every type by marks × how often it appeared in past papers and cuts none (Standard practice includes mastered types; Urgent skips them, still listed). A type not on this exam (core rules' Exam scope) is skipped in both classes and listed last. Show its `rows` as one table (none when `rows` is empty), every row in the given order, never a paragraph:
 
    | Question type | Marks | Seen in papers | Reason |
    |---|---|---|---|
@@ -50,7 +50,7 @@ Reached from `session.md` Start step 2 only when the opening message names a fil
    | DFA construction | 12.5 (estimated) | unknown | not studied yet |
    | Regex | 5 | 2 of 2 papers | mastered, skipped |
 
-   Cells: `name`; `marks`, adding " (estimated)" when `marks_source` is `estimated`; `frequency`, or "unknown" when null; `reason`, adding ", skipped" when `decision` is `skip`. Then say `line` verbatim. With `basis` `outline`, add one sentence naming the basis the ranking rests on: the announced exam scope, the syllabus or lecture emphasis, only as read from the course files. Whenever you explain why a type matters or is worth more time, cite its `frequency` as given ("appeared in 2 of 2 papers"); with a null `frequency`, name that basis instead. Never invent a paper count or other statistic.
+   Cells: `name`; `marks`, adding " (estimated)" when `marks_source` is `estimated`; `frequency`, or "unknown" when null; `reason`, adding ", skipped" when `decision` is `skip` and `scope` is not `out` (an `out` row reads "not on this exam"), and ", not checked" when `scope` is `not checked`. Then say `line` verbatim. With `basis` `outline`, add one sentence naming the basis the ranking rests on: the announced exam scope, the syllabus or lecture emphasis, only as read from the course files. Whenever you explain why a type matters or is worth more time, cite its `frequency` as given ("appeared in 2 of 2 papers"); with a null `frequency`, name that basis instead. Never invent a paper count or other statistic.
    On exit 2, print its stderr line; with an empty `drill`, say there is nothing to drill. In both cases follow the End-of-set hand-off (practice on a named topic, or "end session").
 4. Drill: §3. The Urgent close (§4) runs only when the student says "end session".
 
@@ -60,7 +60,7 @@ Urgent teaches before it tests: per type, a recipe, then a fresh question of tha
 
 **Continue-or-move-on check**: count misses per type, in total across the session, not only in a row. A miss is a wrong answer, "idk", "skip" or "just tell me" on a check item. A right answer after a hint is a success but does not reset the count; no right answer resets it. An item the gate dropped is not an attempt and leaves the count as it is. When a type's count reaches three, give the correction, then, in place of the fresh question, cite the type's `frequency` as given ("appeared in 9 of 11 papers") when it is known, else name the basis from §2 step 3 (never invent a paper count), and ask "Continue with <type>, or move on?" Wait for the answer. "continue" resets the count to zero and gives the fresh similar question; "move on" goes to the next type. A type moved on from keeps its count for a later round in this session.
 
-Take `drill` in order, in sets of up to 3 types. For each set:
+Take `drill` in order, in sets of up to 3 types. `drill` never holds a type not on this exam: never drill one, or use it for a recipe or a gauge, unless the student asks for it by name. For each set:
 
 1. Prepare, per type, a recipe and two items, both items with `topic` = the type name (or its covering `mastery.md` topic, as in §2 step 2):
    - **Recipe**: the short, exam-sufficient method for the type, in at most 5 numbered steps, in the professor's notation as read from the course files. It holds no question and no answer.

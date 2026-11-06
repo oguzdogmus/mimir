@@ -66,6 +66,10 @@ _Avoid_: Temporary request
 **Comfortable engagement**:
 The student is answering and participating without pushback or signs of frustration; the precondition for starting a probe.
 
+**Exam scope**:
+The question types and topics one exam covers, resolved once from the student's words ("the midterm covers sessions 1–19"), confirmed by the student and saved with that exam. Types outside it are listed last, marked, and not drilled.
+_Avoid_: Guessing coverage from paper names
+
 **Recipe**:
 In Urgent, the short exam-sufficient method for a question type, shown before an application question.
 
