@@ -190,7 +190,7 @@ def test_urgent_quiz_and_past_questions_ignore_teaching_settings():
 
 
 def test_triage_is_rendered_as_a_ranked_table_not_a_paragraph():
-    """Urgent study and past-question practice show `plan.py triage` rows as a
+    """Urgent study and past-question practice show `session.py triage` rows as a
     table; nothing ranks by points per hour or says a drill/skip paragraph."""
     urgent = (ROOT_DIR / "skills/mimir-study/references/urgent.md").read_text(encoding="utf-8")
     past = (ROOT_DIR / "skills/mimir-past-questions/SKILL.md").read_text(encoding="utf-8")
@@ -274,7 +274,7 @@ def test_urgent_opening_order_and_every_right_answer_is_assisted():
     order = cargo.split("**Opening order**", 1)[1].split("\n", 1)[0]
     steps = ["class line", "gauge", "triage table", "drill"]
     assert [order.index(s) for s in steps] == sorted(order.index(s) for s in steps), order
-    assert cargo.index("Gauge offer") < cargo.index("`plan.py triage`") < cargo.index("Drill: §3")
+    assert cargo.index("Gauge offer") < cargo.index("`session.py triage`") < cargo.index("Drill: §3")
     lazy = urgent_section("## 1. Lazy setup")
     assert "the student's first line from Mimir is that class line" in lazy
     assert "right answers always use `assisted`" in urgent_section("## 3. ")
@@ -440,11 +440,44 @@ def test_plan_says_the_scripts_remaining_line_verbatim():
 
 def test_triage_and_the_standard_route_use_the_saved_scope():
     urgent = _read("skills/mimir-study/references/urgent.md")
-    assert '"scope"' in urgent and "`start`'s `scope`" in urgent  # passed to plan.py triage
+    assert "`session.py triage`" in urgent and "exam scope from the workspace" in urgent
     assert "not on this exam" in urgent and "not checked" in urgent
     session = _read("skills/mimir-study/references/session.md")
     assert "not on your next exam" in session and "not checked" in session
     assert "never removed" in session or "none is removed" in session
+
+
+def test_shared_triage_leaves_only_semantic_associations_to_the_agent():
+    cargo = urgent_section("## 2. Urgent cargo")
+    for field in ('"now"', '"term"', '"course"', '"class"'):
+        assert field in cargo, field
+    assert '"class": "<start.class.class>"' in cargo
+    assert "`needs-associations`" in cargo and "`mastery_topics`" in cargo
+    assert "every exact type name" in cargo and "including exact-name matches" in cargo
+    assert "JSON `null` when none fits" in cargo and "several types may share a topic" in cargo
+    assert "without echoing the returned draft" in cargo
+    assert "no fingerprint types is already `ready`" in cargo
+    assert "`needs-associations`, print nothing" in cargo  # The draft's line stays internal.
+    for old_step in ("`plan.py triage`", "`session.py check`", "first number in the marks cell"):
+        assert old_step not in cargo, old_step
+    past = _read("skills/mimir-past-questions/SKILL.md")
+    assert "shared §2 steps 1–3" in past and "`session.py triage`" in past
+    assert "`plan.py triage`" not in past
+
+
+def test_triage_rows_carry_recording_topics_and_provenance_into_both_flows():
+    urgent = _read("skills/mimir-study/references/urgent.md")
+    cargo = urgent_section("## 2. Urgent cargo")
+    assert "`drill` contains type-name strings" in cargo
+    assert "matching row's `topic`" in cargo and "every gauge, item, verification and mastery record" in cargo
+    for field in ("`source_note`", "`tentative`", "`prior_term`"):
+        assert field in cargo, field
+    assert "filenames can contain semicolons" in cargo
+    assert "from a photo/scan, may be off" in cargo and '"prior term"' in cargo
+    assert "both items with `topic` = the matching triage row's `topic`" in urgent
+    past = _read("skills/mimir-past-questions/SKILL.md")
+    assert "Match drill names to its returned rows for topic and provenance in both classes" in past
+    assert "record against the matching triage row's `topic`" in past
 
 
 # The setup sampler: offered once during setup with a skip, run before setup is
