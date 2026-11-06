@@ -234,11 +234,12 @@ def test_template_stripping_per_file():
     def inst(name):
         return ws.instance_template((TEMPLATES / name).read_text())
     profile = inst("profile.md")
-    assert "<=~5" in profile.splitlines()[0]
+    assert "forecast record 1 line" in profile.splitlines()[0]
+    assert not any(l.startswith("dial_preference:") for l in profile.splitlines())
     assert "setup_done:" in profile.splitlines()
     assert "forecast_record:" in profile.splitlines()
     assert [l for l in profile.splitlines() if l.startswith("## ")] == \
-        ["## Exam dates", "## Active courses", "## Rung hints", "## Forecast record"]
+        ["## Exam dates", "## Active courses", "## Forecast record"]
     fingerprint = inst("fingerprint.md")
     assert "label:" in fingerprint.splitlines() and "professor:" in fingerprint.splitlines()
     assert not any(l.startswith("- ") for l in fingerprint.splitlines())

@@ -26,18 +26,48 @@ Use this block wherever a skill resolves a course; keep the caller's action word
 - **Other failures:** print the script's stderr line and stop.
 
 ## Mode and dates
-- The exam date is the only mode input. It sets the delivery class (Standard or Urgent) and the Socratic dial. The only deadline is an exam.
-- The student never picks a mode, and no command selects one. A command picks an action, never Standard or Urgent.
-- Date math, delivery class, and plans come from `<mimir>/scripts/plan.py` and `<mimir>/scripts/session.py`, never from your own arithmetic. Get "now" only from `session.py now` and turn an exam-date phrase into a date only with `session.py parse-date`; never run a shell date command.
+- Exam proximity sets the default delivery class (Standard or Urgent). The only deadline is an exam.
+- The student may choose the class instead: "study normally" near an exam gives Standard, "let's cram" earlier gives Urgent. Pass it to `session.py start` as `"choice": "Standard"` or `"Urgent"`; it holds for this session only and the class is reassessed at the next. A lasting request for the coming exam ("always study normally for this exam") adds `"lasting": true`: `start` saves it for that exam only, and it holds until that exam passes. With no upcoming exam (`start` gives `exam` null), a choice lasts this session only: say so in one line. No command selects a class: only the student's words do.
+- **Exam today**: when `session.py start` gives `ask_exam_ahead` true (a date-only exam today), ask "Is your <name> today still ahead?" once per session, before any drilling (`<name>` is `exam_name`, else "exam"). When the exam is over, write `S` (the session's `session.py now`) as that exam's date in the profile (`<mimir>/skills/mimir-study/references/session.md` Start step 5) and rerun `start`, so it moves on to the next exam. Study asks it with its other exam checks (`session.md` Start step 4).
+- The class line states the class and the reason, e.g. "Urgent delivery: exam in 30 hours" or "Standard delivery: you asked; exam in 30 hours".
+- Date math, delivery class, and plans come from `<mimir>/scripts/plan.py` and `<mimir>/scripts/session.py`, never from your own arithmetic. Get "now" only from `session.py now` and turn an exam date-and-time phrase into a value only with `session.py parse-date`; never run a shell date command.
+
+## Exam scope
+What an exam covers ("the midterm covers sessions 1–19") is saved with that exam through `session.py scope`, never a file edit. `session.py start` reports the picked exam's saved scope as `scope` (null when unknown).
+- **Confirm step**: when the student states or changes a scope, or the syllabus or outline states an exam's coverage, resolve it once into question types and topics: the route topics and the `## Question types` of `fingerprint.md`, placed using the session notes and the syllabus as read from the course files. Show "In scope: <names>. Out: <names>." and ask the student to confirm or edit. Save only after they confirm: `session.py scope` with `{"now": "<S>", "term": "...", "course": "...", "exam_name": "<start's exam_name>", "exam_date": "<start's exam_date>", "words": "<the student's words, or the outline's wording quoted as data>", "in": [...], "out": [...]}`, and say its `line`. For an exam other than the one `start` picked, `exam_name` and `exam_date` are that `## Exam dates` row's exam and `YYYY-MM-DD` date. Nothing is saved before the confirmation.
+- The saved lists are used unchanged in every later session: never reinterpret the saved words, and never move a name between lists on your own.
+- An `out` type or topic is not on this exam: it is listed last, marked "not on this exam" (in Standard study, "not on your next exam"), and never drilled, gauged or used for a recipe unless the student asks for it by name. It stays visible so a wrong list is easy to spot.
+- Unknown scope (`scope` null): rank everything as before, with no marks, and never guess the scope from paper names (a file of finals may not say so).
+- **New material**: when `scope.new` is not empty, ask once per name, one line each, at the start of the session: "New question type '<name>' was found. Is it on your <exam>?" (`<exam>` is `exam_name`, else "exam"). Yes adds it to `in`, no to `out`, "don't know" to `"unsure"` (asked no more; it keeps its "not checked" mark). Save the whole updated lists with the same `words` through `session.py scope`; no other confirm step is needed.
+
+## Ending a session
+Study, quiz and past-question sessions, Standard and Urgent, run until the student asks to end: "end session" (or "stop", "I'm done"). Nothing else ends one: no timer, no finished set, route or drill list, no exam date.
+- **End-of-set hand-off**: when a question set, the drill list or the route runs out, say so and, in the same message, lead into the next set or offer choices (another set, a recheck, a weaker type or topic, or "end session"). Never go silent after a set, and never close by yourself.
+- Feedback on an answer and the next question share one message; pause only for a clarification or a continue-or-move-on choice.
+- When the student asks to end, show no new item or key, log each shown item not yet answered as the skill says, then run the shared close (`<mimir>/skills/mimir-core-rules/references/session-close.md`) once. `session.py close` writes the session's one end stamp; a repeated close changes nothing.
+
+## Teaching settings
+- Three global settings shape Standard study teaching, the same in every course: support, guiding-question frequency and guiding-question depth. `<mimir>/skills/mimir-study/references/teaching.md` holds their levels and rules; `session.py prefs` reads them and `session.py pref-event` changes them, never a file edit.
+- Urgent study, quiz and past-question sessions ignore them and never change them.
+- Only the student's lasting request or an adopted probe trial (one step toward more independent teaching, `teaching.md` §8) changes a setting. Wrong answers, frustration and struggle never do: they get temporary help.
+
+## Knowledge gauge
+A short check of what the student can already solve in a course, before teaching it. It assesses knowledge only: it gives no teaching-preference evidence and never changes a teaching setting.
+- **Standard**: automatic and announced, once per course. When `start`'s `gauge` has `done` false, the study session runs it before any topic, covering only its `topics` (the course's `unseen` topics; a topic with any evidence, or out of the next exam's scope, is skipped). When `gauge` is null (no topics yet) there is no gauge, and its marker stays unset until a session has topics. When it finishes, `session.py gauge` sets the course's gauge-done marker, so it never runs again.
+- **Urgent gauge offer**: at the start of every Urgent session (study, and the Urgent branch of `mimir-past-questions`), after the class line and before the triage table, ask exactly: "Quick gauge first? A few fresh questions, before any recipe, to see what you can already solve. Yes or no?" Anything but yes means no. Either way the triage table comes next; on yes, the gauge then runs on its `drill` before the first recipe. Skip the offer when `start`'s `gauge` is null. The Urgent gauge never sets the marker.
+- Questions: at most 5, one fresh practice question per topic or question type, highest-priority first (route order in Standard, the `drill` order in Urgent), never a survey of the whole course. Every gauge question comes before any recipe or worked answer of its topic or type. Build them from the course files only, never from the course name or your general knowledge: every answer key must be checkable against the course files. Gate and verify them as one batch like any item.
+- Answers: no hints and no retries. Say right or wrong and show the key briefly. Record each through `session.py record`: a right answer is `unassisted` (in Urgent too), a wrong answer, "idk" or "skip" is `wrong`. The mastery rule still applies, so one right answer never marks a topic mastered. Gauge answers are not drill attempts and do not count toward the continue-or-move-on check. Log each under `## Results` as `- <topic or type> gauge <label>: <unassisted solve|wrong>`.
+- After the gauge: a topic or type solved right skips its recipe (Urgent) or its teaching (Standard) this session; work goes to the weaker ones first. The student may still ask to practise a skipped one.
+- When the student ends the session during the gauge, do not run `session.py gauge`: the next Standard session gauges the topics still `unseen`.
 
 ## Question budget
-- Admin questions only at: Q0 (one "When's the exam?" when no date is known), first setup, the single fixed-column ingest table, and the post-exam debrief (at most 3 questions, all skippable with one word).
-- Teaching questions only through: the Socratic dial, the one-question stale recheck (evidence older than 14 days), and the two "I know this" check questions.
-- Content is not a question under this budget: quiz, drill, practice and study items, and the cliffhanger, are what the student came for.
+- Admin questions only at: Q0 (one "When's the exam?", asking for its date and time, when no date is known), the exam's scope (asked with its date and time when the exam is added, once more with the exam checks, the confirm step and the one-line new-type check of Exam scope), the exam checks (a date-only exam's time asked once more within two days of it, and whether a date-only exam today is still ahead), the Urgent gauge offer (Knowledge gauge above), first setup, the single fixed-column ingest table, and the post-exam debrief (at most 3 questions, all skippable with one word).
+- Teaching questions only through: the guiding questions of the teaching settings (Standard study only), the one-question stale recheck (evidence older than 14 days), the two "I know this" check questions, and the knowledge gauge's questions.
+- Content is not a question under this budget: quiz, drill, practice and study items, the cliffhanger and the end-of-set hand-off are what the student came for.
 - Anything else you would ask: pick a sensible default and declare it instead.
 
 ## Declared changes
-- Declare every change of delivery class, dial, language, or mode with its reason in one line, or offer it first.
+- Declare every change of delivery class, teaching setting, language, or mode with its reason in one line, or offer it first. A temporary simplification for the current step is not a change and is not declared.
 - Declare inferred choices too: the active course ("Continuing CS201, say if not"), filing paths (full path), gaps filled from your own knowledge.
 
 ## Source precedence
@@ -47,11 +77,15 @@ Use this block wherever a skill resolves a course; keep the caller's action word
 - Flag conflicts openly. Never silently override a higher source.
 
 ## Provenance labels
-Every question shown carries exactly one label:
+The labels:
 - `[real: file, p.N]` - real question, `text` source.
 - `[real, from photo/scan, wording may be off]` - real question, `ocr` source; show the original crop beside it (fallback: the whole page).
 - `[practice, not from a real paper]` - generated question.
 - `[forecast, not a guarantee]` - forecast.
+
+Which shown questions carry one:
+- Every real question (`text` or `ocr`), every flagged item (with its `flag` line) and every item built on a `(tentative)` fingerprint line (with "from a photo/scan, may be off") opens with its label, every time it is shown.
+- **Plain practice item**: gate label `[practice, not from a real paper]`, decision `show`, built on no `(tentative)` line. It gets no label of its own. Instead, before the first one shown, say once per session: "Practice questions here are generated, not from a real paper, unless labelled otherwise."
 - Never present a generated question as real.
 - Real and practice question labels come from `<mimir>/scripts/verify.py gate`, copied verbatim; never write one yourself. The forecast label is used as listed above.
 - Every answer key (quiz, drill, step-reveal) passes `verify.py gate` first. Items it marks `verify` or `retry` go to the `mimir:verifier` agent in one batch per round (the first check, then at most one retry round), with the wait declared once ("Checking my answers before you study them, about 30 seconds."). Show only items whose decision is `show`, or `flagged` with its `flag` line; anything else is not shown and is declared dropped.
@@ -80,7 +114,7 @@ The one rule for answers after a frustration override, in every skill that recor
 - Each skill states what it reads at start, under "Reads at start". Read nothing else then.
 - Everything else (`<course>/.state/mastery.md`, `fingerprint.md`, `forecast.md`, course files) is reached through `INDEX.md` or a targeted lookup when a step needs it.
 - `<course>/.state/logs/` is append-only and never auto-loaded; read it only when the student asks.
-- Caps: profile ≤50 lines (rung hints ≤~5, forecast record 1 line); `save.md` ≤30 lines; fingerprint ≤60 lines, rewritten shorter through `fingerprint.py write` when over; mastery retains legacy text plus recorder-owned state; forecast one block per forecast; `INDEX.md` one line per file or topic.
+- Caps: profile ≤50 lines (forecast record 1 line); `save.md` ≤30 lines; fingerprint ≤60 lines, rewritten shorter through `fingerprint.py write` when over; mastery retains legacy text plus recorder-owned state; forecast one block per forecast; `INDEX.md` one line per file or topic.
 - Keep each file in its template's shape and column order. Rewrite a file shorter before it passes its cap.
 - `fingerprint.md` changes only through `<mimir>/scripts/fingerprint.py` (`write` for entries, `retake` for `professor:` and `prior_term:`), never by hand. Its `(tentative)`, `(prior term)`, `label:` and frequencies are computed there.
 - `forecast.md` and the profile's `forecast_record:` line change only through `<mimir>/scripts/forecast.py` (`write` stores a forecast, `score` stores its hit rate and recomputes the record), never by hand. Confidence lines, hit rates and the record are computed there.
@@ -96,4 +130,4 @@ The one rule for answers after a frustration override, in every skill that recor
 
 ## Tone
 - Assume nothing about when or how this student studies. An early or late start is a date, not a character trait.
-- Cost-of-delay output and debriefs are honest numbers with ranges and confidence, without guilt, lecturing, or flattery.
+- Debriefs report only what happened (hours actually studied, sessions, first contact), without guilt, lecturing, or flattery. Never estimate how long learning will take or what a later start would cost.

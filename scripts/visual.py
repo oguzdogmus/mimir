@@ -4,7 +4,7 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``verify.py`` (same folder). Run as::
 
-    python3 visual.py <sheet|svg|steps|trace|delay|open>  < input.json
+    python3 visual.py <sheet|svg|steps|trace|open>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -121,23 +121,6 @@ trace -- a structure step-through from ``assets/interactive/step-through.html``.
     ``mimir-current`` (a thick outline); a live region and an ordered history
     say each step in words, ending Accepted, Rejected or Stuck.
 
-delay -- the cost-of-delay slider page and chart, from ``assets/interactive/slider.html``.
-    in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "cost-of-delay",
-          "now": "2026-10-17T09:00:00+03:00"}
-    out: {"course_dir": "...", "html": ".../cost-of-delay.html", "svg":
-          ".../cost-of-delay.svg", "delay_line": "Start today: 19 days × ...",
-          "line": "Built .../cost-of-delay.html and .../cost-of-delay.svg."}
-    The route and the exam come from ``session.py start`` for that course
-    and the rows from ``plan.py``: ``delay_line`` is the same line as
-    ``start``'s in a Standard session (``start`` gives none when Urgent; this
-    still computes it, so ``mimir-plan`` works in either class). No
-    arithmetic happens in the page. The page: a native range
-    input "Start day" over every row, an ``<output>`` with that row's line,
-    the confidence line and a table of every row. The SVG chart is generated
-    here (solid bars to the low end, outlined bars to the high end, day labels,
-    a ``<desc>`` saying the trend in words) and passes the ``svg`` checks. An
-    exam that is null or a route with no topics left exits 2.
-
 open -- open a built file in the default browser.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "file": "pumping-lemma.html"}
     out: {"path": "/home/u/learning/2026-Fall/CS201 Theory/.state/out/pumping-lemma.html",
@@ -174,12 +157,9 @@ import sys
 import tempfile
 import unicodedata
 import xml.etree.ElementTree as ET
-from fractions import Fraction
 from pathlib import Path
 
 import ingest
-import plan
-import session
 import verify
 import workspace
 from workspace import InputError, _check_keys, _has_control, _short, parse_segment, parse_term
@@ -205,7 +185,6 @@ _ASSETS = Path(__file__).resolve().parent.parent / "assets"
 _TEMPLATE = _ASSETS / "math-sheet.html"
 _STEPS_TEMPLATE = _ASSETS / "interactive" / "step-reveal.html"
 _TRACE_TEMPLATE = _ASSETS / "interactive" / "step-through.html"
-_SLIDER_TEMPLATE = _ASSETS / "interactive" / "slider.html"
 _KATEX = _ASSETS / "vendor" / "katex"
 
 _NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
@@ -810,86 +789,6 @@ def cmd_trace(data: dict) -> dict:
     return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
-# --- delay ---------------------------------------------------------------------------
-
-_CHART_W, _CHART_H = 640, 320
-_PLOT_X, _PLOT_Y, _PLOT_W, _PLOT_H = 60, 50, 560, 190
-
-
-def _f(value) -> str:
-    return f"{float(value):.2f}"
-
-
-def _delay_chart(course: str, rows: list[dict], texts: list[str], confidence: str) -> bytes:
-    """A bar chart of study a day by start day: solid to the low end, outlined to the high end."""
-    picks = sorted({0, len(rows) // 2, len(rows) - 1})
-    top = max(r["high"] for r in rows)
-    width = Fraction(_PLOT_W) / len(rows)
-    gap = width / 5 if width >= 4 else Fraction(0)
-    desc = (f"Study needed a day for each start day from today to the exam eve. "
-            + " ".join(texts[i] for i in picks)
-            + f" Solid bars show the low estimate, outlined bars the high estimate. Confidence: {confidence}.")
-    esc = html.escape
-    parts = [f'<svg xmlns="{_SVG_NS}" viewBox="0 0 {_CHART_W} {_CHART_H}" role="img">',
-             f"<title>{esc(f'Cost of delay: {course}')}</title>",
-             f"<desc>{esc(desc)}</desc>",
-             "<style>.bg{fill:#ffffff}.low{fill:#1b1b1b}.high{fill:none;stroke:#1b1b1b;stroke-width:1}"
-             ".axis{stroke:#1b1b1b;stroke-width:1}text{fill:#1b1b1b;font:14px system-ui,sans-serif}"
-             "@media (prefers-color-scheme: dark){.bg{fill:#121212}.low{fill:#ececec}.high{stroke:#ececec}"
-             ".axis{stroke:#ececec}text{fill:#ececec}}</style>",
-             f'<rect class="bg" x="0" y="0" width="{_CHART_W}" height="{_CHART_H}"/>',
-             f'<text x="{_PLOT_X}" y="28">{esc(f"Study a day by start day (scale top: {plan.fmt_duration(top)})")}</text>',
-             f'<line class="axis" x1="{_PLOT_X}" y1="{_PLOT_Y + _PLOT_H}" x2="{_PLOT_X + _PLOT_W}" '
-             f'y2="{_PLOT_Y + _PLOT_H}"/>',
-             f'<line class="axis" x1="{_PLOT_X}" y1="{_PLOT_Y}" x2="{_PLOT_X}" y2="{_PLOT_Y + _PLOT_H}"/>']
-    for i, row in enumerate(rows):
-        x = _PLOT_X + width * i + gap / 2
-        for cls, value in (("high", row["high"]), ("low", row["low"])):
-            h = Fraction(_PLOT_H) * value / top
-            parts.append(f'<rect class="{cls}" x="{_f(x)}" y="{_f(_PLOT_Y + _PLOT_H - h)}" '
-                         f'width="{_f(width - gap)}" height="{_f(h)}"/>')
-    for i in picks:
-        label = "Today" if i == 0 else plan.day_label(rows[i]["start"])
-        anchor = "start" if i == 0 else ("end" if i == len(rows) - 1 else "middle")
-        x = (_PLOT_X if i == 0 else _PLOT_X + _PLOT_W if i == len(rows) - 1
-             else _PLOT_X + width * i + width / 2)
-        parts.append(f'<text x="{_f(x)}" y="{_PLOT_Y + _PLOT_H + 24}" text-anchor="{anchor}">{esc(label)}</text>')
-    parts.append(f'<text x="{_PLOT_X}" y="{_CHART_H - 20}">Solid: low estimate. Outline: high estimate.</text>')
-    parts.append("</svg>")
-    raw = ("\n".join(parts) + "\n").encode("utf-8")
-    check_svg(raw)
-    return raw
-
-
-def cmd_delay(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "name", "now"})
-    term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
-    course_dir = verify._course_dir(term, course)
-    start = session.cmd_start({"now": data.get("now"), "term": term, "course": course})
-    if start["exam"] is None:
-        raise InputError(f"no exam date for {course}: the cost of delay needs one")
-    if not start["remaining"]:
-        raise InputError(f"no topics left on the route of {course}: nothing to plan")
-    payload = session.plan_payload(data["now"], start["exam"], start["remaining"], Path(start["course_dir"]))
-    rows, est, _ = session._plan(plan.delay_rows, payload)
-    delay_line = session._plan(plan.cost_of_delay, payload)["line"]
-    texts = [plan.delay_phrase(row, i == 0) for i, row in enumerate(rows)]
-    table = []
-    for i, row in enumerate(rows):
-        day = plan.day_label(row["start"]) + (" (today)" if i == 0 else "")
-        table.append(f"<tr><td>{html.escape(day)}</td><td>{html.escape(plan.count(row['days'], 'day'))}</td>"
-                     f"<td>{html.escape(plan.fmt_range(row['low'], row['high']))}</td></tr>")
-    page = render_page(_SLIDER_TEMPLATE, {
-        "TITLE": html.escape(f"Cost of delay: {course}"), "MAX": str(len(rows) - 1),
-        "FIRST": html.escape(texts[0]), "CONFIDENCE": html.escape(f"Confidence: {est['confidence']}."),
-        "ROWS": "\n".join(table), "DATA": _json_script(texts)})
-    chart = _delay_chart(course, rows, texts, est["confidence"])
-    built = _write_out(course_dir, name, "html", page.encode("utf-8"))
-    svg_out = _write_out(course_dir, name, "svg", chart)
-    return {"course_dir": str(course_dir), "html": built["path"], "svg": svg_out["path"],
-            "delay_line": delay_line, "line": f"Built {built['path']} and {svg_out['path']}."}
-
-
 # --- open --------------------------------------------------------------------------
 
 def _is_wsl() -> bool:
@@ -980,14 +879,13 @@ COMMANDS = {
     "svg": (cmd_svg, "check an SVG document and write it to <course>/.state/out/"),
     "steps": (cmd_steps, "build a step-reveal worked answer page in <course>/.state/out/"),
     "trace": (cmd_trace, "build a structure step-through page in <course>/.state/out/"),
-    "delay": (cmd_delay, "build the cost-of-delay slider page and chart in <course>/.state/out/"),
     "open": (cmd_open, "open a built file in the default browser"),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("visual.py",
-                             ("Mimir visual builder. Subcommands: sheet, svg, steps, trace, delay, open. Reads one JSON object on "
+                             ("Mimir visual builder. Subcommands: sheet, svg, steps, trace, open. Reads one JSON object on "
                               "stdin and prints one JSON object on stdout."),
                              COMMANDS, argv)
 

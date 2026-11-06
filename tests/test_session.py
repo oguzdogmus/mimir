@@ -107,25 +107,36 @@ def test_calm(home, root):
     assert out["class"]["class"] == "Standard" and out["class"]["reason"] == "calm"
     assert out["class"]["days_to_exam"] == 19
     assert out["line"] == out["class"]["line"] == "Standard delivery: exam in 19 days"
-    assert out["delay_line"].startswith("Start today: 19 days")
     assert out["topic"] == {"name": "Sorting", "status": "unseen", "evidence_date": None, "stale": False,
                             "attempt_first": False}
-    assert out["remaining"] == [{"name": "Graphs", "status": "gap"}, {"name": "Sorting", "status": "unseen"}]
-    assert out["class"]["route_minutes"]["point"] == 50  # weight 1 each, 2 topics
+    assert out["remaining"] == [{"name": "Graphs", "status": "gap", "scope": None},
+                                {"name": "Sorting", "status": "unseen", "scope": None}]
+    assert set(out["class"]) == {"class", "reason", "hours_to_exam", "days_to_exam", "line", "decided_by"}
     assert (out["exam"], out["exam_name"], out["q0"], out["code"]) == ("2026-11-05", "final", False, "CS201")
     assert out["inferred"] is True and out["first_contact"] is None
+    assert (out["exam_problems"], out["ask_exam_time"], out["ask_exam_ahead"]) == ([], False, False)
+    assert out["exam_date"] == "2026-11-05"
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
-                        "exam_name", "q0", "remaining", "class", "delay_line", "topic", "route_line",
-                        "first_contact", "debrief", "line"}
+                        "exam_date", "exam_name", "q0", "exam_problems", "ask_exam_time", "ask_exam_ahead",
+                        "ask_exam_scope", "scope_words", "remaining", "remaining_line",
+                        "class", "topic", "route_line", "first_contact", "scope", "gauge", "debrief",
+                        "preference_session", "line"}
+    assert out["scope"] is None and out["ask_exam_scope"] is False
 
 
 def test_near_exam_is_urgent_floor(home, root):
     course(home, mastery=TWO_LEFT)
-    profile(root, exams=[("CS201", "final", "2026-10-19")])
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
     out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})
     assert out["class"]["class"] == "Urgent" and out["class"]["reason"] == "floor"
     assert out["class"]["hours_to_exam"] == 30
-    assert out["delay_line"] is None
+
+
+def test_date_only_exam_two_days_ahead_is_standard(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-10-19")])
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})
+    assert (out["class"]["class"], out["class"]["hours_to_exam"]) == ("Standard", None)
 
 
 def test_no_date_row_asks_q0(home, root):
@@ -164,7 +175,96 @@ def test_exam_today_is_urgent(home, root):
     course(home, mastery=TWO_LEFT)
     profile(root, exams=[("CS201", "final", "2026-10-17")])
     out = ok(home, "start", {"now": NOW})
-    assert out["class"]["reason"] == "today"
+    assert out["class"]["reason"] == "today" and out["class"]["hours_to_exam"] is None
+    assert out["line"] == "Urgent delivery: exam today, time unknown"
+
+
+# --- start: exam date and time -----------------------------------------------------
+
+EVE = "2026-11-02T21:14:46+02:00"
+
+
+def test_issue_29_exam_time_is_used_not_skipped(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "midterm", "2026-11-03T12:30:00+02:00"), ("CS201", "final", "2027-01-04")])
+    out = ok(home, "start", {"now": EVE})
+    assert (out["exam"], out["exam_name"], out["q0"]) == ("2026-11-03T12:30:00+02:00", "midterm", False)
+    assert out["exam_date"] == "2026-11-03"  # the calendar day, for forecast blocks and pending_debrief
+    assert (out["class"]["class"], out["class"]["reason"]) == ("Urgent", "floor")
+    assert out["class"]["hours_to_exam"] == 15.25
+    assert out["line"] == "Urgent delivery: exam in 15 hours"
+
+
+@pytest.mark.parametrize("cell,klass,reason,hours,line", [
+    ("2026-11-03T13:00:00+02:00", "Urgent", "floor", 16, "Urgent delivery: exam in 16 hours"),
+    ("2026-11-03 13:00", "Urgent", "floor", 16, "Urgent delivery: exam in 16 hours"),  # now's offset
+    ("2026-11-03T11:00:00Z", "Urgent", "floor", 16, "Urgent delivery: exam in 16 hours"),  # 13:00 at +02:00
+    ("2026-11-03", "Urgent", "tomorrow", None, "Urgent delivery: exam tomorrow, time unknown"),
+    ("2026-11-05", "Standard", "calm", None, "Standard delivery: exam in 3 days"),
+    ("2026-11-04T21:00:00+02:00", "Urgent", "floor", 48, "Urgent delivery: exam in 48 hours"),
+    ("2026-11-04T21:01:00+02:00", "Standard", "calm", 48.02, "Standard delivery: exam in 2 days"),
+])
+def test_exam_cell_with_time_date_only_and_48_hour_boundary(home, root, cell, klass, reason, hours, line):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "midterm", cell)])
+    out = ok(home, "start", {"now": "2026-11-02T21:00:00+02:00"})
+    assert out["exam_name"] == "midterm"
+    assert (out["class"]["class"], out["class"]["reason"], out["class"]["hours_to_exam"]) == (klass, reason, hours)
+    assert out["line"] == line
+
+
+def test_exam_earlier_today_has_passed(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "quiz", "2026-11-02T09:00:00+02:00"), ("CS201", "final", "2027-01-04")])
+    out = ok(home, "start", {"now": EVE})
+    assert (out["exam"], out["exam_name"]) == ("2027-01-04", "final")
+
+
+def test_date_only_exam_orders_before_a_timed_exam_that_day(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "lab", "2026-11-03T09:00:00+02:00"), ("CS201", "quiz", "2026-11-03")])
+    out = ok(home, "start", {"now": EVE})
+    assert out["exam_name"] == "quiz" and out["class"]["reason"] == "tomorrow"
+
+
+def test_unreadable_exam_cell_is_reported_not_ignored(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "midterm", "Nov 3 12:30"), ("CS201", "quiz", "2026-11-03T25:00"),
+                         ("MATH1", "final", "soon"), ("CS201", "final", "2027-01-04")])
+    out = ok(home, "start", {"now": EVE})
+    assert out["exam_problems"] == [{"exam": "midterm", "date": "Nov 3 12:30"},
+                                    {"exam": "quiz", "date": "2026-11-03T25:00"}]
+    assert out["exam_name"] == "final"
+    profile(root, exams=[("CS201", "final", "2027-01-04")])
+    assert ok(home, "start", {"now": EVE})["exam_problems"] == []
+
+
+@pytest.mark.parametrize("cell,ask_time,ask_ahead", [
+    ("2026-11-02", True, True),               # date only, today: time and "still ahead?"
+    ("2026-11-03", True, False),              # tomorrow
+    ("2026-11-04", True, False),              # within two days
+    ("2026-11-05", False, False),             # three days ahead: not yet
+    ("2026-11-03 time unknown", False, False),  # asked once already: never again
+    ("2026-11-02 Time  Unknown", False, True),  # still asked whether it is ahead
+    ("2026-11-03T12:30:00+02:00", False, False),
+])
+def test_two_day_time_ask_and_exam_day_ahead_ask(home, root, cell, ask_time, ask_ahead):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "midterm", cell)])
+    out = ok(home, "start", {"now": EVE})
+    assert (out["ask_exam_time"], out["ask_exam_ahead"]) == (ask_time, ask_ahead)
+    assert out["exam_problems"] == [] and out["exam_name"] == "midterm"
+    if "time unknown" in cell.casefold():
+        assert out["exam"] == cell.split()[0]
+        assert out["class"]["hours_to_exam"] is None
+
+
+def test_no_exam_asks_nothing_about_its_time(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "unknown")])
+    out = ok(home, "start", {"now": EVE})
+    assert (out["ask_exam_time"], out["ask_exam_ahead"]) == (False, False)
+    assert out["exam_date"] is None
 
 
 def test_course_pick_latest_last_session(home, root):
@@ -234,7 +334,6 @@ def test_topic_null_when_route_done(home, root):
     profile(root, exams=[("CS201", "final", "2026-11-05")])
     out = ok(home, "start", {"now": NOW})
     assert out["topic"] is None and out["remaining"] == []
-    assert out["delay_line"] == "Cost of delay: no topics left on the route."
     assert out["route_line"] == ROUTE_DONE
 
 
@@ -283,8 +382,10 @@ def test_route_from_index_without_outline(home, root):
     cdir = course(home)
     index(cdir, SLIDES, SLIDE_TOPICS)
     out = ok(home, "start", {"now": NOW})
-    assert out["remaining"] == [{"name": "Heaps", "status": "unseen"}, {"name": "Graphs", "status": "unseen"},
-                                {"name": "Sorting | merge", "status": "unseen"}]  # ingestion order, no duplicate
+    # ingestion order, no duplicate
+    assert out["remaining"] == [{"name": "Heaps", "status": "unseen", "scope": None},
+                                {"name": "Graphs", "status": "unseen", "scope": None},
+                                {"name": "Sorting | merge", "status": "unseen", "scope": None}]
     assert out["topic"]["name"] == "Heaps" and out["route_line"] is None
     assert ok(home, "start", {"now": NOW})["remaining"] == out["remaining"]  # repeat start: same route
 
@@ -294,7 +395,7 @@ def test_route_from_past_papers_keeps_studied_rows(home, root):
     index(cdir, [("past-papers/2024.pdf", "past-papers")],
           [("Heaps", "past-papers/2024.pdf#page=1"), ("graphs", "past-papers/2024.pdf#page=2")])
     out = ok(home, "start", {"now": NOW})
-    assert out["remaining"] == [{"name": "Heaps", "status": "unseen"}]  # Graphs mastered, not duplicated
+    assert out["remaining"] == [{"name": "Heaps", "status": "unseen", "scope": None}]  # Graphs mastered, not duplicated
     assert out["topic"]["name"] == "Heaps"
     progress = ok(home, "progress", {"now": NOW})
     assert [t["name"] for t in progress["topics"]] == ["Graphs", "Heaps"]
@@ -304,7 +405,7 @@ def test_route_outline_is_kept(home, root):
     cdir = course(home, mastery=[("Graphs", "unseen", "", 0, 0)])
     index(cdir, [("outline/syllabus.pdf", "outline")] + SLIDES, SLIDE_TOPICS)
     out = ok(home, "start", {"now": NOW})
-    assert out["remaining"] == [{"name": "Graphs", "status": "unseen"}]
+    assert out["remaining"] == [{"name": "Graphs", "status": "unseen", "scope": None}]
 
 
 def test_route_all_mastered_fresh_is_complete(home, root):
@@ -414,25 +515,72 @@ def test_check_refuses_symlinked_course(home, root, tmp_path):
     fails(home, "check", {"now": NOW, "term": TERM, "course": "LINK1 Alias", "topics": ["a"]}, "symlink")
 
 
-# --- clock -------------------------------------------------------------------------
+# --- no episode clock ------------------------------------------------------------
 
-@pytest.mark.parametrize("now,minutes,phase", [
-    ("2026-10-17T09:19:59+03:00", 19, "teach"),
-    ("2026-10-17T09:20:00+03:00", 20, "wrap"),
-    ("2026-10-17T09:24:59+03:00", 24, "wrap"),
-    ("2026-10-17T09:25:00+03:00", 25, "over"),
-    ("2026-10-17T07:30:00+01:00", 30, "over"),  # other offset, same instant arithmetic
-])
-def test_clock(home, now, minutes, phase):
-    out = ok(home, "clock", {"start": NOW, "now": now})
-    assert (out["elapsed_minutes"], out["phase"]) == (minutes, phase)
+def test_no_clock_subcommand(home):
+    """Sessions run until the student ends them: there is no episode timer."""
+    proc = _run(SS, home, "clock", {"start": NOW, "now": NOW})
+    assert proc.returncode == 2 and proc.stdout == b""
+    assert not hasattr(session, "EPISODE_MIN_MINUTES") and not hasattr(session, "EPISODE_MAX_MINUTES")
 
 
-def test_clock_errors(home):
-    fails(home, "clock", {"start": NOW, "now": "2026-10-17T08:59:00+03:00"}, "before start")
-    fails(home, "clock", {"start": NOW, "now": "2026-10-17T09:10:00"}, "offset")
-    fails(home, "clock", {"start": NOW}, "now is required")
-    fails(home, "clock", {"start": "2026-10-17", "now": NOW}, "start must include a time")
+# --- close: the end stamp, once ----------------------------------------------------
+
+def close_args(cdir: Path, now: str, started: str = NOW, log_name: str = "2026-10-17-0900") -> dict:
+    return {"now": now, "term": TERM, "course": cdir.name, "log": log_name, "started": started}
+
+
+def test_close_stamps_the_end_once(home, root):
+    cdir = course(home)
+    log(cdir, "2026-10-17-0900", session_log(NOW))
+    path = cdir / ".state/logs/2026-10-17-0900.md"
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:47:30+03:00"))
+    assert out["ended"] == "2026-10-17T10:47:30+03:00" and out["already_closed"] is False
+    assert (out["minutes"], out["last_session"]) == (107, "2026-10-17 10:47")
+    assert out["line"] == "Session closed after 107 min."
+    assert path.read_text(encoding="utf-8") == session_log(NOW, "2026-10-17T10:47:30+03:00")
+    before = snapshot(home)
+    again = ok(home, "close", close_args(cdir, "2026-10-17T11:30:00+03:00"))  # a second close
+    assert snapshot(home) == before  # writes nothing: one ended stamp per session
+    assert again["ended"] == out["ended"] and again["already_closed"] is True
+    assert (again["minutes"], again["last_session"]) == (107, "2026-10-17 10:47")
+    assert again["line"] == "Session already closed after 107 min."
+
+
+def test_close_refusals_write_nothing(home, root):
+    cdir = course(home)
+    log(cdir, "2026-10-17-0900", session_log(NOW))
+    later = "2026-10-17T09:30:00+03:00"
+    before = snapshot(home)
+    fails(home, "close", close_args(cdir, "2026-10-17T08:59:00+03:00"), "now is before started")
+    fails(home, "close", close_args(cdir, "2026-10-17T09:30:00"), "offset")
+    fails(home, "close", close_args(cdir, later, started="2026-10-17T09:01:00+03:00"), "no started")
+    fails(home, "close", close_args(cdir, later, log_name="2026-10-17-0901"), "not found")
+    fails(home, "close", close_args(cdir, later, log_name="../../profile"), "log must be")
+    fails(home, "close", {**close_args(cdir, later), "course": "NOPE1 X"}, "course")
+    fails(home, "close", {**close_args(cdir, later), "x": 1}, "unknown field 'x'")
+    fails(home, "close", {k: v for k, v in close_args(cdir, later).items() if k != "started"}, "started is required")
+    assert snapshot(home) == before
+
+
+def test_close_never_stamps_over_a_later_session(home, root):
+    cdir = course(home)
+    second = "2026-10-17T09:00:40+03:00"
+    log(cdir, "2026-10-17-0900", session_log(NOW) + session_log(second))
+    before = snapshot(home)
+    fails(home, "close", close_args(cdir, "2026-10-17T10:00:00+03:00"), "later session")
+    assert snapshot(home) == before
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:00:00+03:00", started=second))
+    assert out["minutes"] == 59 and out["already_closed"] is False
+
+
+def test_closed_session_counts_in_the_cram_bill(home, root):
+    cdir = due_course(home, root)
+    started = "2026-11-01T20:00:00+02:00"
+    log(cdir, "2026-11-01-2000", session_log(started, extra=f"first_contact: {started}\n"))
+    for _ in range(2):
+        ok(home, "close", close_args(cdir, "2026-11-01T21:30:00+02:00", started, "2026-11-01-2000"))
+    assert ok(home, "debrief", {"now": DUE_NOW})["cram"]["actual_minutes"] == 90
 
 
 # --- error contract ------------------------------------------------------------------
@@ -448,7 +596,6 @@ def test_bad_inputs(home, root):
     fails(home, "start", {"now": NOW, "term": "Fall"}, "term")
     fails(home, "check", {"now": NOW, "term": TERM, "course": "CS201 Theory", "topics": ["a"], "x": 1},
           "unknown field 'x'")
-    fails(home, "clock", {"start": NOW, "now": NOW, "x": 1}, "unknown field 'x'")
     fails(home, "start", b"not json", "not valid JSON")
 
 
@@ -471,7 +618,6 @@ def _all_commands_write_nothing(home: Path) -> None:
     before = snapshot(home)
     ok(home, "start", {"now": NOW})
     ok(home, "check", {"now": NOW, "term": TERM, "course": "CS201 Theory", "topics": ["Graphs"]})
-    ok(home, "clock", {"start": NOW, "now": NOW})
     fails(home, "start", {"now": NOW, "course": "NOPE1 X"})
     assert snapshot(home) == before
 
@@ -496,7 +642,6 @@ def test_duplicate_topic_row_first_wins(home, root):
                           ("Sorting", "unseen", "", 0, 0)])
     out = ok(home, "start", {"now": NOW})
     assert [r["name"] for r in out["remaining"]] == ["Graphs", "Sorting"]
-    assert out["class"]["route_minutes"]["point"] == 50
     got = ok(home, "check", {"now": NOW, "term": TERM, "course": "CS201 Theory", "topics": ["Graphs"]})
     assert got["topics"][0]["status"] == "gap" and got["topics"][0]["assisted"] == 1
 
@@ -649,6 +794,15 @@ def test_debrief_superseded_by_later_passed_exam(home, root):
     assert st["debrief"]["due"] is True
 
 
+def test_debrief_reads_timed_exam_rows_and_pending_value(home, root):
+    # session-close writes pending_debrief from start's exam, which may carry a time.
+    due_course(home, root, pending="2026-10-20T09:00:00+03:00 midterm",
+               exams=[("CS201", "midterm", "2026-10-20T09:00:00+03:00"),
+                      ("CS201", "final", "2026-11-10 13:00"), ("CS201", "quiz", "2026-11-20T09:00:00+02:00")])
+    st = ok(home, "start", {"now": DUE_NOW})
+    assert st["debrief"] == {"exam": "2026-11-10", "exam_name": "final", "due": True, "deferred": False}
+
+
 def test_debrief_superseded_window_uses_target(home, root):
     cdir = due_course(home, root, pending="2026-10-20 midterm",
                       exams=[("CS201", "midterm", "2026-10-20"), ("CS201", "final", "2026-11-10")])
@@ -710,8 +864,9 @@ def test_debrief_session_window(home, root):
     log(cdir, "2026-11-06-0900", session_log("2026-11-06T09:00:00+02:00", "2026-11-06T10:00:00+02:00"))  # after
     out = ok(home, "debrief", {"now": DUE_NOW})
     assert out["cram"]["session_count"] == 3 and out["cram"]["actual_minutes"] == 30 + 45 + 60
-    assert out["cram"]["counterfactual_minutes"]["point"] == 75  # all 3 mastery rows, weight 1
     assert out["cram"]["days_before_exam"] == 35
+    assert set(out["cram"]) == {"actual_minutes", "actual_hours", "session_count", "days_before_exam", "line"}
+    assert out["cram"]["line"] == "Cram bill: 2.5 h studied in 3 sessions. First contact: 35 days before the exam."
 
 
 def test_debrief_disagreements_in_window_distinct(home, root):
@@ -790,7 +945,7 @@ def test_stdlib_only_and_only_now_reads_the_clock():
                    and node.attr in {"now", "today", "utcnow", "time"}
                    and isinstance(node.value, ast.Name) and node.value.id in {"datetime", "date", "time"}]
     assert clock_reads == ["_clock"]  # only the `now` subcommand reads the clock
-    assert (session.STALE_DAYS, session.EPISODE_MIN_MINUTES, session.EPISODE_MAX_MINUTES) == (14, 20, 25)
+    assert session.STALE_DAYS == 14
 
 
 # --- progress ----------------------------------------------------------------------
@@ -913,7 +1068,7 @@ def test_progress_writes_nothing_and_skips_plan(home, root, monkeypatch):
 
     def boom(*_):
         raise AssertionError("plan.py called")
-    for name in ("delivery_class", "cost_of_delay", "debrief"):
+    for name in ("delivery_class", "debrief"):
         monkeypatch.setattr(session.plan, name, boom)
     monkeypatch.setenv("HOME", str(home))
     assert session.cmd_progress({"now": NOW})["course"] == "CS201 Theory"
@@ -992,6 +1147,41 @@ def test_parse_date_weekdays_and_offsets(home, now, phrase, expected):
 ])
 def test_parse_date_refusals(home, phrase, needle):
     fails(home, "parse-date", {"now": NOW, "phrase": phrase}, needle)
+
+
+@pytest.mark.parametrize("phrase,exam,line", [
+    ("12:30 tomorrow", "2026-11-03T12:30:00+02:00", "Exam: 2026-11-03 at 12:30."),
+    ("tomorrow at 12:30", "2026-11-03T12:30:00+02:00", "Exam: 2026-11-03 at 12:30."),
+    ("Tomorrow 9:05", "2026-11-03T09:05:00+02:00", "Exam: 2026-11-03 at 09:05."),
+    ("2026-11-03 12:30", "2026-11-03T12:30:00+02:00", "Exam: 2026-11-03 at 12:30."),
+    ("friday at 2pm", "2026-11-06T14:00:00+02:00", "Exam: 2026-11-06 at 14:00."),
+    ("12:30 am in 3 days", "2026-11-05T00:30:00+02:00", "Exam: 2026-11-05 at 00:30."),
+    ("12 PM tomorrow", "2026-11-03T12:00:00+02:00", "Exam: 2026-11-03 at 12:00."),
+    ("today 23:00", "2026-11-02T23:00:00+02:00", "Exam: 2026-11-02 at 23:00."),
+    ("tomorrow", "2026-11-03", "Exam date: 2026-11-03."),
+])
+def test_parse_date_with_time(home, phrase, exam, line):
+    out = ok(home, "parse-date", {"now": EVE, "phrase": phrase})
+    assert (out["exam"], out["line"]) == (exam, line)
+    assert out["date"] == exam[:10]
+    assert out["time"] == (exam[11:16] if "T" in exam else None)
+    assert set(out) == {"date", "time", "exam", "line"}
+
+
+@pytest.mark.parametrize("phrase,needle", [
+    ("today 21:00", "in the past"),      # earlier today than now
+    ("today at 9am", "in the past"),
+    ("tomorrow 25:00", "not a real time"),
+    ("tomorrow 12:60", "not a real time"),
+    ("tomorrow 13:00 pm", "not a real time"),
+    ("tomorrow 0am", "not a real time"),
+    ("tomorrow noon", "unsupported"),
+    ("12:30", "unsupported"),           # a time needs a date
+    ("12:30 tomorrow 13:00", "unsupported"),
+    ("tomorrow at", "unsupported"),
+])
+def test_parse_date_time_refusals(home, phrase, needle):
+    fails(home, "parse-date", {"now": EVE, "phrase": phrase}, needle)
 
 
 def test_parse_date_bad_input(home):
@@ -1087,6 +1277,42 @@ def test_record_requires_distinct_items_and_day(home, root):
     assert ok(home, "record", {**payload, "item": "c", "date": "2026-10-18", "session": "s2"})["status"] == "mastered"
 
 
+def test_record_first_miss_once_then_right_after_guidance_as_assisted(home, root):
+    """Standard retries: the first wrong answer on an item records once, repeated
+    misses on it record nothing, and the later right answer records as assisted."""
+    course(home)
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "show", "counts_for_mastery": True},
+             outcome="wrong", real_past_paper=False, session="s1", date="2026-10-17")
+    assert ok(home, "record", p)["status"] == "gap"
+    for _ in range(2):
+        again = ok(home, "record", p)
+        assert (again["recorded"], again["duplicate"]) == (False, True)
+    right = ok(home, "record", {**p, "outcome": "assisted"})
+    assert (right["recorded"], right["status"]) == (True, "shaky")
+    assert ok(home, "record", {**p, "outcome": "assisted"})["duplicate"] is True
+    assert ok(home, "record", p)["duplicate"] is True
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"]) == (1, 0)
+    assert row["evidence"].count(": wrong") == 1 and row["evidence"].endswith(": assisted")
+
+
+def test_record_right_after_a_miss_on_the_same_item_never_counts_unassisted(home, root):
+    course(home)
+    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
+             gate={"decision": "show", "counts_for_mastery": True},
+             outcome="wrong", real_past_paper=False, session="s1", date="2026-10-17")
+    ok(home, "record", p)
+    assert ok(home, "record", {**p, "outcome": "unassisted"})["recorded"] is True
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"], row["status"]) == (1, 0, "shaky")
+    # a miss in an earlier session does not taint a later session's solve
+    assert ok(home, "record", {**p, "outcome": "unassisted", "session": "s2",
+                               "date": "2026-10-18"})["recorded"] is True
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"]) == (1, 1)
+
+
 @pytest.mark.parametrize("change,status,recorded", [
     ({"item": "b", "real_past_paper": True}, "mastered", True),
     ({"item": "a", "real_past_paper": True, "session": "s2"}, "shaky", True),
@@ -1154,25 +1380,1106 @@ def test_record_initialization_and_legacy_evidence(home, root):
                               "gate": {"decision": "drop", "counts_for_mastery": False}})["recorded"]
 
 
-def test_start_uses_fingerprint_weights_and_logged_topic_times(home, root):
-    c = course(home, mastery=[(n, 'gap', '', 0, 0) for n in ('A', 'B', 'C')])
-    args = {'now': NOW, 'term': TERM, 'course': c.name}
-    profile(root, exams=[('CS201', 'final', '2026-11-05')])
-    cold = ok(home, 'start', args)
-    assert cold['class']['route_minutes']['point'] == 75
-    assert cold['class']['confidence'].startswith('rough:')
-    (c / '.state/fingerprint.md').write_text(
-        '## Question types\n| type | frequency | marks |\n|---|---|---|\n'
-        '| A (source: past-papers/a.pdf) | 1 of 1 papers | 30 |\n'
-        '| B (source: past-papers/a.pdf) | 1 of 1 papers | 10 |\n')
-    weighted = ok(home, 'start', args)
-    assert weighted['class']['route_minutes']['point'] == 125
-    (c / '.state/logs/timing.md').write_text(
-        '## Topic timings\n| topic | started | ended |\n|---|---|---|\n'
-        '| A | 2026-10-16T09:00:00+03:00 | 2026-10-16T09:30:00+03:00 |\n'
-        '| B | 2026-10-16T10:00:00+03:00 | 2026-10-16T10:10:00+03:00 |\n'
-        '| C | 2026-10-16T11:00:00+03:00 | 2026-10-16T11:10:00+03:00 |\n')
-    calibrated = ok(home, 'start', args)
-    assert calibrated['class']['route_minutes']['point'] == 50
-    assert calibrated['class']['confidence'] == 'based on 3 timed topics'
-    assert calibrated['delay_line'] != weighted['delay_line']
+def test_start_class_ignores_route_size_and_topic_times(home, root):
+    # A long, slow route four days out used to switch to Urgent; only exam proximity decides now.
+    c = course(home, mastery=[(f"T{i}", "gap", "", 0, 0) for i in range(30)])
+    profile(root, exams=[("CS201", "final", "2026-10-21")])
+    (c / ".state/logs/timing.md").write_text(
+        "## Topic timings\n| topic | started | ended |\n|---|---|---|\n"
+        + "".join(f"| T{i} | 2026-10-16T0{i}:00:00+03:00 | 2026-10-16T0{i}:50:00+03:00 |\n" for i in range(3)))
+    out = ok(home, "start", {"now": NOW, "term": TERM, "course": c.name})
+    assert (out["class"]["class"], out["class"]["reason"]) == ("Standard", "calm")
+    assert "delay_line" not in out
+
+
+# --- teaching settings (preference state) ------------------------------------------
+
+DEFAULT_AXES = {"support": {"level": "method-first", "provenance": "default", "wording": None},
+                "frequency": {"level": "key decisions", "provenance": "default", "wording": None},
+                "depth": {"level": "why", "provenance": "default", "wording": None}}
+
+
+def test_prefs_defaults_without_state(home, root):
+    profile(root)
+    before = snapshot(home)
+    out = ok(home, "prefs", {})
+    assert out["axes"] == DEFAULT_AXES and out["saved"] is False
+    assert out["line"] == ("Teaching settings: support method-first (default), guiding-question frequency "
+                           "key decisions (default), guiding-question depth why (default).")
+    assert snapshot(home) == before
+
+
+def test_prefs_needs_a_workspace(home):
+    fails(home, "prefs", {}, "no workspace")
+
+
+def _legacy_profile(root: Path, dial: str) -> None:
+    profile(root)
+    text = (root / ".state" / "profile.md").read_text(encoding="utf-8")
+    text = text.replace("level:\n", f"level:\ndial_preference: {dial}\n")
+    text += "\n## Rung hints\n| topic type | rung that worked |\n|---|---|\n| Recursion | analogy |\n"
+    (root / ".state" / "profile.md").write_text(text, encoding="utf-8")
+
+
+LEGACY_AXES = {**DEFAULT_AXES, "frequency": {"level": "checks only", "provenance": "legacy", "wording": None}}
+
+
+@pytest.mark.parametrize("dial", ["", "none", "<none, or the preference saved after a frustration override>"])
+def test_prefs_unset_dial_preference_is_default(home, root, dial):
+    _legacy_profile(root, dial)
+    assert ok(home, "prefs", {})["axes"] == DEFAULT_AXES
+
+
+def test_legacy_dial_preference_reads_as_checks_only(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    before = snapshot(home)
+    out = ok(home, "prefs", {})
+    assert out["axes"] == LEGACY_AXES and out["saved"] is False  # rung hints ignored: support stays default
+    assert snapshot(home) == before
+
+
+def test_legacy_import_saves_once_and_leaves_memory_untouched(home, root):
+    cdir = course(home, mastery=TWO_LEFT, save={"next_topic": "Sorting"})
+    (cdir / ".state" / "logs" / "2026-10-01-0900.md").write_text("started: 2026-10-01T09:00:00+03:00\n",
+                                                                  encoding="utf-8")
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    memory = {p: p.read_bytes() for p in [root / ".state" / "profile.md", cdir / ".state" / "mastery.md",
+                                          cdir / ".state" / "save.md", cdir / ".state" / "logs" / "2026-10-01-0900.md"]}
+    out = ok(home, "pref-event", {"event": "legacy-import"})
+    assert out["axes"] == LEGACY_AXES and out["saved"] is True and out["changed"] is True
+    assert out["line"] == "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
+    state = root / ".state" / "preferences.json"
+    saved = state.read_bytes()
+    assert json.loads(saved) == {"version": 1, "axes": LEGACY_AXES}
+    assert {p: p.read_bytes() for p in memory} == memory  # dial_preference and rung hints stay in place
+    again = ok(home, "pref-event", {"event": "legacy-import"})
+    assert again["changed"] is False and again["axes"] == LEGACY_AXES
+    assert again["line"] == "Teaching settings already saved."
+    assert state.read_bytes() == saved
+    assert ok(home, "prefs", {})["saved"] is True
+    assert list((root / ".state").glob(".preferences.json.*")) == []  # no temp file left behind
+
+
+def test_legacy_import_without_dial_preference_saves_defaults(home, root):
+    _legacy_profile(root, "none")
+    out = ok(home, "pref-event", {"event": "legacy-import"})
+    assert out["axes"] == DEFAULT_AXES and out["changed"] is True
+    assert out["line"] == "Teaching settings saved with the defaults."
+
+
+@pytest.mark.parametrize("axis,level,wording", [
+    ("support", "example-first", "for math, always show an example first"),
+    ("frequency", "checks only", "ask fewer questions"),
+    ("depth", "what-if", "from now on ask me what-if questions"),
+])
+def test_explicit_request_changes_only_its_axis(home, root, axis, level, wording):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    out = ok(home, "pref-event", {"event": "explicit", "axis": axis, "level": level, "wording": wording})
+    expected = {**LEGACY_AXES, axis: {"level": level, "provenance": "explicit", "wording": wording}}
+    assert out["axes"] == expected and out["changed"] is True
+    names = {"support": "support", "frequency": "guiding-question frequency", "depth": "guiding-question depth"}
+    assert out["line"] == f"Saved for every course: {names[axis]} is now {level}."
+    assert ok(home, "prefs", {})["axes"] == expected
+    saved = (root / ".state" / "preferences.json").read_bytes()
+    again = ok(home, "pref-event", {"event": "explicit", "axis": axis, "level": level, "wording": wording})
+    assert again["changed"] is False and again["axes"] == expected
+    assert (root / ".state" / "preferences.json").read_bytes() == saved  # byte-identical rerun
+
+
+def test_explicit_request_moves_any_distance_and_keeps_latest_wording(home, root):
+    profile(root)
+    ok(home, "pref-event", {"event": "explicit", "axis": "support", "level": "try-first",
+                            "wording": "let me try first"})
+    out = ok(home, "pref-event", {"event": "explicit", "axis": "support", "level": "example-first",
+                                  "wording": "  always   explain with an example first "})
+    assert out["axes"]["support"] == {"level": "example-first", "provenance": "explicit",
+                                      "wording": "always explain with an example first"}
+    assert out["axes"]["frequency"] == DEFAULT_AXES["frequency"]
+
+
+@pytest.mark.parametrize("payload,needle", [
+    ({"event": "explicit", "axis": "support", "level": "checks only", "wording": "x"}, "level for support"),
+    ({"event": "explicit", "axis": "pace", "level": "why", "wording": "x"}, "axis must be"),
+    ({"event": "explicit", "axis": "depth", "level": "why"}, "wording"),
+    ({"event": "explicit", "axis": "depth", "level": "why", "wording": "  "}, "wording"),
+    ({"event": "explicit", "axis": "depth", "level": "why", "wording": "a\nb"}, "wording"),
+    ({"event": "explicit", "axis": "depth", "level": "why", "wording": "w" * 201}, "wording"),
+    ({"event": "explicit", "axis": "depth", "level": "why", "wording": "x", "course": "CS201"}, "course"),
+    ({"event": "legacy-import", "axis": "depth"}, "axis"),
+    ({"event": "sampler", "axis": "depth", "level": "try-first"}, "level for depth"),
+    ({"event": "sampler", "axis": "pace", "level": "why"}, "axis must be"),
+    ({"event": "sampler", "axis": "depth", "level": "why", "wording": "x"}, "wording"),
+    ({"event": "sampler-skip", "axis": "depth"}, "axis"),
+    ({"event": "frustrated"}, "event must be"),
+    ({}, "event must be"),
+])
+def test_pref_event_rejects_invalid_input_and_writes_nothing(home, root, payload, needle):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    before = snapshot(home)
+    fails(home, "pref-event", payload, needle)
+    assert snapshot(home) == before
+
+
+def test_prefs_reads_nothing_extra(home, root):
+    profile(root)
+    fails(home, "prefs", {"axis": "support"}, "axis")
+
+
+@pytest.mark.parametrize("content", ["not json", '{"version": 1}', '{"version": 2, "axes": {}}',
+                                     json.dumps({"version": 1, "axes": DEFAULT_AXES, "sampler_skipped": False}),
+                                     json.dumps({"version": 1, "axes": DEFAULT_AXES, "whats_new_seen": "yes"}),
+                                     json.dumps({"version": 1, "axes": {**{a: dict(v) for a, v in
+                                                 DEFAULT_AXES.items()}, "depth": {"level": "deep",
+                                                 "provenance": "default", "wording": None}}}),
+                                     json.dumps({"version": 1, "axes": {**DEFAULT_AXES, "support": {
+                                         "level": "try-first", "provenance": "explicit", "wording": None}}})])
+def test_damaged_preference_state_is_refused(home, root, content):
+    profile(root)
+    state = root / ".state" / "preferences.json"
+    state.write_text(content, encoding="utf-8")
+    before = snapshot(home)
+    fails(home, "prefs", {}, "preferences.json is damaged")
+    fails(home, "pref-event", {"event": "explicit", "axis": "depth", "level": "why", "wording": "x"}, "damaged")
+    assert snapshot(home) == before
+
+
+def test_symlinked_preference_state_is_refused(home, root, tmp_path):
+    profile(root)
+    target = tmp_path / "elsewhere.json"
+    target.write_text(json.dumps({"version": 1, "axes": DEFAULT_AXES}), encoding="utf-8")
+    (root / ".state" / "preferences.json").symlink_to(target)
+    fails(home, "prefs", {}, "symlink")
+    fails(home, "pref-event", {"event": "legacy-import"}, "symlink")
+
+
+# --- knowledge gauge (issue #39) -----------------------------------------------------
+
+GAUGE_LOG = "2026-10-17-0900"
+
+
+def gauge_args(cdir: Path, now: str = NOW, log_name: str = GAUGE_LOG) -> dict:
+    return {"now": now, "term": TERM, "course": cdir.name, "log": log_name}
+
+
+def test_start_gauge_covers_only_unseen_topics_until_done(home, root):
+    """The Standard gauge is due once per course and skips topics with any evidence."""
+    course(home, mastery=TWO_LEFT + [("Trees", "shaky", "2026-10-11", 1, 0)])
+    out = ok(home, "start", {"now": NOW})
+    assert out["gauge"] == {"done": False, "topics": ["Sorting"]}
+
+
+def test_start_gauge_is_null_for_a_course_without_topics(home, root):
+    """No topics: no gauge, never from the course name, and the marker stays unset."""
+    cdir = course(home)
+    assert ok(home, "start", {"now": NOW})["gauge"] is None
+    index(cdir, SLIDES)  # files indexed, still no topics
+    assert ok(home, "start", {"now": NOW})["gauge"] is None
+    index(cdir, SLIDES, SLIDE_TOPICS[:2])  # topics arrive: the gauge is due at this session
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps", "Graphs"]}
+
+
+def test_gauge_sets_the_marker_once_per_course(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    log(cdir, GAUGE_LOG, session_log(NOW))
+    path = cdir / ".state/logs" / f"{GAUGE_LOG}.md"
+    out = ok(home, "gauge", gauge_args(cdir))
+    assert (out["gauge_done"], out["already_done"]) == (NOW, False)
+    assert out["log"] == str(path)
+    assert out["line"] == "Knowledge gauge done for CS201 Theory: it will not run again."
+    assert path.read_text(encoding="utf-8") == session_log(NOW) + f"gauge_done: {NOW}\n"
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": True, "topics": []}
+    # A later session, even in another log, finds the marker and writes nothing.
+    later = "2026-10-20T09:00:00+03:00"
+    log(cdir, "2026-10-20-0900", session_log(later))
+    before = snapshot(home)
+    again = ok(home, "gauge", gauge_args(cdir, later, "2026-10-20-0900"))
+    assert snapshot(home) == before
+    assert (again["gauge_done"], again["already_done"]) == (NOW, True)
+    assert again["line"] == "Knowledge gauge already done for CS201 Theory."
+
+
+def test_existing_course_without_marker_gets_the_gauge_once(home, root):
+    """Courses from before the gauge (first_contact already logged) are still due once."""
+    cdir = course(home, mastery=TWO_LEFT)
+    log(cdir, "2026-10-01-0900", session_log("2026-10-01T09:00:00+03:00", "2026-10-01T10:00:00+03:00",
+                                             "first_contact: 2026-10-01T09:00:00+03:00\ngauge_done: soon\n"))
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Sorting"]}
+
+
+def test_gauge_refusals_write_nothing(home, root):
+    cdir = course(home)  # no topics yet: no gauge, the marker stays unset
+    log(cdir, GAUGE_LOG, session_log(NOW))
+    before = snapshot(home)
+    fails(home, "gauge", gauge_args(cdir), "no topics yet")
+    assert snapshot(home) == before
+    assert ok(home, "start", {"now": NOW})["gauge"] is None
+    index(cdir, SLIDES, SLIDE_TOPICS[:1])
+    before = snapshot(home)
+    fails(home, "gauge", gauge_args(cdir, log_name="2026-10-17-0901"), "not found")
+    fails(home, "gauge", gauge_args(cdir, log_name="../../profile"), "log must be")
+    fails(home, "gauge", {**gauge_args(cdir), "course": "NOPE1 X"}, "course")
+    fails(home, "gauge", {**gauge_args(cdir), "x": 1}, "unknown field 'x'")
+    fails(home, "gauge", {k: v for k, v in gauge_args(cdir).items() if k != "now"}, "now is required")
+    assert snapshot(home) == before
+
+
+def test_gauge_answers_record_unassisted_and_leave_teaching_settings_alone(home, root):
+    """One right gauge answer never marks a topic mastered, and the gauge is no preference evidence."""
+    cdir = course(home, mastery=TWO_LEFT)
+    log(cdir, GAUGE_LOG, session_log(NOW))
+    answer = dict(term=TERM, course="CS201 Theory", topic="Sorting", item="gauge:sorting:1",
+                  gate={"decision": "show", "counts_for_mastery": True},
+                  outcome="unassisted", real_past_paper=False, session=GAUGE_LOG, date="2026-10-17")
+    assert ok(home, "record", answer)["status"] == "shaky"
+    ok(home, "gauge", gauge_args(cdir))
+    assert not (root / ".state" / session.PREFS_FILE).exists()
+    assert ok(home, "prefs", {})["saved"] is False
+    sorting = next(t for t in ok(home, "progress", {"now": NOW})["topics"] if t["name"] == "Sorting")
+    assert (sorting["status"], sorting["unassisted"], sorting["assisted"]) == ("shaky", 1, 0)
+
+
+# --- start: the student's delivery choice (issue #36) ------------------------------
+
+def test_default_class_is_decided_by_the_exam_date(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Urgent", "exam date")
+    assert out["line"] == "Urgent delivery: exam in 30 hours"
+
+
+@pytest.mark.parametrize("cell,choice,line", [
+    ("2026-10-19T00:00:00+03:00", "Standard", "Standard delivery: you asked; exam in 30 hours"),
+    ("2026-11-05", "Urgent", "Urgent delivery: you asked; exam in 19 days"),
+])
+def test_session_choice_overrides_the_exam_date_both_ways(home, root, cell, choice, line):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", cell)])
+    before = snapshot(root)
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00", "choice": choice})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == (choice, "session choice")
+    assert out["line"] == out["class"]["line"] == line
+    assert snapshot(root) == before  # a session choice is not saved
+    later = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})  # reassessed next session
+    assert later["class"]["decided_by"] == "exam date" and later["class"]["class"] != choice
+
+
+def test_lasting_choice_is_saved_for_the_exam_and_used_next_session(home, root):
+    cdir = course(home, mastery=TWO_LEFT, save={"next_topic": "Sorting"})
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
+    now = "2026-10-17T18:00:00+03:00"
+    out = ok(home, "start", {"now": now, "choice": "Standard", "lasting": True})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Standard", "lasting choice")
+    assert out["line"] == "Standard delivery: you asked, until your final; exam in 30 hours"
+    save = (cdir / ".state" / "save.md").read_text(encoding="utf-8")
+    assert "delivery_choice: Standard 2026-10-19 final\n" in save and "next_topic: Sorting\n" in save
+    later = ok(home, "start", {"now": "2026-10-18T09:00:00+03:00"})
+    assert (later["class"]["class"], later["class"]["decided_by"]) == ("Standard", "lasting choice")
+    assert later["line"] == "Standard delivery: you asked, until your final; exam in 15 hours"
+    again = ok(home, "start", {"now": now, "choice": "Standard", "lasting": True})  # a rerun changes nothing
+    assert (cdir / ".state" / "save.md").read_text(encoding="utf-8") == save and again["line"] == out["line"]
+
+
+def test_session_choice_beats_a_lasting_choice_for_one_session(home, root):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": "Standard 2026-10-19 final"})
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00", "choice": "Urgent"})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Urgent", "session choice")
+
+
+@pytest.mark.parametrize("now", [
+    "2026-10-19T00:30:00+03:00",  # the timed midterm has just passed
+    "2026-10-19T12:00:00+03:00",
+])
+def test_lasting_choice_expires_when_its_exam_passes(home, root, now):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": "Standard 2026-10-19 midterm"})
+    profile(root, exams=[("CS201", "midterm", "2026-10-19T00:00:00+03:00"),
+                         ("CS201", "final", "2026-10-20T09:00:00+03:00")])
+    out = ok(home, "start", {"now": now})
+    assert out["exam_name"] == "final"
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Urgent", "exam date")
+
+
+def test_lasting_choice_on_a_date_only_exam_holds_through_its_day(home, root):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": "standard 2026-10-17 final"})
+    profile(root, exams=[("CS201", "Final", "2026-10-17")])
+    out = ok(home, "start", {"now": NOW})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Standard", "lasting choice")
+    assert out["line"] == "Standard delivery: you asked, until your Final; exam today, time unknown"
+    gone = ok(home, "start", {"now": "2026-10-18T09:00:00+03:00"})
+    assert gone["class"]["decided_by"] == "exam date"
+
+
+@pytest.mark.parametrize("cell", ["Urgent 2026-10-19 midterm", "Urgent 2026-11-05", "maybe", "<none>"])
+def test_a_lasting_choice_for_another_exam_or_unreadable_is_ignored(home, root, cell):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": cell})
+    profile(root, exams=[("CS201", "final", "2026-11-05")])
+    out = ok(home, "start", {"now": NOW})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Standard", "exam date")
+
+
+def test_a_new_lasting_choice_replaces_the_saved_one(home, root):
+    cdir = course(home, mastery=TWO_LEFT, save={"delivery_choice": "Standard 2026-10-01 quiz", "status": "on-track"})
+    profile(root, exams=[("CS201", "final", "2026-11-05")])
+    ok(home, "start", {"now": NOW, "choice": "Urgent", "lasting": True})
+    save = (cdir / ".state" / "save.md").read_text(encoding="utf-8")
+    assert save == "# Save\n\ndelivery_choice: Urgent 2026-11-05 final\nstatus: on-track\n"
+
+
+@pytest.mark.parametrize("payload,needle", [
+    ({"choice": "Normal"}, "choice must be Standard or Urgent"),
+    ({"choice": "standard"}, "choice must be Standard or Urgent"),
+    ({"lasting": True}, "true needs a choice"),
+    ({"choice": "Urgent", "lasting": "yes"}, "lasting must be true or false"),
+])
+def test_bad_choice_input_exits_2(home, root, payload, needle):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-11-05")])
+    fails(home, "start", {"now": NOW, **payload}, needle)
+
+
+def test_lasting_choice_needs_an_upcoming_exam(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "unknown")])
+    before = snapshot(root)
+    fails(home, "start", {"now": NOW, "choice": "Urgent", "lasting": True}, "lasting needs an upcoming exam")
+    assert snapshot(root) == before
+
+
+def test_debrief_rejects_a_choice(home, root):
+    course(home, mastery=TWO_LEFT)
+    fails(home, "debrief", {"now": NOW, "choice": "Urgent"}, "choice")
+
+
+def test_a_chosen_urgent_session_defers_a_due_debrief(home, root):
+    course(home, mastery=TWO_LEFT, save={"pending_debrief": "2026-10-10 midterm"})
+    profile(root, exams=[("CS201", "midterm", "2026-10-10"), ("CS201", "final", "2026-11-05")])
+    assert ok(home, "start", {"now": NOW})["debrief"]["due"] is True
+    out = ok(home, "start", {"now": NOW, "choice": "Urgent"})
+    assert (out["debrief"]["due"], out["debrief"]["deferred"]) == (False, True)
+
+
+# --- Exam scope (#45) -----------------------------------------------------------------
+
+MIDTERM = ("CS201", "midterm", "2026-11-05")
+FINAL = ("CS201", "final", "2026-12-20 10:00")
+WORDS = "the midterm covers sessions 1-19"
+
+
+def save_scope(home, *, exam_name="midterm", exam_date="2026-11-05", words=WORDS, now=NOW, **lists) -> dict:
+    return ok(home, "scope", {"now": now, "term": TERM, "course": "CS201 Theory", "exam_name": exam_name,
+                              "exam_date": exam_date, "words": words, **lists})
+
+
+def test_scope_is_saved_with_the_exam_and_start_reports_it_in_later_sessions(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM, FINAL])
+    out = save_scope(home, **{"in": ["Graphs", "Heaps"], "out": ["Sorting"]})
+    assert out["line"] == "Scope of your midterm on 2026-11-05 saved: 2 in, 1 out."
+    assert out["changed"] is True
+    assert out["scope"] == {"words": WORDS, "in": ["Graphs", "Heaps"], "out": ["Sorting"], "unsure": []}
+    for now in (NOW, "2026-10-25T18:00:00+03:00"):  # survives across sessions, used unchanged
+        start = ok(home, "start", {"now": now})
+        assert start["exam_name"] == "midterm"
+        assert start["scope"] == {"words": WORDS, "in": ["Graphs", "Heaps"], "out": ["Sorting"], "unsure": [],
+                                  "new": []}
+
+
+ROUTE4 = [("Sorting", "gap", "2026-10-10", 1, 0), ("Heaps", "unseen", "", 0, 0),
+          ("Graphs", "shaky", "2026-10-10", 1, 0), ("Tries", "unseen", "", 0, 0)]
+
+
+def test_standard_route_puts_out_of_scope_topics_last_marked_and_removes_none(home, root):
+    # save.md points at an out-of-scope topic: the first in-scope topic is picked instead.
+    course(home, mastery=ROUTE4, save={"next_topic": "Sorting"})
+    profile(root, exams=[MIDTERM, FINAL])
+    save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["sorting"]})
+    out = ok(home, "start", {"now": NOW})
+    assert out["class"]["class"] == "Standard"
+    assert out["remaining"] == [{"name": "Heaps", "status": "unseen", "scope": "in"},
+                                {"name": "Graphs", "status": "shaky", "scope": "in"},
+                                {"name": "Tries", "status": "unseen", "scope": "not checked"},
+                                {"name": "Sorting", "status": "gap", "scope": "out"}]
+    assert out["topic"]["name"] == "Heaps"
+    assert out["scope"]["new"] == ["Tries"]
+
+
+def test_gauge_skips_unseen_topics_that_are_not_on_the_exam(home, root):
+    course(home, mastery=ROUTE4)
+    profile(root, exams=[MIDTERM, FINAL])
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps", "Tries"]}
+    save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["Tries"]})
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps"]}
+
+
+def test_remaining_line_lists_whats_left_with_the_next_exams_scope_marks(home, root):
+    course(home, mastery=ROUTE4)
+    profile(root, exams=[MIDTERM, FINAL])
+    assert ok(home, "start", {"now": NOW})["remaining_line"] == (
+        "Left on your route:\n- Sorting (gap)\n- Heaps (unseen)\n- Graphs (shaky)\n- Tries (unseen)")
+    save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["sorting"]})
+    assert ok(home, "start", {"now": NOW})["remaining_line"] == (
+        "Left on your route:\n- Heaps (unseen)\n- Graphs (shaky)\n- Tries (unseen, not checked)\n"
+        "- Sorting (gap, not on your next exam)")
+
+
+def test_remaining_line_is_null_when_nothing_is_left(home, root):
+    course(home, mastery=[("Heaps", "mastered", "2026-10-10", 0, 2)])
+    profile(root)
+    out = ok(home, "start", {"now": NOW})
+    assert out["remaining"] == [] and out["remaining_line"] is None
+
+
+def test_standard_route_offers_out_of_scope_topics_once_nothing_else_is_left(home, root):
+    course(home, mastery=[("Heaps", "mastered", "2026-10-16", 0, 2), ("Sorting", "gap", "2026-10-10", 1, 0)],
+           save={"next_topic": "Sorting"})
+    profile(root, exams=[MIDTERM])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})
+    out = ok(home, "start", {"now": NOW})
+    assert out["remaining"] == [{"name": "Sorting", "status": "gap", "scope": "out"}]
+    assert out["topic"]["name"] == "Sorting"
+
+
+def test_without_a_scope_the_route_is_unchanged(home, root):
+    course(home, mastery=ROUTE4, save={"next_topic": "Sorting"})
+    profile(root, exams=[MIDTERM])
+    out = ok(home, "start", {"now": NOW})
+    assert [(r["name"], r["scope"]) for r in out["remaining"]] == [
+        ("Sorting", None), ("Heaps", None), ("Graphs", None), ("Tries", None)]
+    assert out["topic"]["name"] == "Sorting" and out["scope"] is None
+
+
+def test_scope_expires_with_its_exam_and_the_next_exams_scope_applies(home, root):
+    course(home, mastery=ROUTE4)
+    profile(root, exams=[MIDTERM, FINAL])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting", "Graphs"]})
+    after = "2026-11-06T09:00:00+02:00"  # the midterm (2026-11-05) has passed: start picks the final
+    out = ok(home, "start", {"now": after})
+    assert out["exam_name"] == "final" and out["scope"] is None
+    assert [r["scope"] for r in out["remaining"]] == [None] * 4
+    save_scope(home, exam_name="final", exam_date="2026-12-20", words="everything", now=after,
+               **{"in": ["Sorting", "Heaps", "Graphs", "Tries"]})
+    out = ok(home, "start", {"now": after})
+    assert out["scope"]["words"] == "everything" and out["scope"]["out"] == []
+    # The midterm's scope is still in scope.md, kept for its own exam.
+    assert ok(home, "start", {"now": NOW})["scope"]["words"] == WORDS
+
+
+FINGERPRINT = """# Fingerprint
+
+## Question types
+| type | frequency | marks |
+|---|---|---|
+| DFA construction (source: past-papers/mt1.pdf) | 2 of 2 papers | 15 |
+| PDA construction (source: past-papers/f1.pdf) (tentative) | 1 of 2 papers | 15 |
+| Heaps (source: past-papers/mt1.pdf) | 2 of 2 papers | 10 |
+"""
+
+
+def test_new_question_types_and_topics_found_after_confirmation_are_listed_once_as_new(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    (cdir / ".state" / "fingerprint.md").write_text(FINGERPRINT, encoding="utf-8")
+    profile(root, exams=[MIDTERM])
+    save_scope(home, **{"in": ["Heaps", "DFA construction"], "out": ["Sorting"]})
+    assert ok(home, "start", {"now": NOW})["scope"]["new"] == ["Graphs", "PDA construction"]
+    # The student answers: Graphs is on it, PDA unsure. Nothing is new any more.
+    save_scope(home, **{"in": ["Heaps", "DFA construction", "Graphs"], "out": ["Sorting"],
+                        "unsure": ["PDA construction"]})
+    scope = ok(home, "start", {"now": NOW})["scope"]
+    assert scope["new"] == [] and scope["unsure"] == ["PDA construction"]
+
+
+@pytest.mark.parametrize("cell, now, ask", [
+    ("2026-11-05", "2026-11-03T09:00:00+02:00", True),           # two days ahead
+    ("2026-11-05 12:30", "2026-11-05T08:00:00+02:00", True),     # a timed exam today
+    ("2026-11-05", "2026-11-02T09:00:00+02:00", False),          # three days ahead: not yet
+])
+def test_start_asks_for_the_scope_once_more_within_two_days(home, root, cell, now, ask):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "midterm", cell)])
+    assert ok(home, "start", {"now": now})["ask_exam_scope"] is ask
+
+
+def test_a_saved_scope_or_dont_know_stops_the_two_day_scope_question(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM])
+    near = "2026-11-04T09:00:00+02:00"
+    assert ok(home, "start", {"now": near})["ask_exam_scope"] is True
+    out = save_scope(home, words="don't know", now=near)  # no lists: scope unknown, asked
+    assert out["line"] == "Scope of your midterm on 2026-11-05: unknown, saved so it is not asked again."
+    after = ok(home, "start", {"now": near})
+    assert after["ask_exam_scope"] is False and after["scope"] is None  # unknown scope: nothing marked
+    assert [r["scope"] for r in after["remaining"]] == [None, None]
+
+
+def test_no_exam_never_asks_for_a_scope(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root)
+    out = ok(home, "start", {"now": NOW})
+    assert out["ask_exam_scope"] is False and out["scope"] is None
+
+
+def test_saving_the_same_scope_again_changes_nothing_and_another_exam_keeps_its_own(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM, FINAL])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})
+    save_scope(home, exam_name="Final", exam_date="2026-12-20", words="all of it", **{"in": ["Heaps", "Sorting"]})
+    path = cdir / ".state" / "scope.md"
+    before = snapshot(cdir / ".state")
+    again = save_scope(home, **{"in": [" Heaps "], "out": ["Sorting", "sorting"]})  # same lists, normalised
+    assert again["changed"] is False and snapshot(cdir / ".state") == before
+    assert again["scope"] == {"words": WORDS, "in": ["Heaps"], "out": ["Sorting"], "unsure": []}
+    edited = save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["Sorting"]})  # the student edits the list
+    assert edited["changed"] is True
+    text = path.read_text(encoding="utf-8")
+    assert text.count("## ") == 2 and "- in: Graphs" in text and "words: all of it" in text
+
+
+def test_a_saved_scope_follows_its_exam_when_the_date_or_time_changes(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM, FINAL])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})
+    profile(root, exams=[("CS201", "midterm", "2026-11-07 14:00"), FINAL])  # the midterm moved, same name
+    out = ok(home, "start", {"now": NOW})
+    assert (out["exam_date"], out["exam_name"]) == ("2026-11-07", "midterm")
+    assert out["scope"]["words"] == WORDS and out["scope"]["out"] == ["Sorting"]
+    near = ok(home, "start", {"now": "2026-11-06T09:00:00+02:00"})
+    assert near["ask_exam_scope"] is False  # it was answered for this exam: not asked again
+    # Saving it again under the new date moves the section instead of adding a second one.
+    save_scope(home, exam_date="2026-11-07", **{"in": ["Heaps", "Graphs"], "out": ["Sorting"]})
+    text = (cdir / ".state" / "scope.md").read_text(encoding="utf-8")
+    assert text.count("## ") == 1 and "## 2026-11-07 midterm" in text
+
+
+def test_a_passed_exams_scope_does_not_carry_over_to_a_later_exam_of_the_same_name(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})
+    profile(root, exams=[MIDTERM, ("CS201", "midterm", "2026-12-01")])  # a second midterm; the first stays
+    out = ok(home, "start", {"now": "2026-11-10T09:00:00+02:00"})
+    assert out["exam_date"] == "2026-12-01" and out["scope"] is None
+
+
+SETUP_SCOPE = {"now": NOW, "code": "CS201", "exam_name": "midterm", "exam_date": "2026-11-05", "words": WORDS}
+
+
+def test_a_scope_given_at_setup_is_noted_by_course_code_and_confirmed_at_the_first_session(home, root):
+    profile(root, exams=[MIDTERM])  # setup: the exam row is written, no course folder exists yet
+    noted = ok(home, "scope", SETUP_SCOPE)
+    assert noted["line"] == ("Scope of your midterm on 2026-11-05 noted: you confirm it at your first "
+                             "study session, once the course files are in.")
+    assert noted["course_dir"] is None and noted["changed"] is True
+    assert noted["scope"] == {"words": WORDS, "in": [], "out": [], "unsure": []}
+    assert ok(home, "scope", SETUP_SCOPE)["changed"] is False
+    course(home, mastery=TWO_LEFT)  # ingest made the course
+    near = "2026-11-04T09:00:00+02:00"
+    for now in (NOW, near):
+        out = ok(home, "start", {"now": now})
+        assert out["scope_words"] == WORDS and out["scope"] is None
+        assert out["ask_exam_scope"] is False  # the words are confirmed, not asked again
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})  # the confirm step at the first session
+    out = ok(home, "start", {"now": near})
+    assert out["scope_words"] is None and out["scope"]["out"] == ["Sorting"]
+
+
+def test_scope_words_are_only_for_the_matching_course_and_exam(home, root):
+    profile(root, exams=[MIDTERM, FINAL, ("MA101", "midterm", "2026-11-05")])
+    ok(home, "scope", {**SETUP_SCOPE, "code": "MA101"})
+    course(home, mastery=TWO_LEFT)
+    assert ok(home, "start", {"now": NOW})["scope_words"] is None
+
+
+@pytest.mark.parametrize("change, needle", [
+    ({"in": ["Heaps"]}, "a scope noted by code holds words only"),
+    ({"term": TERM, "course": "CS201 Theory"}, "give code, or term and course"),
+    ({"code": "CS 201"}, "code must be"),
+    ({"exam_name": "final"}, "no ## Exam dates row of 'CS201' named 'final'"),
+])
+def test_a_scope_noted_by_code_rejects_bad_input_and_writes_nothing(home, root, change, needle):
+    profile(root, exams=[MIDTERM])
+    before = snapshot(root)
+    fails(home, "scope", {**SETUP_SCOPE, **change}, needle)
+    assert snapshot(root) == before
+
+
+SCOPE_BASE = {"now": NOW, "term": TERM, "course": "CS201 Theory", "exam_name": "midterm", "exam_date": "2026-11-05",
+              "words": WORDS, "in": ["Heaps"]}
+
+
+@pytest.mark.parametrize("change, needle", [
+    ({"exam_date": "2026-11-06"}, "no ## Exam dates row of 'CS201' named 'midterm' on 2026-11-06"),
+    ({"exam_name": "final"}, "no ## Exam dates row of 'CS201' named 'final'"),
+    ({"exam_date": "Nov 5"}, "exam_date must be a date"),
+    ({"words": " "}, "words must be the student's words"),
+    ({"words": "x" * 201}, "words must be the student's words"),
+    ({"in": "Heaps"}, "in must be a list of names"),
+    ({"out": ["a\nb"]}, "out[1] must be a one-line name"),
+    ({"out": ["HEAPS"]}, "'Heaps' is in both in and out"),
+    ({"unsure": ["heaps"]}, "'Heaps' is in both in and unsure"),
+    ({"scope": []}, "unknown field 'scope'"),
+    ({"course": "Nope 1"}, "has no course folder"),
+])
+def test_scope_rejects_bad_input_and_writes_nothing(home, root, change, needle):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM])
+    before = snapshot(cdir)
+    fails(home, "scope", {**SCOPE_BASE, **change}, needle)
+    assert snapshot(cdir) == before
+
+
+def test_scope_refuses_a_symlinked_scope_file_and_reads_it_as_empty(home, root, tmp_path):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM])
+    target = tmp_path / "elsewhere.md"
+    target.write_text("## 2026-11-05 midterm\nwords: x\n- out: Heaps\n", encoding="utf-8")
+    (cdir / ".state" / "scope.md").symlink_to(target)
+    fails(home, "scope", SCOPE_BASE, "scope.md must not be a symlink")
+    assert ok(home, "start", {"now": NOW})["scope"] is None
+    assert target.read_text(encoding="utf-8").startswith("## 2026-11-05")
+
+
+# --- setup sampler -------------------------------------------------------------------
+
+def _setup_done(root: Path, date: str = "2026-10-01") -> None:
+    path = root / ".state" / "profile.md"
+    path.write_text(path.read_text(encoding="utf-8").replace("level:\n", f"level:\nsetup_done: {date}\n"),
+                    encoding="utf-8")
+
+
+def test_sampler_is_open_during_setup_with_every_axis_remaining(home, root):
+    profile(root)
+    before = snapshot(home)
+    out = ok(home, "prefs", {})
+    assert out["sampler"] == {"open": True, "started": False, "remaining": ["support", "frequency", "depth"]}
+    assert snapshot(home) == before
+
+
+def test_sampler_is_closed_for_users_who_finished_setup(home, root):
+    profile(root)
+    _setup_done(root)
+    assert ok(home, "prefs", {})["sampler"] == {"open": False, "started": False, "remaining": []}
+
+
+def test_sampler_choice_fills_a_default_axis_and_resumes_with_the_rest(home, root):
+    profile(root)
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "example-first"})
+    assert out["changed"] is True and out["line"] == "Noted for now: support example-first."
+    assert out["axes"] == {**DEFAULT_AXES, "support": {"level": "example-first", "provenance": "sampler",
+                                                       "wording": None}}
+    # an interrupted setup resumes the remaining demonstrations from the saved state
+    assert ok(home, "prefs", {})["sampler"] == {"open": True, "started": True, "remaining": ["frequency", "depth"]}
+
+
+def _saved_axis(root: Path, axis: str, entry: dict) -> None:
+    state = root / ".state" / "preferences.json"
+    state.write_text(json.dumps({"version": 1, "axes": {**DEFAULT_AXES, axis: entry}}, indent=2) + "\n",
+                     encoding="utf-8")
+
+
+@pytest.mark.parametrize("setup", ["explicit", "learned", "legacy", "sampler"])
+def test_sampler_never_overwrites_a_value_that_is_not_default(home, root, setup):
+    if setup == "legacy":
+        _legacy_profile(root, "fewer questions (2026-10-01)")
+        ok(home, "pref-event", {"event": "legacy-import"})
+    else:
+        profile(root)
+        if setup == "explicit":
+            ok(home, "pref-event", {"event": "explicit", "axis": "frequency", "level": "every step",
+                                    "wording": "ask me at every step"})
+        elif setup == "learned":
+            _saved_axis(root, "frequency", {"level": "every step", "provenance": "learned", "wording": None})
+        else:
+            ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "every step"})
+    kept = ok(home, "prefs", {})["axes"]["frequency"]
+    assert ok(home, "prefs", {})["sampler"]["remaining"] == ["support", "depth"]
+    before = snapshot(home)
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "key decisions"})
+    assert out["changed"] is False and out["axes"]["frequency"] == kept
+    assert out["line"] == f"Kept: guiding-question frequency stays {kept['level']} ({setup})."
+    assert snapshot(home) == before  # nothing rewritten
+
+
+def test_unsaved_legacy_value_is_saved_but_never_overwritten_by_the_sampler(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "every step"})
+    assert out["axes"] == LEGACY_AXES and out["saved"] is True
+    assert json.loads((root / ".state" / "preferences.json").read_text(encoding="utf-8"))["axes"] == LEGACY_AXES
+
+
+@pytest.mark.parametrize("payload", [{"event": "sampler", "axis": "support", "level": "try-first"},
+                                     {"event": "sampler-skip"}])
+def test_sampler_is_refused_after_setup(home, root, payload):
+    profile(root)
+    _setup_done(root)
+    before = snapshot(home)
+    fails(home, "pref-event", payload, "the sampler runs only during setup")
+    assert snapshot(home) == before
+
+
+def test_sampler_skip_keeps_completed_choices_and_ends_the_sampler(home, root):
+    profile(root)
+    ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "try-first"})
+    out = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert out["changed"] is True
+    assert out["line"] == "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
+    assert out["axes"] == {**DEFAULT_AXES, "support": {"level": "try-first", "provenance": "sampler",
+                                                       "wording": None}}
+    assert out["sampler"] == {"open": False, "started": True, "remaining": []}  # never offered again
+    before = snapshot(home)
+    again = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert again["changed"] is False and again["line"] == "Sampler already skipped."
+    late = ok(home, "pref-event", {"event": "sampler", "axis": "depth", "level": "what-if"})
+    assert late["changed"] is False and late["axes"]["depth"] == DEFAULT_AXES["depth"]
+    assert late["line"] == "The sampler was skipped; settings unchanged."
+    assert snapshot(home) == before
+
+
+def test_sampler_skip_before_any_choice_saves_the_defaults(home, root):
+    profile(root)
+    out = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert out["axes"] == DEFAULT_AXES and out["saved"] is True
+    assert ok(home, "prefs", {})["sampler"] == {"open": False, "started": False, "remaining": []}
+
+
+def test_last_sampler_choice_ends_with_a_tentative_summary(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")  # frequency is legacy: the sampler skips it
+    ok(home, "pref-event", {"event": "sampler", "axis": "depth", "level": "what-if"})
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "example-first"})
+    assert out["line"] == ("Tentative starting settings: support example-first, guiding-question frequency "
+                           "checks only, guiding-question depth what-if. They keep adapting as you study.")
+    assert out["sampler"] == {"open": False, "started": True, "remaining": []}
+    assert out["axes"]["frequency"] == LEGACY_AXES["frequency"]
+
+
+# --- Probe trials: one step toward more independent teaching (issue #41) -------------
+
+@pytest.mark.parametrize("cell,choice,expected", [
+    ("2026-11-05", None, True),                         # calm Standard
+    ("unknown", None, True),                            # no exam date: Standard
+    ("2026-10-19T00:00:00+03:00", None, False),         # Urgent within 48 hours
+    ("2026-10-19T00:00:00+03:00", "Standard", False),   # Standard by choice, but within 48 hours of the exam
+    ("2026-10-18", "Standard", False),                  # date-only exam tomorrow counts as within 48 hours
+    ("2026-11-05", "Urgent", False),                    # Urgent by choice
+])
+def test_start_says_whether_the_session_may_give_preference_evidence(home, root, cell, choice, expected):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", cell)])
+    payload = {"now": "2026-10-17T18:00:00+03:00", **({"choice": choice} if choice else {})}
+    assert ok(home, "start", payload)["preference_session"] is expected
+
+
+@pytest.mark.parametrize("exams,expected", [
+    ([("CS201", "final", "2026-11-04")], False),                 # date-only, 2 days on: part of that day is within 48 h
+    ([("CS201", "final", "2026-11-05")], True),                  # date-only, 3 days on: none of it is
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-03")], False),  # another course's exam counts
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-04T20:00:00+02:00")], False),  # 47 hours away
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-04T22:00:00+02:00")], True),   # 49 hours away
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-02T20:00:00+02:00")], True),   # already over
+])
+def test_no_preference_session_within_48_hours_of_any_exam(home, root, exams, expected):
+    course(home, mastery=TWO_LEFT)
+    course(home, "MA101 Calculus", mastery=TWO_LEFT)
+    profile(root, exams=exams)
+    out = ok(home, "start", {"now": "2026-11-02T21:00:00+02:00", "course": "CS201 Theory", "choice": "Standard"})
+    assert out["class"]["class"] == "Standard" and out["preference_session"] is expected
+
+
+DAY1 ="2026-10-17T09:00:00+03:00"
+DAY1_EVENING = "2026-10-17T19:00:00+03:00"
+DAY2 = "2026-10-18T09:00:00+03:00"
+DAY3 = "2026-10-19T09:00:00+03:00"
+ALL_AXES = ["support", "frequency", "depth"]
+
+
+def pref(home: Path, event: str, session: str | None = None, **fields) -> dict:
+    return ok(home, "pref-event", {"event": event, **({"session": session} if session else {}), **fields})
+
+
+def test_an_eligible_session_counts_once_and_opens_one_probe(home, root):
+    profile(root)
+    before = ok(home, "prefs", {})
+    assert before["trial"] is None and before["probe_axes"] == []  # no eligible session yet
+    out = pref(home, "session", DAY1)
+    assert out["changed"] is True and out["trial"] is None and out["probe_axes"] == ALL_AXES
+    assert out["axes"] == DEFAULT_AXES
+    saved = (root / ".state" / "preferences.json").read_bytes()
+    again = pref(home, "session", DAY1)  # a rerun in the same session changes nothing
+    assert again["changed"] is False and (root / ".state" / "preferences.json").read_bytes() == saved
+    fails(home, "pref-event", {"event": "session", "session": "2026-10-16T09:00:00+03:00"}, "earlier")
+
+
+def test_a_trial_moves_one_level_toward_independence_and_shows_while_it_runs(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    out = pref(home, "trial-start", DAY1, axis="frequency")
+    trial = {"axis": "frequency", "from": "key decisions", "to": "every step", "evidence": []}
+    assert out["changed"] is True and out["trial"] == trial
+    assert out["axes"] == DEFAULT_AXES  # the saved level changes only on adoption
+    assert out["probe_axes"] == []  # one probe per session, one active trial
+    assert ok(home, "prefs", {})["trial"] == trial
+    fails(home, "pref-event", {"event": "trial-start", "session": DAY1, "axis": "depth"}, "already running")
+    nxt = pref(home, "session", DAY2)  # the trial continues: it is the next session's probe
+    assert nxt["trial"] == trial and nxt["probe_axes"] == []
+
+
+def test_adoption_needs_positive_evidence_in_two_sessions_on_different_days(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    pref(home, "trial-start", DAY1, axis="depth")
+    first = pref(home, "positive", DAY1)
+    assert first["trial"]["evidence"] == [DAY1] and first["axes"]["depth"] == DEFAULT_AXES["depth"]
+    assert pref(home, "positive", DAY1)["changed"] is False  # a second answer in the same session adds nothing
+    pref(home, "session", DAY2)
+    neutral = pref(home, "neutral", DAY2)  # brief answers neither count nor reset
+    assert neutral["changed"] is False and neutral["trial"]["evidence"] == [DAY1]
+    pref(home, "session", DAY3)
+    out = pref(home, "positive", DAY3)
+    assert out["trial"] is None
+    assert out["axes"] == {**DEFAULT_AXES, "depth": {"level": "what-if", "provenance": "learned", "wording": None}}
+    assert out["line"] == "Saved for every course: guiding-question depth is now what-if."
+    assert out["probe_axes"] == []  # adoption used this session's probe
+    nxt = pref(home, "session", "2026-10-20T09:00:00+03:00")
+    assert nxt["probe_axes"] == ["support", "frequency"]  # depth is at its most independent level
+
+
+def test_positive_evidence_on_the_same_day_counts_once(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    pref(home, "trial-start", DAY1, axis="support")
+    pref(home, "positive", DAY1)
+    pref(home, "session", DAY1_EVENING)
+    same_day = pref(home, "positive", DAY1_EVENING)
+    assert same_day["changed"] is False and same_day["trial"]["evidence"] == [DAY1]
+    assert same_day["axes"]["support"] == DEFAULT_AXES["support"]
+    pref(home, "session", DAY2)
+    assert pref(home, "positive", DAY2)["axes"]["support"]["level"] == "try-first"
+
+
+def _reject(home: Path, session: str, axis: str = "frequency") -> dict:
+    pref(home, "trial-start", session, axis=axis)
+    return pref(home, "pushback", session)
+
+
+def test_pushback_reverts_and_the_same_change_waits_one_then_two_sessions_then_stops(home, root):
+    profile(root)
+    days = iter(f"2026-10-{d:02d}T09:00:00+03:00" for d in range(17, 31))
+
+    def session() -> tuple[str, dict]:
+        s = next(days)
+        return s, pref(home, "session", s)
+
+    s, _ = session()
+    pref(home, "trial-start", s, axis="frequency")
+    pref(home, "positive", s)
+    out = pref(home, "pushback", s)
+    assert out["trial"] is None and out["axes"] == DEFAULT_AXES  # reverted at once
+    assert out["probe_axes"] == []  # the session's probe is spent
+    s, skipped = session()
+    assert "frequency" not in skipped["probe_axes"] and "support" in skipped["probe_axes"]  # other changes stay open
+    fails(home, "pref-event", {"event": "trial-start", "session": s, "axis": "frequency"}, "rejected recently")
+    s, back = session()
+    assert "frequency" in back["probe_axes"]
+    again = _reject(home, s)  # the second rejection: positive evidence was reset, two sessions wait
+    assert again["trial"] is None
+    for _ in range(2):
+        _, skipped = session()
+        assert "frequency" not in skipped["probe_axes"]
+    s, back = session()
+    assert "frequency" in back["probe_axes"]
+    third = _reject(home, s)
+    assert third["line"].endswith("This change is not tried again unless the student asks.")
+    for _ in range(4):
+        s, later = session()
+        assert "frequency" not in later["probe_axes"]
+    fails(home, "pref-event", {"event": "trial-start", "session": s, "axis": "frequency"},
+          "only the student can reopen it")
+    reopened = pref(home, "reopen", axis="frequency")
+    assert reopened["line"] == "Reopened: Mimir may try guiding-question frequency every step again."
+    assert "frequency" in reopened["probe_axes"]
+
+
+def test_sessions_near_an_exam_give_no_evidence_run_no_probe_and_do_not_advance_cool_downs(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-10-21T09:00:00+03:00")])
+    assert ok(home, "start", {"now": DAY1})["preference_session"] is True
+    pref(home, "session", DAY1)
+    _reject(home, DAY1)  # the first rejection: skip one eligible session
+    near = "2026-10-19T18:00:00+03:00"  # Standard by choice, 39 hours before the exam
+    assert ok(home, "start", {"now": near, "choice": "Standard"})["preference_session"] is False
+    before = snapshot(home)
+    for payload in [{"event": "trial-start", "session": near, "axis": "support"},
+                    {"event": "positive", "session": near}, {"event": "frustration", "session": near}]:
+        fails(home, "pref-event", payload, "no preference evidence")
+    assert snapshot(home) == before
+    after = pref(home, "session", "2026-10-22T09:00:00+03:00")  # the first eligible session after the rejection
+    assert "frequency" not in after["probe_axes"]  # the near-exam session did not count as the skipped one
+
+
+def test_a_running_trial_is_paused_outside_the_counted_session(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-10-21T09:00:00+03:00")])
+    assert ok(home, "prefs", {})["trial_paused"] is False  # no trial at all
+    pref(home, "session", DAY1)
+    started = pref(home, "trial-start", DAY1, axis="depth")
+    assert started["trial"]["to"] == "what-if" and started["trial_paused"] is False  # applies in this session
+    near = "2026-10-19T18:00:00+03:00"  # Standard by choice, 39 hours before the exam: no session event
+    assert ok(home, "start", {"now": near, "choice": "Standard"})["preference_session"] is False
+    paused = ok(home, "prefs", {})
+    assert paused["trial"]["to"] == "what-if" and paused["trial_paused"] is True  # teach at the saved level
+    assert paused["axes"]["depth"] == DEFAULT_AXES["depth"]
+    resumed = pref(home, "session", "2026-10-22T09:00:00+03:00")
+    assert resumed["trial"]["to"] == "what-if" and resumed["trial_paused"] is False
+
+
+def test_explicit_values_are_never_probed_and_an_explicit_request_ends_a_trial_on_its_axis(home, root):
+    profile(root)
+    pref(home, "explicit", axis="support", level="example-first", wording="always show an example first")
+    out = pref(home, "session", DAY1)
+    assert out["probe_axes"] == ["frequency", "depth"]
+    fails(home, "pref-event", {"event": "trial-start", "session": DAY1, "axis": "support"}, "standing instruction")
+    fails(home, "pref-event", {"event": "reopen", "axis": "support"}, "standing instruction")
+    pref(home, "trial-start", DAY1, axis="depth")
+    ended = pref(home, "explicit", axis="depth", level="why", wording="keep asking me why")
+    assert ended["trial"] is None and ended["axes"]["depth"]["provenance"] == "explicit"
+    pref(home, "session", DAY2)
+    assert ok(home, "prefs", {})["probe_axes"] == ["frequency"]  # no rejection was counted for depth
+
+
+def test_frustration_in_two_separate_sessions_offers_fewer_questions_once(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    first = pref(home, "frustration", DAY1)
+    assert first["offer"] is False
+    assert pref(home, "frustration", DAY1)["offer"] is False  # a second override in the same session
+    pref(home, "session", DAY2)
+    second = pref(home, "frustration", DAY2)
+    assert second["offer"] is True and second["line"] == "Want fewer questions from now on?"
+    assert second["axes"] == DEFAULT_AXES  # the offer changes nothing; a yes is an explicit request
+    pref(home, "session", DAY3)
+    assert pref(home, "frustration", DAY3)["offer"] is False  # asked once only
+
+
+def test_no_offer_when_questions_are_already_at_checks_only(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    for s in (DAY1, DAY2):
+        pref(home, "session", s)
+        assert pref(home, "frustration", s)["offer"] is False
+
+
+@pytest.mark.parametrize("payload,needle", [
+    ({"event": "session"}, "session must be"),
+    ({"event": "session", "session": "2026-10-17"}, "session must be"),
+    ({"event": "session", "session": "2026-10-17T09:00:00"}, "session must be"),  # no offset
+    ({"event": "session", "session": DAY1, "axis": "depth"}, "axis"),
+    ({"event": "trial-start", "session": DAY1, "axis": "pace"}, "no preference evidence"),
+    ({"event": "positive", "session": DAY1}, "no preference evidence"),
+    ({"event": "neutral", "session": DAY1, "level": "why"}, "level"),
+    ({"event": "reopen", "axis": "pace"}, "axis must be"),
+    ({"event": "reopen", "axis": "depth", "session": DAY1}, "session"),
+    ({"event": "frustration"}, "session must be"),
+])
+def test_probe_events_reject_invalid_input_and_write_nothing(home, root, payload, needle):
+    profile(root)
+    before = snapshot(home)
+    fails(home, "pref-event", payload, needle)
+    assert snapshot(home) == before
+
+
+def test_evidence_needs_a_running_trial(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    for event in ("positive", "neutral", "pushback"):
+        fails(home, "pref-event", {"event": event, "session": DAY1}, "no trial is running")
+    fails(home, "pref-event", {"event": "trial-start", "session": DAY1, "axis": "pace"}, "axis must be")
+    assert pref(home, "reopen", axis="depth")["changed"] is False
+
+
+@pytest.mark.parametrize("extra", [
+    {"trial": {"axis": "depth", "from": "why", "to": "next step", "evidence": []}},   # a move toward more guided
+    {"trial": {"axis": "depth", "from": "next step", "to": "why", "evidence": []}},   # from is not the saved level
+    {"trial": {"axis": "depth", "from": "why", "to": "what-if", "evidence": ["felt keen"]}},
+    {"sessions": {"count": -1, "current": None, "probed": None}},
+    {"transitions": {"depth: why > what-if": {"rejections": 4, "next": 0}}},
+    {"transitions": {"depth: what-if > why": {"rejections": 1, "next": 0}}},
+    {"frustration": {"count": 1, "last": None, "offered": "no"}},
+    {"notes": "seemed tired"},
+])
+def test_damaged_probe_state_is_refused(home, root, extra):
+    profile(root)
+    (root / ".state" / "preferences.json").write_text(json.dumps({"version": 1, "axes": DEFAULT_AXES, **extra}),
+                                                      encoding="utf-8")
+    fails(home, "prefs", {}, "preferences.json is damaged")
+
+
+def test_probe_state_survives_a_new_conversation_byte_for_byte(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    pref(home, "trial-start", DAY1, axis="support")
+    saved = (root / ".state" / "preferences.json").read_bytes()
+    state = json.loads(saved)
+    assert state["trial"]["to"] == "try-first" and state["sessions"]["count"] == 1
+    assert ok(home, "prefs", {})["trial"] == state["trial"]
+    assert pref(home, "session", DAY1)["changed"] is False
+    assert (root / ".state" / "preferences.json").read_bytes() == saved
+
+
+# --- what's-new line for existing users (issue #43) ------------------------------------
+
+WHATS_NEW = "New: sessions run until you say 'end session'. You can also ask to cram or to study normally."
+
+
+def test_existing_user_gets_the_whats_new_line_at_the_first_session(home, root):
+    profile(root)
+    _setup_done(root)  # setup finished before the update: no seen marker
+    before = snapshot(home)
+    assert ok(home, "prefs", {})["whats_new"] == WHATS_NEW
+    assert snapshot(home) == before  # prefs stays read-only
+
+
+def test_whats_new_line_is_shown_once_and_never_again(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    _setup_done(root)
+    out = ok(home, "pref-event", {"event": "whats-new-seen"})
+    assert out["changed"] is True and out["whats_new"] is None
+    assert out["axes"] == LEGACY_AXES  # the settings are untouched; the legacy value is saved with the marker
+    state = json.loads((root / ".state" / "preferences.json").read_text(encoding="utf-8"))
+    assert state["whats_new_seen"] is True  # the global seen marker lives in the preference state
+    before = snapshot(home)
+    for _ in range(2):  # later sessions
+        assert ok(home, "prefs", {})["whats_new"] is None
+    again = ok(home, "pref-event", {"event": "whats-new-seen"})
+    assert again["changed"] is False and again["whats_new"] is None
+    assert snapshot(home) == before  # a rerun rewrites nothing
+
+
+def test_a_user_with_only_a_lazy_setup_counts_as_existing(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root)  # no setup_done: the earlier sessions came from a lazy setup
+    (cdir / ".state" / "logs").mkdir(exist_ok=True)
+    (cdir / ".state" / "logs" / "2026-10-01-0900.md").write_text("## Session\nstarted: 2026-10-01T09:00:00+03:00\n",
+                                                                  encoding="utf-8")
+    assert ok(home, "prefs", {})["whats_new"] == WHATS_NEW
+    _setup_done(root, "2026-10-17")  # running setup later does not hide it either
+    assert ok(home, "prefs", {})["whats_new"] == WHATS_NEW
+
+
+def test_a_new_lazy_user_is_marked_seen_at_the_first_session_and_never_sees_it(home, root):
+    cdir = course(home, mastery=TWO_LEFT)  # just filed by the lazy setup: no session log yet
+    profile(root)
+    assert ok(home, "prefs", {})["whats_new"] is None
+    ok(home, "pref-event", {"event": "whats-new-seen"})  # every first session marks it seen
+    (cdir / ".state" / "logs").mkdir(exist_ok=True)
+    (cdir / ".state" / "logs" / "2026-10-17-0900.md").write_text("started: 2026-10-17T09:00:00+03:00\n",
+                                                                  encoding="utf-8")
+    assert ok(home, "prefs", {})["whats_new"] is None
+
+
+def test_new_users_never_see_the_whats_new_line(home, root):
+    profile(root)  # a new user in setup: no setup_done yet
+    assert ok(home, "prefs", {})["whats_new"] is None
+    ok(home, "pref-event", {"event": "sampler-skip"})
+    out = ok(home, "pref-event", {"event": "whats-new-seen"})  # setup marks it seen before setup_done
+    assert out["changed"] is True and out["whats_new"] is None
+    _setup_done(root, "2026-10-17")
+    assert ok(home, "prefs", {})["whats_new"] is None  # first study session after setup
+    assert ok(home, "prefs", {})["sampler"]["open"] is False
