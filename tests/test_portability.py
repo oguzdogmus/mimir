@@ -403,6 +403,18 @@ def test_exam_intake_and_the_two_day_check_ask_for_the_scope_with_the_time():
     assert "covers" in ingest and "Exam scope" in ingest  # an outline's stated coverage is proposed
 
 
+def test_setup_asks_the_scope_with_each_exam_and_the_first_session_confirms_it():
+    setup = _read(SETUP)
+    intake = setup.split("3. Ask everything", 1)[1].split("\n4. ", 1)[0]
+    assert "date and time and what it covers" in intake  # asked together when the exam is added
+    assert '"code"' in setup and "session.py\" scope" in setup  # noted by course code, no folder yet
+    session = _read("skills/mimir-study/references/session.md")
+    checks = session.split("Exam checks", 1)[1].split("\n5. ", 1)[0]
+    assert "`scope_words`" in checks and "confirm step" in checks
+    lazy = urgent_section("## 1. Lazy setup")
+    assert "no scope question in a lazy setup" in lazy  # lazy setup still leaves it out on purpose
+
+
 def test_triage_and_the_standard_route_use_the_saved_scope():
     urgent = _read("skills/mimir-study/references/urgent.md")
     assert '"scope"' in urgent and "`start`'s `scope`" in urgent  # passed to plan.py triage

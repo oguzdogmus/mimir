@@ -118,7 +118,7 @@ def test_calm(home, root):
     assert out["exam_date"] == "2026-11-05"
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
                         "exam_date", "exam_name", "q0", "exam_problems", "ask_exam_time", "ask_exam_ahead",
-                        "ask_exam_scope", "remaining",
+                        "ask_exam_scope", "scope_words", "remaining",
                         "class", "topic", "route_line", "first_contact", "scope", "gauge", "debrief",
                         "preference_session", "line"}
     assert out["scope"] is None and out["ask_exam_scope"] is False
@@ -1940,6 +1940,48 @@ def test_a_passed_exams_scope_does_not_carry_over_to_a_later_exam_of_the_same_na
     profile(root, exams=[MIDTERM, ("CS201", "midterm", "2026-12-01")])  # a second midterm; the first stays
     out = ok(home, "start", {"now": "2026-11-10T09:00:00+02:00"})
     assert out["exam_date"] == "2026-12-01" and out["scope"] is None
+
+
+SETUP_SCOPE = {"now": NOW, "code": "CS201", "exam_name": "midterm", "exam_date": "2026-11-05", "words": WORDS}
+
+
+def test_a_scope_given_at_setup_is_noted_by_course_code_and_confirmed_at_the_first_session(home, root):
+    profile(root, exams=[MIDTERM])  # setup: the exam row is written, no course folder exists yet
+    noted = ok(home, "scope", SETUP_SCOPE)
+    assert noted["line"] == ("Scope of your midterm on 2026-11-05 noted: you confirm it at your first "
+                             "study session, once the course files are in.")
+    assert noted["course_dir"] is None and noted["changed"] is True
+    assert noted["scope"] == {"words": WORDS, "in": [], "out": [], "unsure": []}
+    assert ok(home, "scope", SETUP_SCOPE)["changed"] is False
+    course(home, mastery=TWO_LEFT)  # ingest made the course
+    near = "2026-11-04T09:00:00+02:00"
+    for now in (NOW, near):
+        out = ok(home, "start", {"now": now})
+        assert out["scope_words"] == WORDS and out["scope"] is None
+        assert out["ask_exam_scope"] is False  # the words are confirmed, not asked again
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})  # the confirm step at the first session
+    out = ok(home, "start", {"now": near})
+    assert out["scope_words"] is None and out["scope"]["out"] == ["Sorting"]
+
+
+def test_scope_words_are_only_for_the_matching_course_and_exam(home, root):
+    profile(root, exams=[MIDTERM, FINAL, ("MA101", "midterm", "2026-11-05")])
+    ok(home, "scope", {**SETUP_SCOPE, "code": "MA101"})
+    course(home, mastery=TWO_LEFT)
+    assert ok(home, "start", {"now": NOW})["scope_words"] is None
+
+
+@pytest.mark.parametrize("change, needle", [
+    ({"in": ["Heaps"]}, "a scope noted by code holds words only"),
+    ({"term": TERM, "course": "CS201 Theory"}, "give code, or term and course"),
+    ({"code": "CS 201"}, "code must be"),
+    ({"exam_name": "final"}, "no ## Exam dates row of 'CS201' named 'final'"),
+])
+def test_a_scope_noted_by_code_rejects_bad_input_and_writes_nothing(home, root, change, needle):
+    profile(root, exams=[MIDTERM])
+    before = snapshot(root)
+    fails(home, "scope", {**SETUP_SCOPE, **change}, needle)
+    assert snapshot(root) == before
 
 
 SCOPE_BASE = {"now": NOW, "term": TERM, "course": "CS201 Theory", "exam_name": "midterm", "exam_date": "2026-11-05",

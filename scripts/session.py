@@ -47,6 +47,10 @@ Files read (all inside the learning root, see ``workspace.py``)
   section per exam, ``## YYYY-MM-DD <exam name>``, then ``words: <the
   student's words>`` and one ``- in: <name>``, ``- out: <name>`` or ``-
   unsure: <name>`` line per question type or topic. Other lines are ignored.
+* ``.state/scope.md`` (in the learning root): exam scopes noted at setup,
+  before the course had a folder, written only by ``scope`` with ``code``.
+  Sections as in the course ``scope.md``, plus a ``code: <CODE>`` line;
+  only ``words`` is kept (no lists).
 * ``<course>/.state/fingerprint.md``: the ``## Question types`` names (the
   type cell before ``(source:``, ``(tentative)`` or ``(prior term)``), for
   ``start``'s ``scope.new``.
@@ -146,8 +150,13 @@ start -- pick the course, the exam and the class for a new session.
     topics and fingerprint question types in none of the three lists (found
     after the scope was confirmed), route first. Once the exam passes,
     ``start`` picks another exam and that exam's scope (or none) applies.
-    ``ask_exam_scope``: the exam is at most TIME_ASK_DAYS days ahead and
-    ``scope.md`` has no section for it at all (a saved "don't know" counts).
+    ``scope_words``: when the course ``scope.md`` has no section for the
+    picked exam, the ``words`` noted at setup for it (root ``scope.md``,
+    a section of ``code`` found the same way), else null: the session
+    resolves them through the confirm step instead of asking.
+    ``ask_exam_scope``: the exam is at most TIME_ASK_DAYS days ahead, the
+    course ``scope.md`` has no section for it at all (a saved "don't know"
+    counts) and no scope was noted for it at setup.
     Route: ``mastery.md`` rows in order; when the
     ``INDEX.md`` registry has no ``outline`` row, each ``## Topics`` name not
     yet listed (ignoring case and repeated spaces) follows as an unseen row,
@@ -422,6 +431,14 @@ scope -- save the confirmed scope of one exam.
           "2026-11-05", "scope": {"words": "...", "in": [...], "out": [...],
           "unsure": []}, "changed": true, "line": "Scope of your midterm on
           2026-11-05 saved: 1 in, 1 out."}
+    At setup, before the course has a folder: {"now", "code" (the course
+    code, one word, instead of ``term`` and ``course``), "exam_name",
+    "exam_date", "words"} notes the student's words in the root
+    ``.state/scope.md`` (``in``, ``out`` and ``unsure`` must be empty;
+    ``course_dir`` null; line "Scope of your <name> on <date> noted: you
+    confirm it at your first study session, once the course files are in.").
+    ``start`` reports them as ``scope_words`` until the course has a section
+    for that exam. Giving ``code`` with ``term`` or ``course`` exits 2.
     ``exam_name`` and ``exam_date`` are ``start``'s for that exam: the
     ``## Exam dates`` row of the course code with that name (case and repeated
     spaces ignored; null for an unnamed row) whose calendar day is
@@ -789,6 +806,9 @@ SCOPE_FILE = "scope.md"
 SCOPE_SIDES = ("in", "out", "unsure")
 SCOPE_HEAD = ("<!-- Mimir exam scope. Changed only by session.py scope; one section per exam. -->\n"
               "# Exam scope\n")
+NOTED_HEAD = ("<!-- Mimir exam scopes noted at setup, before the course had a folder. Changed only by "
+              "session.py scope. -->\n# Noted exam scope\n")
+_CODE = re.compile(r"[^\s|]{1,40}")
 MAX_SCOPE_NAME = 120
 _SCOPE_SECTION = re.compile(r"## ([0-9]{4}-[0-9]{2}-[0-9]{2})(?: (.*))?")
 _SCOPE_ENTRY = re.compile(r"- (in|out|unsure): (.+)")
@@ -802,7 +822,7 @@ def scopes(course_dir: Path) -> list[dict]:
         head = _SCOPE_SECTION.fullmatch(line)
         if head:
             out.append({"exam_date": head.group(1), "exam_name": " ".join((head.group(2) or "").split()),
-                        "words": "", "in": [], "out": [], "unsure": []})
+                        "code": "", "words": "", "in": [], "out": [], "unsure": []})
             continue
         if not out:
             continue
@@ -811,6 +831,8 @@ def scopes(course_dir: Path) -> list[dict]:
             out[-1][entry.group(1)].append(" ".join(entry.group(2).split()))
         elif line.startswith("words:"):
             out[-1]["words"] = line[len("words:"):].strip()
+        elif line.startswith("code:"):
+            out[-1]["code"] = line[len("code:"):].strip()
     return out
 
 
@@ -828,10 +850,12 @@ def _scope_for(sections: list[dict], exam_date: str | None, exam_name: str | Non
             or next((s for s in same if s["exam_date"] not in rows), None))
 
 
-def _scope_text(sections: list[dict]) -> str:
-    parts = [SCOPE_HEAD]
+def _scope_text(sections: list[dict], head: str = SCOPE_HEAD) -> str:
+    parts = [head]
     for sec in sections:
-        lines = [f"## {sec['exam_date']} {sec['exam_name']}".rstrip(), f"words: {sec['words']}"]
+        lines = [f"## {sec['exam_date']} {sec['exam_name']}".rstrip()]
+        lines += [f"code: {sec['code']}"] if sec.get("code") else []
+        lines += [f"words: {sec['words']}"]
         lines += [f"- {side}: {name}" for side in SCOPE_SIDES for name in sec[side]]
         parts.append("\n".join(lines) + "\n")
     return "\n".join(parts)
@@ -851,24 +875,33 @@ def question_types(course_dir: Path) -> list[str]:
     return names
 
 
-def scope_view(course_dir: Path, rows: list[dict], exam: dict, exams: list[tuple[date, str]],
-               today: date) -> tuple[dict | None, bool]:
-    """``start``'s ``scope`` and ``ask_exam_scope``. ``scope``: the saved lists of the picked exam
-    plus ``new``, the route topics and question types in none of them; None when no list is saved
-    for it (scope unknown). ``ask_exam_scope``: nothing at all is saved for the exam (not even
-    "don't know") and it is at most TIME_ASK_DAYS days ahead."""
+def _noted_scope(root: Path, code: str, exam: dict, exams: list[tuple[date, str]]) -> dict | None:
+    """The scope noted at setup for the course code's exam, from ``<root>/.state/scope.md``."""
+    sections = [s for s in scopes(root) if s["code"].casefold() == code.casefold()]
+    return _scope_for(sections, exam["exam_date"], exam["exam_name"], exams)
+
+
+def scope_view(root: Path, course_dir: Path, code: str, rows: list[dict], exam: dict,
+               exams: list[tuple[date, str]], today: date) -> tuple[dict | None, bool, str | None]:
+    """``start``'s ``scope``, ``ask_exam_scope`` and ``scope_words``. ``scope``: the saved lists of
+    the picked exam plus ``new``, the route topics and question types in none of them; None when no
+    list is saved for it (scope unknown). ``scope_words``: with nothing saved in the course, the
+    words noted at setup for the exam, else None. ``ask_exam_scope``: nothing at all is saved or
+    noted for the exam (not even "don't know") and it is at most TIME_ASK_DAYS days ahead."""
     saved = _scope_for(scopes(course_dir), exam["exam_date"], exam["exam_name"], exams)
-    ask = (saved is None and exam["exam_date"] is not None
+    noted = _noted_scope(root, code, exam, exams) if saved is None else None
+    words = noted["words"] if noted else None
+    ask = (saved is None and noted is None and exam["exam_date"] is not None
            and (date.fromisoformat(exam["exam_date"]) - today).days <= TIME_ASK_DAYS)
     if saved is None or not any(saved[side] for side in SCOPE_SIDES):
-        return None, ask
+        return None, ask, words
     known = {_norm(n) for side in SCOPE_SIDES for n in saved[side]}
     new: list[str] = []
     for name in [r["name"] for r in rows] + question_types(course_dir):
         if _norm(name) not in known:
             known.add(_norm(name))
             new.append(name)
-    return {"words": saved["words"], **{side: saved[side] for side in SCOPE_SIDES}, "new": new}, False
+    return {"words": saved["words"], **{side: saved[side] for side in SCOPE_SIDES}, "new": new}, False, None
 
 
 def scope_mark(scope: dict | None, name: str) -> str | None:
@@ -1148,6 +1181,7 @@ def _start(data: dict, choice: str | None = None,
         return {"root": str(root), "courses": courses, "term": None, "course": None, "course_dir": None,
                 "code": None, "inferred": None, "exam": None, "exam_date": None, "exam_name": None, "q0": None,
                 "exam_problems": None, "ask_exam_time": None, "ask_exam_ahead": None, "ask_exam_scope": None,
+                "scope_words": None,
                 "remaining": [], "class": None, "topic": None, "route_line": None,
                 "first_contact": None, "scope": None, "gauge": None, "debrief": None, "preference_session": None,
                 "line": NO_COURSE_LINE}, None
@@ -1155,7 +1189,8 @@ def _start(data: dict, choice: str | None = None,
     today = now.date()
     exam = _exam(profile, code, now)
     rows = route(course_dir)
-    scope, ask_scope = scope_view(course_dir, rows, exam, _code_exams(profile, code, now.tzinfo), today)
+    scope, ask_scope, scope_words = scope_view(root, course_dir, code, rows, exam,
+                                               _code_exams(profile, code, now.tzinfo), today)
     # The next exam's scope orders the route: topics not on it go last; none is removed.
     rows = sorted(rows, key=lambda r: scope_mark(scope, r["name"]) == "out")
     remaining = [r for r in rows if r["status"] != "mastered"]
@@ -1180,7 +1215,7 @@ def _start(data: dict, choice: str | None = None,
     route_line = None if pick is not None else ROUTE_DONE_LINE if rows else NO_ROUTE_LINE
     return {"root": str(root), "courses": courses, "term": chosen["term"], "course": chosen["course"],
             "course_dir": str(course_dir), "code": code, "inferred": inferred, **exam,
-            "ask_exam_scope": ask_scope,
+            "ask_exam_scope": ask_scope, "scope_words": scope_words,
             "remaining": [{"name": r["name"], "status": r["status"], "scope": scope_mark(scope, r["name"])}
                           for r in remaining],
             "class": klass, "topic": topic, "route_line": route_line,
@@ -1204,10 +1239,20 @@ def _scope_names(data: dict, side: str) -> list[str]:
 
 
 def cmd_scope(data: dict) -> dict:
-    """Save the confirmed scope of one exam in the course's ``scope.md``."""
-    _check_keys(data, {"now", "term", "course", "exam_name", "exam_date", "words", *SCOPE_SIDES})
+    """Save the confirmed scope of one exam in the course's ``scope.md``, or, given a course
+    ``code`` instead of ``term`` and ``course`` (setup, before the course has a folder), note the
+    student's words in ``<root>/.state/scope.md`` for the first study session to confirm."""
+    _check_keys(data, {"now", "term", "course", "code", "exam_name", "exam_date", "words", *SCOPE_SIDES})
     now = _moment(data, "now")
-    term, course = parse_term(data), parse_segment(data, "course")
+    noted = "code" in data
+    if noted and ("term" in data or "course" in data):
+        raise InputError("give code, or term and course, not both")
+    if noted:
+        code = data["code"]
+        if not isinstance(code, str) or not _CODE.fullmatch(code):
+            raise InputError("code must be a course code: one word of at most 40 characters")
+    else:
+        term, course = parse_term(data), parse_segment(data, "course")
     exam_date = data.get("exam_date")
     if not isinstance(exam_date, str) or _valid_date(exam_date) is None:
         raise InputError("exam_date must be a date YYYY-MM-DD (start's exam_date)")
@@ -1224,37 +1269,47 @@ def cmd_scope(data: dict) -> dict:
         if both:
             name = next(n for n in lists[a] if _norm(n) in both)
             raise InputError(f"{_short(name)} is in both {a} and {b}")
+    if noted and any(lists.values()):
+        raise InputError("a scope noted by code holds words only: its lists are confirmed once the course "
+                         "has a folder")
     root = ingest._workspace_root()
-    course_dir = workspace.course_folder(root, term, course)
-    if not (course_dir / "INDEX.md").is_file():
-        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
-    code = course.split()[0]
+    if noted:
+        course_dir, folder = None, root
+    else:
+        course_dir = folder = workspace.course_folder(root, term, course)
+        if not (course_dir / "INDEX.md").is_file():
+            raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
+        code = course.split()[0]
     exams = _code_exams(_text(root / ".state" / "profile.md"), code, now.tzinfo)
     if not any(day.isoformat() == exam_date and _norm(name) == _norm(exam_name) for day, name in exams):
         raise InputError(f"no ## Exam dates row of {_short(code)} named {_short(exam_name or '(none)')} "
                          f"on {exam_date} in profile.md")
-    path = course_dir / ".state" / SCOPE_FILE
+    path = folder / ".state" / SCOPE_FILE
     if path.is_symlink():
         raise InputError(f"{SCOPE_FILE} must not be a symlink")
-    sections = scopes(course_dir)
-    entry = {"exam_date": exam_date, "exam_name": exam_name, "words": " ".join(words.split()), **lists}
-    old = _scope_for(sections, exam_date, exam_name, exams)
+    sections = scopes(folder)
+    entry = {"exam_date": exam_date, "exam_name": exam_name, "code": code if noted else "",
+             "words": " ".join(words.split()), **lists}
+    mine = [s for s in sections if s["code"].casefold() == code.casefold()] if noted else sections
+    old = _scope_for(mine, exam_date, exam_name, exams)
     if old is None:
         sections.append(entry)
     else:
         sections[sections.index(old)] = entry
-    text = _scope_text(sections)
+    text = _scope_text(sections, NOTED_HEAD if noted else SCOPE_HEAD)
     changed = _text(path) != text
     if changed:
         ingest._write_atomic(path, text)
     label = f"your {exam_name or 'exam'} on {exam_date}"
-    if any(lists.values()):
+    if noted:
+        line = f"Scope of {label} noted: you confirm it at your first study session, once the course files are in."
+    elif any(lists.values()):
         counts = f"{len(lists['in'])} in, {len(lists['out'])} out"
         counts += f", {len(lists['unsure'])} unsure" if lists["unsure"] else ""
         line = f"Scope of {label} saved: {counts}."
     else:
         line = f"Scope of {label}: unknown, saved so it is not asked again."
-    return {"course_dir": str(course_dir), "exam_name": exam_name or None, "exam_date": exam_date,
+    return {"course_dir": str(course_dir) if course_dir else None, "exam_name": exam_name or None, "exam_date": exam_date,
             "scope": {"words": entry["words"], **lists}, "changed": changed, "line": line}
 
 
