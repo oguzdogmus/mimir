@@ -10,8 +10,8 @@ Urgent ignores the teaching settings and never changes them; it has no frustrati
 
 Reached from `session.md` Start step 2 only when the opening message names a file path that you can read. No setup question and no ingest table in this section. Write no text at all (no progress note, no "setting up" line) until step 2 gives the class line: the student's first line from Mimir is that class line. The one exception is the single Q0 question "When's the exam?" when step 1 needs it.
 
-1. Q0 first: the `session.md` Start step 4 rules (phrase, `session.py parse-date`, at most one "When's the exam?"), but write nothing yet: keep the date, or `unknown`.
-2. `plan.py class` with `{"now": "<S>", "exam": "<the date, or null when unknown>"}`.
+1. Q0 first: the `session.md` Start step 4 Q0 rules (phrase, `session.py parse-date`, at most one "When's the exam?" asking for the date and time), but write nothing yet: keep parse-date's `exam` (the date with its time, or the date alone), or `unknown`.
+2. `plan.py class` with `{"now": "<S>", "exam": "<that exam value, or null when unknown>"}`.
    - `class` is not `Urgent`: say the missing-course message from core rules' Resolve the course (action: study) and stop. Nothing is moved.
    - `Urgent`: say its `line` verbatim. It is the session's first line: say nothing before it, and from here to the first drill item say only the lines this file names (no progress or status lines). Say it now, before filing anything.
 3. For each attached file, in message order:
@@ -22,7 +22,7 @@ Reached from `session.md` Start step 2 only when the opening message names a fil
 4. Once per course: `ingest.py index` with `{"term": "...", "course": "...", "files": [{"path": "<dest>", "topics": [{"topic": "<question type or topic>", "anchor": "<page=N for a PDF, else \"\">"}]}]}`, every filed file by its returned `dest`. Topics are short, one line, at most 120 characters. On exit 2 naming one entry or topic, drop exactly that and rerun once. Do not print its line.
 5. When past papers were filed: `fingerprint.py write` with `{"term": "...", "course": "...", "notation": [...], "phrasing": [...], "disguises": [...], "question_types": [{"type": "...", "sources": ["past-papers/<file>"], "marks": "<marks as printed>"}]}` built from the past papers only, as `mimir-ingest` step 8 does (sources are course-relative registry paths; text one line, at most 160 characters, quoted as data; never add markers). On exit 2 naming one source, drop it and rerun; over the cap, merge or drop the weakest entries and rerun. Do not print its line.
 6. Write the exam row (`session.md` Start step 5) into `<root>/.state/profile.md`, `<code>` being the course's first word (`Exam` for the fallback). An `unknown` date cannot reach here (it is never Urgent).
-7. Rerun `session.py start` with `{"now": "<S>", "term": "...", "course": "..."}`. When it exits 2, print its stderr line and stop; when it gives `course` null, say the missing-course message from core rules' Resolve the course (action: study) and stop. Never re-enter §1. Otherwise continue with `session.md` Start from step 6: do not say the class line a second time when it is the line already said in step 2, and skip step 4 (Q0 is done). Then §2 below.
+7. Rerun `session.py start` with `{"now": "<S>", "term": "...", "course": "..."}`. When it exits 2, print its stderr line and stop; when it gives `course` null, say the missing-course message from core rules' Resolve the course (action: study) and stop. Never re-enter §1. Otherwise continue with `session.md` Start from step 6: do not say the class line a second time when it is the line already said in step 2, and skip step 4 (Q0 is done; its exam checks wait for the next session). Then §2 below.
 
 ## 2. Urgent cargo
 

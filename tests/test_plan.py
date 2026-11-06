@@ -98,15 +98,38 @@ def test_exam_today_date_only():
     payload = {"now": "2026-11-05T07:00:00+02:00", "exam": "2026-11-05"}
     out = ok("class", payload)
     assert (out["class"], out["reason"]) == ("Urgent", "today")
-    assert out["line"] == "Urgent delivery: exam today"
+    assert out["line"] == "Urgent delivery: exam today, time unknown"
     assert out["hours_to_exam"] is None          # exam time unknown
     assert out["days_to_exam"] == 0
 
 
-def test_date_only_exam_earlier_day_is_midnight():
-    out = ok("class", {"now": "2026-11-03T12:00:00+02:00", "exam": "2026-11-05"})
-    assert out["hours_to_exam"] == 36
-    assert out["reason"] == "floor"
+def test_date_only_exam_tomorrow_is_urgent_without_hours():
+    # 21:00 the evening before used to say "exam in 3 hours" (a countdown to midnight).
+    out = ok("class", {"now": "2026-11-04T21:00:00+02:00", "exam": "2026-11-05"})
+    assert (out["class"], out["reason"]) == ("Urgent", "tomorrow")
+    assert out["line"] == "Urgent delivery: exam tomorrow, time unknown"
+    assert out["hours_to_exam"] is None and out["days_to_exam"] == 1
+
+
+@pytest.mark.parametrize("now,days", [("2026-11-03T12:00:00+02:00", 2), ("2026-11-02T23:59:00+02:00", 3)])
+def test_date_only_exam_two_or_more_days_ahead_is_standard_without_hours(now, days):
+    out = ok("class", {"now": now, "exam": "2026-11-05"})
+    assert (out["class"], out["reason"]) == ("Standard", "calm")
+    assert out["line"] == f"Standard delivery: exam in {days} days"
+    assert out["hours_to_exam"] is None and out["days_to_exam"] == days
+
+
+def test_exam_time_tomorrow_counts_real_hours():
+    out = ok("class", {"now": "2026-11-04T21:00:00+02:00", "exam": "2026-11-05T13:00:00+02:00"})
+    assert (out["class"], out["reason"]) == ("Urgent", "floor")
+    assert out["hours_to_exam"] == 16
+    assert out["line"] == "Urgent delivery: exam in 16 hours"
+
+
+def test_exam_time_in_another_offset():
+    # 12:30 at +02:00 is 10:30 UTC; from 21:14:46 at +02:00 that is 15.25 hours.
+    out = ok("class", {"now": "2026-11-02T19:14:46+00:00", "exam": "2026-11-03T12:30:00+02:00"})
+    assert out["hours_to_exam"] == 15.25 and out["class"] == "Urgent"
 
 
 @pytest.mark.parametrize("payload", [

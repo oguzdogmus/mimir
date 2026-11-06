@@ -28,7 +28,7 @@ Use this block wherever a skill resolves a course; keep the caller's action word
 ## Mode and dates
 - The exam date is the only mode input. It sets the delivery class (Standard or Urgent). The only deadline is an exam.
 - The student never picks a mode, and no command selects one. A command picks an action, never Standard or Urgent.
-- Date math, delivery class, and plans come from `<mimir>/scripts/plan.py` and `<mimir>/scripts/session.py`, never from your own arithmetic. Get "now" only from `session.py now` and turn an exam-date phrase into a date only with `session.py parse-date`; never run a shell date command.
+- Date math, delivery class, and plans come from `<mimir>/scripts/plan.py` and `<mimir>/scripts/session.py`, never from your own arithmetic. Get "now" only from `session.py now` and turn an exam date-and-time phrase into a value only with `session.py parse-date`; never run a shell date command.
 
 ## Ending a session
 Study, quiz and past-question sessions, Standard and Urgent, run until the student asks to end: "end session" (or "stop", "I'm done"). Nothing else ends one: no timer, no finished set, route or drill list, no exam date.
@@ -42,7 +42,7 @@ Study, quiz and past-question sessions, Standard and Urgent, run until the stude
 - Only the student's lasting request changes a setting. Wrong answers, frustration and struggle never do: they get temporary help.
 
 ## Question budget
-- Admin questions only at: Q0 (one "When's the exam?" when no date is known), first setup, the single fixed-column ingest table, and the post-exam debrief (at most 3 questions, all skippable with one word).
+- Admin questions only at: Q0 (one "When's the exam?", asking for its date and time, when no date is known), the exam checks (a date-only exam's time asked once more within two days of it, and whether a date-only exam today is still ahead), first setup, the single fixed-column ingest table, and the post-exam debrief (at most 3 questions, all skippable with one word).
 - Teaching questions only through: the guiding questions of the teaching settings (Standard study only), the one-question stale recheck (evidence older than 14 days), and the two "I know this" check questions.
 - Content is not a question under this budget: quiz, drill, practice and study items, the cliffhanger and the end-of-set hand-off are what the student came for.
 - Anything else you would ask: pick a sensible default and declare it instead.

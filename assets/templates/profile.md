@@ -9,7 +9,7 @@ setup_done: <YYYY-MM-DD when full setup finished>
 ## Exam dates
 | course | exam | date |
 |---|---|---|
-| <CODE> | <midterm/final/quiz> | <YYYY-MM-DD> |
+| <CODE> | <midterm/final/quiz> | <YYYY-MM-DD HH:MM, or YYYY-MM-DD when the time is unknown> |
 
 ## Active courses
 | course | path |
