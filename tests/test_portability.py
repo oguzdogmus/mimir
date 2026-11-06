@@ -414,3 +414,20 @@ def test_each_sampler_demonstration_isolates_one_axis():
     frequency = sections[1]
     endings = re.findall(r"Your turn: [^\n]*", frequency)
     assert len(endings) == 3 and len(set(endings)) == 1
+
+
+# The one-time what's-new line (issue #43): existing users hear it at their first
+# study session, Standard or Urgent; new users' setup marks it seen before setup is done.
+def test_whats_new_line_is_said_once_at_session_start_and_setup_marks_it_seen():
+    session = _read("skills/mimir-study/references/session.md")
+    start = session[session.index("## Start"):session.index("## 2. Urgent")]  # before either class branches
+    assert "`whats_new`" in start and 'session.py prefs' in start
+    assert start.index("`whats_new`") < start.index('{"event": "whats-new-seen"}')  # said, then marked seen
+    setup = _read(SETUP)
+    assert setup.index('{"event": "whats-new-seen"}') < setup.index("`setup_done:` set to")
+    for path in MARKDOWN:
+        rel = str(path.relative_to(ROOT_DIR))
+        text = path.read_text(encoding="utf-8")
+        assert "sessions run until you say" not in text, rel  # the line comes from session.py, verbatim
+        if rel not in (SETUP, "skills/mimir-study/references/session.md"):
+            assert "whats-new-seen" not in text, rel

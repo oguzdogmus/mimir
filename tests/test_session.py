@@ -1521,6 +1521,7 @@ def test_prefs_reads_nothing_extra(home, root):
 
 @pytest.mark.parametrize("content", ["not json", '{"version": 1}', '{"version": 2, "axes": {}}',
                                      json.dumps({"version": 1, "axes": DEFAULT_AXES, "sampler_skipped": False}),
+                                     json.dumps({"version": 1, "axes": DEFAULT_AXES, "whats_new_seen": "yes"}),
                                      json.dumps({"version": 1, "axes": {**{a: dict(v) for a, v in
                                                  DEFAULT_AXES.items()}, "depth": {"level": "deep",
                                                  "provenance": "default", "wording": None}}}),
@@ -1863,3 +1864,43 @@ def test_last_sampler_choice_ends_with_a_tentative_summary(home, root):
                            "checks only, guiding-question depth what-if. They keep adapting as you study.")
     assert out["sampler"] == {"open": False, "started": True, "remaining": []}
     assert out["axes"]["frequency"] == LEGACY_AXES["frequency"]
+
+
+# --- what's-new line for existing users (issue #43) ------------------------------------
+
+WHATS_NEW = "New: sessions run until you say 'end session'. You can also ask to cram or to study normally."
+
+
+def test_existing_user_gets_the_whats_new_line_at_the_first_session(home, root):
+    profile(root)
+    _setup_done(root)  # setup finished before the update: no seen marker
+    before = snapshot(home)
+    assert ok(home, "prefs", {})["whats_new"] == WHATS_NEW
+    assert snapshot(home) == before  # prefs stays read-only
+
+
+def test_whats_new_line_is_shown_once_and_never_again(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    _setup_done(root)
+    out = ok(home, "pref-event", {"event": "whats-new-seen"})
+    assert out["changed"] is True and out["whats_new"] is None
+    assert out["axes"] == LEGACY_AXES  # the settings are untouched; the legacy value is saved with the marker
+    state = json.loads((root / ".state" / "preferences.json").read_text(encoding="utf-8"))
+    assert state["whats_new_seen"] is True  # the global seen marker lives in the preference state
+    before = snapshot(home)
+    for _ in range(2):  # later sessions
+        assert ok(home, "prefs", {})["whats_new"] is None
+    again = ok(home, "pref-event", {"event": "whats-new-seen"})
+    assert again["changed"] is False and again["whats_new"] is None
+    assert snapshot(home) == before  # a rerun rewrites nothing
+
+
+def test_new_users_never_see_the_whats_new_line(home, root):
+    profile(root)  # a new user in setup: no setup_done yet
+    assert ok(home, "prefs", {})["whats_new"] is None
+    ok(home, "pref-event", {"event": "sampler-skip"})
+    out = ok(home, "pref-event", {"event": "whats-new-seen"})  # setup marks it seen before setup_done
+    assert out["changed"] is True and out["whats_new"] is None
+    _setup_done(root, "2026-10-17")
+    assert ok(home, "prefs", {})["whats_new"] is None  # first study session after setup
+    assert ok(home, "prefs", {})["sampler"]["open"] is False
