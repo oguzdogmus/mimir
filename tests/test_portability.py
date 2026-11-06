@@ -307,6 +307,23 @@ def test_study_asks_exam_time_within_two_days_and_whether_today_is_still_ahead()
     assert "within two days" in core and "still ahead" in core  # allowed admin questions
 
 
+def test_past_questions_checks_an_exam_today_and_passes_the_class_choice():
+    exam_today = "Is your <name> today still ahead?"
+    holders = [str(p.relative_to(ROOT_DIR)) for p in MARKDOWN if exam_today in p.read_text(encoding="utf-8")]
+    assert holders == ["skills/mimir-core-rules/SKILL.md"], holders  # defined once, reused
+    past = _read("skills/mimir-past-questions/SKILL.md")
+    assert "`ask_exam_ahead`" in past and "Exam today" in past and "Mode and dates" in past
+    assert past.index("Exam today") < past.index("5. Triage")  # before any drilling
+    assert "<class.decided_by>, <class.reason>" in past  # the same class line as study logs
+
+
+def test_urgent_past_questions_closes_once():
+    past = _read("skills/mimir-past-questions/SKILL.md")
+    assert "§4 then step 8" not in past
+    assert "step 8 does not run" in past
+    assert past.split("\n8. ", 1)[1].startswith("Standard only")
+
+
 BARE_DATE = re.compile(r"`date` of [^.]*parse-date|its `date` is usable")
 
 
