@@ -33,6 +33,9 @@ _Avoid_: Preference probe, knowledge check
 **Application question**:
 A question the student solves to practise using a method, distinct from a guiding question embedded in an explanation.
 
+**Question type**:
+A recurring form of exam question, such as DFA construction. Several question types may belong to the same topic whose mastery is tracked.
+
 **Method-first support**:
 An explanation of the solving method before the student attempts the problem, without supplying its answer.
 

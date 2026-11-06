@@ -4,7 +4,7 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <now|parse-date|start|check|close|gauge|debrief|progress|record|prefs|pref-event|scope>  < input.json
+    python3 session.py <now|parse-date|start|triage|check|close|gauge|debrief|progress|record|prefs|pref-event|scope>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -55,7 +55,8 @@ Files read (all inside the learning root, see ``workspace.py``)
   only ``words`` is kept (no lists).
 * ``<course>/.state/fingerprint.md``: the ``## Question types`` names (the
   type cell before ``(source:``, ``(tentative)`` or ``(prior term)``), for
-  ``start``'s ``scope.new``.
+  ``start``'s ``scope.new``; ``triage`` also reads marks and frequencies,
+  retaining the source annotation and tentative/prior-term markers.
 * ``<course>/INDEX.md``: the ``## Registry`` roles and ``## Topics`` names
   (``ingest.py`` rules; a non-UTF-8 one exits 2) for the route.
 * ``<course>/.state/logs/*.md`` (name order): the first ``first_contact:``
@@ -220,6 +221,36 @@ start -- pick the course, the exam and the class for a new session.
     A workspace with no course folder gives
     ``course`` null, every course field null, and the line "No course yet:
     run mimir-setup, then mimir-ingest."
+
+triage -- read-only question-type preparation and ranking for a resolved session.
+    in : {"now": "...", "term": "2026-Fall", "course": "CS201 Theory",
+          "class": "Urgent"}
+    All four fields are required; ``class`` is ``start.class.class``, including
+    a session or lasting choice already resolved by ``start``. With fingerprint
+    types, returns ``state: needs-associations``, ``types`` (name, source_note,
+    tentative, prior_term), and ``mastery_topics`` (canonical mastery names).
+    Print nothing yet. The agent chooses a covering mastery topic per type,
+    then repeats the same request with ``associations``:
+    {"DFA construction": "Finite automata", "Pumping lemma proof": null}.
+    Every fingerprint type needs an explicit entry, even an identical name;
+    null uses the type's own name for mastery lookup and recording. Names
+    compare ignoring case and repeated spaces; unknown/missing/repeated keys
+    or non-null values outside the candidate topics exit 2.
+    With no fingerprint types, returns ready directly: ``start.remaining``'s
+    topics and statuses, else distinct INDEX topics checked by their own name.
+    This preserves the remaining route's exclusion of mastered topics even
+    in Standard. An empty associations object is allowed on this path.
+    ``state: ready`` carries ``plan.py triage``'s rows, drill names, basis and
+    line. Each row adds ``topic`` (recording name), ``source_note`` (the whole
+    annotation, including markers, else empty), ``tentative`` and ``prior_term``.
+    Display and scope use ``name``; items and recording use ``topic``.
+    Fingerprint marks use the first ordinary integer or decimal (20|25 -> 20,
+    12.5 marks -> 12.5). Fractions, percentages and negative expressions are
+    unknown, retaining plan's estimation. Unreadable/missing frequencies are
+    unknown; recognizable impossible counts and duplicate normalized type
+    names exit 2 with their fingerprint row. Each call rereads current files;
+    obsolete associations fail clearly. No continuation, saved mapping, clock
+    read or file write. ``start``'s names-only reader stays forgiving.
 
 check -- staleness and counts for named topics.
     in : {"now": "...", "term": "2026-Fall", "course": "CS201 Theory",
@@ -477,6 +508,7 @@ import re
 import json
 import sys
 from datetime import date, datetime, time, timedelta, tzinfo
+from fractions import Fraction
 from pathlib import Path
 
 import ingest
@@ -890,14 +922,31 @@ _FP_TYPES = ("Question types", ("type", "frequency", "marks"))
 _FP_MARKERS = re.compile(r"\s*(?:\(source:.*|\(tentative\).*|\(prior term\).*)$")
 
 
+def _fingerprint_rows(course_dir: Path) -> list[dict]:
+    """Structural reading only: scope's names projection stays forgiving of triage data."""
+    original = _memory(course_dir, "fingerprint.md").splitlines()
+    lines = original.copy()
+    first, end = ingest._section_table(lines, _FP_TYPES)
+    added = len(lines) - len(original)  # in-memory header repair precedes existing data rows
+    rows = []
+    for i in range(first, end):
+        cells = [ingest._unescape(c) for c in (ingest._split_row(lines[i]) + [""] * 3)[:3]]
+        marker = _FP_MARKERS.search(cells[0])
+        name = " ".join(cells[0][:marker.start() if marker else len(cells[0])].split())
+        if not name or name.startswith("<"):
+            continue
+        note = cells[0][marker.start():].strip() if marker else ""
+        suffix = re.search(r"(?:(?:^|\s+)\((?:tentative|prior term)\))+$", note)
+        flags = re.findall(r"\((tentative|prior term)\)", suffix.group()) if suffix else []
+        rows.append({"name": name, "source_note": note, "prior_term": "prior term" in flags,
+                     "tentative": "tentative" in flags,
+                     "marks_text": cells[2], "frequency_text": cells[1], "row": i + 1 - added})
+    return rows
+
+
 def question_types(course_dir: Path) -> list[str]:
     """``fingerprint.md`` question type names, without their source and markers."""
-    names = []
-    for cells in _section_rows(_memory(course_dir, "fingerprint.md"), _FP_TYPES):
-        name = " ".join(_FP_MARKERS.sub("", cells[0]).split())
-        if name and not name.startswith("<"):
-            names.append(name)
-    return names
+    return [row["name"] for row in _fingerprint_rows(course_dir)]
 
 
 def _noted_scope(root: Path, code: str, exam: dict, exams: list[tuple[date, str]]) -> dict | None:
@@ -1254,6 +1303,135 @@ def _start(data: dict, choice: str | None = None,
             "first_contact": _first_contact(course_dir), "scope": scope,
             "gauge": _gauge(course_dir, rows, scope),
             "debrief": debrief, "preference_session": _preference_session(klass, profile, now), "line": klass["line"]}, window
+
+
+# --- Question-type triage ------------------------------------------------------------
+
+_TRIAGE_NUMBER = re.compile(r"(?P<fraction>[¼½¾⅐-⅟↉])|[-+−]?\s*(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)")
+_TRIAGE_FREQUENCY = re.compile(r"\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s+of\s+"
+                               r"([+-]?[0-9]+(?:\.[0-9]+)?)\s+papers?\s*", re.IGNORECASE)
+_TYPE_METADATA = ("name", "source_note", "tentative", "prior_term")
+
+
+def _triage_marks(text: str) -> Fraction | None:
+    """First ordinary number; unsupported numeric expressions are unknown, never partial values."""
+    match = _TRIAGE_NUMBER.search(text)
+    if match is None:
+        return None
+    token = match.group().strip()
+    after = text[match.end():]
+    if match["fraction"] or token.startswith(("-", "−")) or re.match(
+            r"\s*(?:[%/⁄¼½¾⅐-⅟↉]|percent\b|per\s+cent\b|[eE][+-]?[0-9]|,[0-9]|\.[0-9])", after,
+            re.IGNORECASE) or re.match(r"\s+[0-9]+\s*[/⁄]", after):
+        return None
+    value = Fraction("".join(token.split()))
+    if value > sys.float_info.max:
+        raise InputError("marks are too large to compute with")
+    return value
+
+
+def _triage_types(course_dir: Path) -> list[dict]:
+    """Validate mechanical triage facts without tightening scope's names-only reader."""
+    types, seen = [], {}
+    for row in _fingerprint_rows(course_dir):
+        where = f"fingerprint.md row {row['row']} ({_short(row['name'])})"
+        key = _norm(row["name"])
+        if key in seen:
+            raise InputError(f"{where}: duplicate question type; first appears on row {seen[key]}")
+        seen[key] = row["row"]
+        counts = _TRIAGE_FREQUENCY.fullmatch(row["frequency_text"])
+        found, papers = 0, 0
+        if counts:
+            try:
+                found, papers = (int(v) for v in counts.groups())
+            except ValueError:
+                raise InputError(f"{where}: paper counts must be whole numbers") from None
+            if found < 0 or papers < 0 or found > papers:
+                raise InputError(f"{where}: paper counts must satisfy 0 <= seen <= papers")
+        try:
+            marks = _triage_marks(row["marks_text"])
+        except (ValueError, InputError) as exc:
+            raise InputError(f"{where}: {exc}") from None
+        types.append({**{k: row[k] for k in _TYPE_METADATA}, "marks": marks,
+                      "seen": found, "papers": papers})
+    return types
+
+
+def _triage_associations(value, types: list[dict], topics: dict[str, dict]) -> dict[str, str]:
+    """One explicit decision per fingerprint type; null uses its own-name mastery lookup."""
+    if not isinstance(value, dict):
+        raise InputError("associations must be an object mapping each question type to a mastery topic or null")
+    names = {_norm(t["name"]): t["name"] for t in types}
+    matches = {}
+    for name, topic in value.items():
+        key = _norm(name)
+        if key not in names:
+            raise InputError(f"associations has unknown question type {_short(name)}; rerun triage without associations")
+        if key in matches:
+            raise InputError(f"associations repeats question type {_short(name)}")
+        if topic is not None and (not isinstance(topic, str) or _norm(topic) not in topics):
+            raise InputError(f"associations[{_short(name)}] must name a candidate mastery topic or be null; "
+                             "rerun triage without associations")
+        matches[key] = topics[_norm(topic)]["name"] if topic is not None else names[key]
+    missing = next((name for key, name in names.items() if key not in matches), None)
+    if missing is not None:
+        raise InputError(f"associations is missing question type {_short(missing)}; give a mastery topic or null")
+    return matches
+
+
+def cmd_triage(data: dict) -> dict:
+    """Read course facts, obtain semantic associations when needed, and rank through plan.triage."""
+    _check_keys(data, {"now", "term", "course", "class", "associations"})
+    now = _moment(data, "now")
+    term, course = parse_term(data), parse_segment(data, "course")
+    klass = data.get("class")
+    if klass not in plan.TRIAGE_CLASSES:
+        raise InputError("class must be Standard or Urgent (start's class.class)")
+    root = ingest._workspace_root()
+    course_dir = _indexed_course(root, term, course)
+    types = _triage_types(course_dir)
+    rows = route(course_dir)
+    topics = {_norm(r["name"]): r for r in mastery(course_dir)}
+    context = {"term": term, "course": course, "course_dir": str(course_dir), "class": klass}
+    if types and "associations" not in data:
+        return {**context, "state": "needs-associations",
+                "types": [{k: t[k] for k in _TYPE_METADATA} for t in types],
+                "mastery_topics": [r["name"] for r in topics.values()],
+                "line": "Choose a mastery topic for each question type, or null when none covers it."}
+    matches = _triage_associations(data.get("associations", {}), types, topics)
+    code = course_code(course)
+    profile = _text(root / ".state" / "profile.md")
+    exam = _exam(profile, code, now)
+    scope, _, _ = scope_view(root, course_dir, code, rows, exam,
+                             _code_exams(profile, code, now.tzinfo), now.date())
+    basis = "papers" if types else "outline"
+    if not types:
+        # Exactly start.remaining's ordering and exclusion, including in Standard.
+        remaining = sorted((r for r in rows if r["status"] != "mastered"),
+                           key=lambda r: scope_mark(scope, r["name"]) == "out")
+        if remaining:
+            types = [{"name": r["name"], "status": r["status"]} for r in remaining]
+        else:
+            seen = set()
+            for name in ingest.topics(course_dir / "INDEX.md"):
+                key = _norm(name)
+                if key not in seen:
+                    seen.add(key)
+                    types.append({"name": name})
+        for t in types:
+            t.update(source_note="", tentative=False, prior_term=False, marks=None, seen=0, papers=0)
+    for t in types:
+        topic = matches.get(_norm(t["name"]), t["name"])
+        saved = topics.get(_norm(topic))
+        t["topic"] = saved["name"] if saved is not None else topic
+        if "status" not in t:
+            t["status"] = saved["status"] if saved is not None else "unseen"
+    ranked = _plan(plan.triage, {"types": types, "class": klass, "basis": basis,
+                                "scope": {k: scope[k] for k in ("in", "out")} if scope is not None else None})
+    metadata = {_norm(t["name"]): {k: t[k] for k in ("topic", "source_note", "tentative", "prior_term")}
+                for t in types}
+    return {**context, **ranked, "state": "ready",
+            "rows": [{**row, **metadata[_norm(row["name"])]} for row in ranked["rows"]]}
 
 
 def _scope_names(data: dict, side: str) -> list[str]:
@@ -2132,6 +2310,7 @@ COMMANDS = {
     "now": (cmd_now, "the local time: ISO timestamp, evidence date, log name, last_session stamp and term"),
     "parse-date": (cmd_parse_date, "the student's exam date-and-time phrase as an exam value, or a refusal"),
     "start": (cmd_start, "pick the course, exam, delivery class and first topic for a session"),
+    "triage": (cmd_triage, "prepare question types, associate mastery topics, and rank for a resolved session"),
     "check": (cmd_check, "status, counts and staleness for named topics"),
     "close": (cmd_close, "stamp the end of a session in its log once and report its length"),
     "gauge": (cmd_gauge, "set the course's knowledge-gauge-done marker in the session log, once"),
@@ -2143,7 +2322,7 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
-                             ("Mimir session runner. Subcommands: now, parse-date, start, check, close, gauge, debrief, "
+                             ("Mimir session runner. Subcommands: now, parse-date, start, triage, check, close, gauge, debrief, "
                               "progress, record, prefs, pref-event, scope. Reads one JSON object on stdin and prints one "
                               "JSON object on stdout. Only record, close, gauge, pref-event, scope and start with lasting "
                               "write."),
