@@ -110,7 +110,7 @@ def test_calm(home, root):
     assert out["topic"] == {"name": "Sorting", "status": "unseen", "evidence_date": None, "stale": False,
                             "attempt_first": False}
     assert out["remaining"] == [{"name": "Graphs", "status": "gap"}, {"name": "Sorting", "status": "unseen"}]
-    assert set(out["class"]) == {"class", "reason", "hours_to_exam", "days_to_exam", "line"}
+    assert set(out["class"]) == {"class", "reason", "hours_to_exam", "days_to_exam", "line", "decided_by"}
     assert (out["exam"], out["exam_name"], out["q0"], out["code"]) == ("2026-11-05", "final", False, "CS201")
     assert out["inferred"] is True and out["first_contact"] is None
     assert (out["exam_problems"], out["ask_exam_time"], out["ask_exam_ahead"]) == ([], False, False)
@@ -1538,3 +1538,124 @@ def test_symlinked_preference_state_is_refused(home, root, tmp_path):
     (root / ".state" / "preferences.json").symlink_to(target)
     fails(home, "prefs", {}, "symlink")
     fails(home, "pref-event", {"event": "legacy-import"}, "symlink")
+
+
+# --- start: the student's delivery choice (issue #36) ------------------------------
+
+def test_default_class_is_decided_by_the_exam_date(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Urgent", "exam date")
+    assert out["line"] == "Urgent delivery: exam in 30 hours"
+
+
+@pytest.mark.parametrize("cell,choice,line", [
+    ("2026-10-19T00:00:00+03:00", "Standard", "Standard delivery: you asked; exam in 30 hours"),
+    ("2026-11-05", "Urgent", "Urgent delivery: you asked; exam in 19 days"),
+])
+def test_session_choice_overrides_the_exam_date_both_ways(home, root, cell, choice, line):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", cell)])
+    before = snapshot(root)
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00", "choice": choice})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == (choice, "session choice")
+    assert out["line"] == out["class"]["line"] == line
+    assert snapshot(root) == before  # a session choice is not saved
+    later = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})  # reassessed next session
+    assert later["class"]["decided_by"] == "exam date" and later["class"]["class"] != choice
+
+
+def test_lasting_choice_is_saved_for_the_exam_and_used_next_session(home, root):
+    cdir = course(home, mastery=TWO_LEFT, save={"next_topic": "Sorting"})
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
+    now = "2026-10-17T18:00:00+03:00"
+    out = ok(home, "start", {"now": now, "choice": "Standard", "lasting": True})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Standard", "lasting choice")
+    assert out["line"] == "Standard delivery: you asked, until your final; exam in 30 hours"
+    save = (cdir / ".state" / "save.md").read_text(encoding="utf-8")
+    assert "delivery_choice: Standard 2026-10-19 final\n" in save and "next_topic: Sorting\n" in save
+    later = ok(home, "start", {"now": "2026-10-18T09:00:00+03:00"})
+    assert (later["class"]["class"], later["class"]["decided_by"]) == ("Standard", "lasting choice")
+    assert later["line"] == "Standard delivery: you asked, until your final; exam in 15 hours"
+    again = ok(home, "start", {"now": now, "choice": "Standard", "lasting": True})  # a rerun changes nothing
+    assert (cdir / ".state" / "save.md").read_text(encoding="utf-8") == save and again["line"] == out["line"]
+
+
+def test_session_choice_beats_a_lasting_choice_for_one_session(home, root):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": "Standard 2026-10-19 final"})
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00", "choice": "Urgent"})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Urgent", "session choice")
+
+
+@pytest.mark.parametrize("now", [
+    "2026-10-19T00:30:00+03:00",  # the timed midterm has just passed
+    "2026-10-19T12:00:00+03:00",
+])
+def test_lasting_choice_expires_when_its_exam_passes(home, root, now):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": "Standard 2026-10-19 midterm"})
+    profile(root, exams=[("CS201", "midterm", "2026-10-19T00:00:00+03:00"),
+                         ("CS201", "final", "2026-10-20T09:00:00+03:00")])
+    out = ok(home, "start", {"now": now})
+    assert out["exam_name"] == "final"
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Urgent", "exam date")
+
+
+def test_lasting_choice_on_a_date_only_exam_holds_through_its_day(home, root):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": "standard 2026-10-17 final"})
+    profile(root, exams=[("CS201", "Final", "2026-10-17")])
+    out = ok(home, "start", {"now": NOW})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Standard", "lasting choice")
+    assert out["line"] == "Standard delivery: you asked, until your Final; exam today, time unknown"
+    gone = ok(home, "start", {"now": "2026-10-18T09:00:00+03:00"})
+    assert gone["class"]["decided_by"] == "exam date"
+
+
+@pytest.mark.parametrize("cell", ["Urgent 2026-10-19 midterm", "Urgent 2026-11-05", "maybe", "<none>"])
+def test_a_lasting_choice_for_another_exam_or_unreadable_is_ignored(home, root, cell):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": cell})
+    profile(root, exams=[("CS201", "final", "2026-11-05")])
+    out = ok(home, "start", {"now": NOW})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Standard", "exam date")
+
+
+def test_a_new_lasting_choice_replaces_the_saved_one(home, root):
+    cdir = course(home, mastery=TWO_LEFT, save={"delivery_choice": "Standard 2026-10-01 quiz", "status": "on-track"})
+    profile(root, exams=[("CS201", "final", "2026-11-05")])
+    ok(home, "start", {"now": NOW, "choice": "Urgent", "lasting": True})
+    save = (cdir / ".state" / "save.md").read_text(encoding="utf-8")
+    assert save == "# Save\n\ndelivery_choice: Urgent 2026-11-05 final\nstatus: on-track\n"
+
+
+@pytest.mark.parametrize("payload,needle", [
+    ({"choice": "Normal"}, "choice must be Standard or Urgent"),
+    ({"choice": "standard"}, "choice must be Standard or Urgent"),
+    ({"lasting": True}, "true needs a choice"),
+    ({"choice": "Urgent", "lasting": "yes"}, "lasting must be true or false"),
+])
+def test_bad_choice_input_exits_2(home, root, payload, needle):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-11-05")])
+    fails(home, "start", {"now": NOW, **payload}, needle)
+
+
+def test_lasting_choice_needs_an_upcoming_exam(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "unknown")])
+    before = snapshot(root)
+    fails(home, "start", {"now": NOW, "choice": "Urgent", "lasting": True}, "lasting needs an upcoming exam")
+    assert snapshot(root) == before
+
+
+def test_debrief_rejects_a_choice(home, root):
+    course(home, mastery=TWO_LEFT)
+    fails(home, "debrief", {"now": NOW, "choice": "Urgent"}, "choice")
+
+
+def test_a_chosen_urgent_session_defers_a_due_debrief(home, root):
+    course(home, mastery=TWO_LEFT, save={"pending_debrief": "2026-10-10 midterm"})
+    profile(root, exams=[("CS201", "midterm", "2026-10-10"), ("CS201", "final", "2026-11-05")])
+    assert ok(home, "start", {"now": NOW})["debrief"]["due"] is True
+    out = ok(home, "start", {"now": NOW, "choice": "Urgent"})
+    assert (out["debrief"]["due"], out["debrief"]["deferred"]) == (False, True)

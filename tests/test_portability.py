@@ -313,3 +313,21 @@ BARE_DATE = re.compile(r"`date` of [^.]*parse-date|its `date` is usable")
 def test_no_skill_writes_a_bare_date_from_parse_date():
     for path in MARKDOWN:
         assert not BARE_DATE.search(path.read_text(encoding="utf-8")), path
+
+
+# The student may choose the delivery class: for this session, or lastingly for
+# one exam (issue #36). The old "the student never picks a mode" rule is gone.
+def test_student_chooses_standard_or_urgent_through_session_start():
+    for path in MARKDOWN + [ROOT_DIR / "README.md"]:
+        text = path.read_text(encoding="utf-8")
+        assert "never picks a mode" not in text and "only mode input" not in text, path
+    core = _read("skills/mimir-core-rules/SKILL.md")
+    assert '"choice"' in core and '"lasting": true' in core
+    assert "study normally" in core and "cram" in core and "until that exam passes" in core
+    session = _read("skills/mimir-study/references/session.md")
+    assert '"choice"' in session and '"lasting": true' in session
+    assert "<class.decided_by>" in session  # the log records which rule decided
+    assert "choose" in _read("skills/mimir-study/SKILL.md")
+    assert "delivery_choice:" in _read("assets/templates/save.md")
+    for rel in ("skills/mimir-study/references/session.md", "skills/mimir-study/references/urgent.md"):
+        assert "pending_debrief and the `delivery_choice:` line" in _read(rel), rel  # the close keeps it

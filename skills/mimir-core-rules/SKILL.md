@@ -26,8 +26,9 @@ Use this block wherever a skill resolves a course; keep the caller's action word
 - **Other failures:** print the script's stderr line and stop.
 
 ## Mode and dates
-- The exam date is the only mode input. It sets the delivery class (Standard or Urgent). The only deadline is an exam.
-- The student never picks a mode, and no command selects one. A command picks an action, never Standard or Urgent.
+- Exam proximity sets the default delivery class (Standard or Urgent). The only deadline is an exam.
+- The student may choose the class instead: "study normally" near an exam gives Standard, "let's cram" earlier gives Urgent. Pass it to `session.py start` as `"choice": "Standard"` or `"Urgent"`; it holds for this session only and the class is reassessed at the next. A lasting request for the coming exam ("always study normally for this exam") adds `"lasting": true`: `start` saves it for that exam only, and it holds until that exam passes. With no upcoming exam (`start` gives `exam` null), a choice lasts this session only: say so in one line. No command selects a class: only the student's words do.
+- The class line states the class and the reason, e.g. "Urgent delivery: exam in 30 hours" or "Standard delivery: you asked; exam in 30 hours".
 - Date math, delivery class, and plans come from `<mimir>/scripts/plan.py` and `<mimir>/scripts/session.py`, never from your own arithmetic. Get "now" only from `session.py now` and turn an exam date-and-time phrase into a value only with `session.py parse-date`; never run a shell date command.
 
 ## Ending a session

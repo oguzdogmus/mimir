@@ -82,7 +82,7 @@ Take `drill` in order, in sets of up to 3 types. For each set:
 Only when the student says "end session" (or "stop").
 
 
-1. Write `<course_dir>/.state/save.md` in the template's shape, at most 30 lines; preserve last_session and pending_debrief for the shared close step:
+1. Write `<course_dir>/.state/save.md` in the template's shape, at most 30 lines; preserve last_session, pending_debrief and the `delivery_choice:` line as the file has them now (only `session.py start` writes that line) for the shared close step:
    - `current_topic:` the last drilled type; `next_topic:` the next type in `drill` not reached, else blank; `cliffhanger:` and `resolution:` blank;
    - `last_class: Urgent`; `status: at-risk`;
    - `## Previously on`: 2 to 4 bullets on what was drilled and which checks were right.
