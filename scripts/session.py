@@ -4,11 +4,11 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <now|parse-date|start|check|close|debrief|progress|record|prefs|pref-event|scope>  < input.json
+    python3 session.py <now|parse-date|start|check|close|gauge|debrief|progress|record|prefs|pref-event|scope>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
-``line``. Only record (mastery.md), close (a session log), pref-event
+``line``. Only record (mastery.md), close and gauge (a session log), pref-event
 (``.state/preferences.json``), scope (``scope.md``) and start with ``lasting``
 (``save.md``) write, atomically; other commands are read-only. Only ``now``
 reads the clock; every other subcommand takes "now" as an input (``now``, from
@@ -54,6 +54,8 @@ Files read (all inside the learning root, see ``workspace.py``)
   (``ingest.py`` rules; a non-UTF-8 one exits 2) for the route.
 * ``<course>/.state/logs/*.md`` (name order): the first ``first_contact:``
   line whose value is a date or datetime (``plan.py`` rules); for ``debrief``
+  and the first ``gauge_done:`` line whose value is a date or datetime (the
+  gauge-done marker); for ``debrief``
   also ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
   disagreements``, and ``next_course_offer:`` lines in every course of the
   term. Symlinked, unreadable or non-UTF-8 logs are skipped.
@@ -114,6 +116,7 @@ start -- pick the course, the exam and the class for a new session.
           "topic": {"name": "Graphs", "status": "unseen", "evidence_date":
           null, "stale": false, "attempt_first": false}, "route_line": null, "first_contact":
           "2026-10-10T20:00:00+03:00", "scope": null,
+          "gauge": {"done": false, "topics": ["Graphs"]},
           "line": "Standard delivery: exam in 19 days"}
     (``class`` here includes "decided_by": "exam date".)
     Course: the given one (``inferred`` false); else the latest ``save.md``
@@ -174,7 +177,11 @@ start -- pick the course, the exam and the class for a new session.
     is set; else "No topics on the route yet: drop the outline, slides or
     past papers into `_inbox/` and run mimir-ingest." for an empty route, or
     "Your route is complete: every topic is mastered in mastery.md. Want a
-    `mimir-quiz` to keep it fresh?". ``line`` is the class line. ``debrief``: null when ``pending_debrief:``
+    `mimir-quiz` to keep it fresh?". ``gauge`` (the knowledge gauge): null when the
+    route is empty (no gauge; never gauge from the course name); else ``done``
+    (the course has a gauge-done marker, set by ``gauge``) and ``topics``, the
+    route's ``unseen`` topic names in route order ([] when done).
+    ``line`` is the class line. ``debrief``: null when ``pending_debrief:``
     holds no valid date P; else {"exam", "exam_name", "due", "deferred"}.
     P today or later: P with the pending name, due and deferred false (a
     date-only exam is past only from the next day, as in ``plan.py``). P
@@ -219,6 +226,19 @@ close -- stamp a session's end in its log, once.
     has no such ``started:`` line, a later session already started in it
     while this one is open, its ``ended:`` line is not a datetime, or ``now``
     is before ``started`` or mixes offset and no-offset with it.
+
+gauge -- set the course's gauge-done marker, once.
+    in : {"now": "2026-10-17T09:40:00+03:00", "term": "2026-Fall", "course":
+          "CS201 Theory", "log": "2026-10-17-0900"}
+    out: {"log": ".../.state/logs/2026-10-17-0900.md", "gauge_done":
+          "2026-10-17T09:40:00+03:00", "already_done": false,
+          "line": "Knowledge gauge done for CS201 Theory: it will not run again."}
+    ``log`` is this session's log name (it must exist). When no log of the
+    course has a gauge-done marker, appends ``gauge_done: <now>`` to the log;
+    otherwise writes nothing and reports the existing marker with
+    ``already_done`` true ("Knowledge gauge already done for <course>.").
+    Exits 2 when the course has no topics yet (the route is empty: no gauge, so
+    the marker stays unset), or on the ``close`` log errors.
 
 debrief -- what the post-exam debrief needs. Read-only, like the rest.
     in : as ``start`` ({"now": ..., optional "term" and "course"}).
@@ -286,8 +306,9 @@ prefs -- the global teaching settings. Read-only.
     in : {}
     out: {"axes": {"support": {"level": "method-first", "provenance":
           "default", "wording": null}, "frequency": {...}, "depth": {...}},
-          "saved": false, "line": "Teaching settings: support method-first
-          (default), ..."}
+          "saved": false, "sampler": {"open": true, "started": false,
+          "remaining": ["support", "frequency", "depth"]}, "whats_new": null,
+          "line": "Teaching settings: support method-first (default), ..."}
     Axes and levels, more guided to more independent: support example-first,
     method-first, try-first; frequency checks only, key decisions, every
     step; depth next step, why, what-if. Provenance is default, sampler,
@@ -297,18 +318,37 @@ prefs -- the global teaching settings. Read-only.
     that a set profile ``dial_preference:`` reads as frequency checks only with
     provenance legacy (``## Rung hints`` are ignored). A damaged or symlinked
     ``preferences.json`` exits 2.
+    ``sampler`` is the setup sampler: ``remaining`` lists the axes still at
+    default, in order, while setup is not done (no ``setup_done:`` date in the
+    profile) and the sampler was not skipped, else []; ``open`` = remaining is
+    non-empty; ``started`` = some axis has provenance sampler.
+    ``whats_new``: the one-time line "New: sessions run until you say 'end
+    session'. You can also ask to cram or to study normally." while setup is
+    done and the seen marker is unset (users set up before the update), else
+    null. Setup sets the marker for new users, so they never get it.
 
 pref-event -- apply one teaching-settings event and save the state.
     in : {"event": "explicit", "axis": "frequency", "level": "checks only",
           "wording": "ask fewer questions"}
-         or {"event": "legacy-import"}
+         or {"event": "sampler", "axis": "support", "level": "example-first"}
+         or {"event": "sampler-skip"} or {"event": "legacy-import"}
+         or {"event": "whats-new-seen"}
     out: as ``prefs`` plus "changed", with ``saved`` true; line e.g.
          "Saved for every course: guiding-question frequency is now checks only."
     ``explicit``: the student's lasting request sets that axis to that level
     (any distance), provenance explicit, wording kept with spaces collapsed;
-    other axes are untouched. ``legacy-import``: saves the state ``prefs``
+    other axes are untouched. ``sampler``: one setup-sampler choice; it
+    fills the axis only while that axis is at default (provenance sampler),
+    never overwriting a sampler, learned, explicit or legacy value ("Kept:
+    ..."), and after a skip changes nothing. The choice that leaves no axis
+    remaining says the tentative summary of all three levels.
+    ``sampler-skip``: ends the sampler for good; completed choices stay and
+    unanswered axes keep their defaults. Both sampler events exit 2 once
+    setup is done. ``legacy-import``: saves the state ``prefs``
     shows (the legacy value included) when nothing is saved yet; otherwise
-    changes nothing. A state that would not change is not rewritten, so a
+    changes nothing. ``whats-new-seen``: sets the global seen marker, so
+    ``whats_new`` is null from then on; allowed before and after setup.
+    A state that would not change is not rewritten, so a
     rerun leaves the file byte-identical. An unknown event, axis, or a level
     from another axis exits 2 and writes nothing.
 
@@ -560,6 +600,26 @@ def _first_contact(course_dir: Path) -> str | None:
             if m and _valid_moment(m.group(1).strip()):
                 return m.group(1).strip()
     return None
+
+
+def _gauge_done(course_dir: Path) -> str | None:
+    """The course's gauge-done marker: the first ``gauge_done:`` log line holding a date or datetime."""
+    for _, text in _logs(course_dir):
+        for line in text.splitlines():
+            m = re.fullmatch(r"gauge_done:(.*)", line.strip())
+            if m and _valid_moment(m.group(1).strip()):
+                return m.group(1).strip()
+    return None
+
+
+def _gauge(course_dir: Path, rows: list[dict], scope: dict | None) -> dict | None:
+    """``start``'s gauge: null with no topics; else done, and while not done the unseen topics
+    that are not out of the next exam's scope."""
+    if not rows:
+        return None
+    done = _gauge_done(course_dir) is not None
+    return {"done": done, "topics": [] if done else [r["name"] for r in rows if r["status"] == "unseen"
+                                                     and scope_mark(scope, r["name"]) != "out"]}
 
 
 def _valid_moment(text: str) -> bool:
@@ -997,7 +1057,8 @@ def _start(data: dict, choice: str | None = None,
                 "code": None, "inferred": None, "exam": None, "exam_date": None, "exam_name": None, "q0": None,
                 "exam_problems": None, "ask_exam_time": None, "ask_exam_ahead": None, "ask_exam_scope": None,
                 "remaining": [], "class": None, "topic": None, "route_line": None,
-                "first_contact": None, "scope": None, "debrief": None, "line": NO_COURSE_LINE}, None
+                "first_contact": None, "scope": None, "gauge": None, "debrief": None,
+                "line": NO_COURSE_LINE}, None
     code = chosen["course"].split()[0]
     today = now.date()
     exam = _exam(profile, code, now)
@@ -1032,6 +1093,7 @@ def _start(data: dict, choice: str | None = None,
                           for r in remaining],
             "class": klass, "topic": topic, "route_line": route_line,
             "first_contact": _first_contact(course_dir), "scope": scope,
+            "gauge": _gauge(course_dir, rows, scope),
             "debrief": debrief, "line": klass["line"]}, window
 
 
@@ -1197,10 +1259,9 @@ def cmd_check(data: dict) -> dict:
     return {"course_dir": str(course_dir), "topics": out, "line": line}
 
 
-def cmd_close(data: dict) -> dict:
-    """Stamp a session's end in its log once; a repeated close reuses the stamp and writes nothing."""
-    _check_keys(data, {"now", "term", "course", "log", "started"})
-    now, started = _moment(data, "now"), _moment(data, "started")
+def _session_log(data: dict) -> tuple[Path, Path]:
+    """(course folder, log path) for a ``term``, ``course`` and ``log`` name from ``session.py now``;
+    exits 2 when the course or the log is missing, or the log is a symlink."""
     term, course = parse_term(data), parse_segment(data, "course")
     name = data.get("log")
     if not isinstance(name, str) or not _CLOSE_LOG.fullmatch(name):
@@ -1211,6 +1272,19 @@ def cmd_close(data: dict) -> dict:
     path = course_dir / ".state" / "logs" / f"{name}.md"
     if path.is_symlink() or not path.is_file():
         raise InputError(f"log {name} not found in {_short(course)}")
+    return course_dir, path
+
+
+def _append(path: Path, text: str, line: str) -> None:
+    ingest._write_atomic(path, text + ("" if text.endswith("\n") or not text else "\n") + line + "\n")
+
+
+def cmd_close(data: dict) -> dict:
+    """Stamp a session's end in its log once; a repeated close reuses the stamp and writes nothing."""
+    _check_keys(data, {"now", "term", "course", "log", "started"})
+    now, started = _moment(data, "now"), _moment(data, "started")
+    _, path = _session_log(data)
+    name = data["log"]
     text = _text(path)
     ended, found, inside = None, False, False
     for line in text.splitlines():
@@ -1237,12 +1311,27 @@ def cmd_close(data: dict) -> dict:
         if now < started:
             raise InputError("now is before started")
         ended = now
-        ingest._write_atomic(path, text + ("" if text.endswith("\n") or not text else "\n")
-                             + f"ended: {data['now']}\n")
+        _append(path, text, f"ended: {data['now']}")
     minutes = max(0, int((ended - started).total_seconds() // 60))
     line = f"Session {'already closed' if already else 'closed'} after {minutes} min."
     return {"log": str(path), "started": data["started"], "ended": ended.isoformat(), "minutes": minutes,
             "last_session": ended.strftime("%Y-%m-%d %H:%M"), "already_closed": already, "line": line}
+
+
+def cmd_gauge(data: dict) -> dict:
+    """Set the course's gauge-done marker once: a ``gauge_done:`` line in this session's log."""
+    _check_keys(data, {"now", "term", "course", "log"})
+    _moment(data, "now")
+    course_dir, path = _session_log(data)
+    course = course_dir.name
+    if not route(course_dir):
+        raise InputError(f"course {_short(course)} has no topics yet: no gauge, and its marker stays unset")
+    done = _gauge_done(course_dir)
+    if done is None:
+        _append(path, _text(path), f"gauge_done: {data['now']}")
+    line = (f"Knowledge gauge already done for {course}." if done else
+            f"Knowledge gauge done for {course}: it will not run again.")
+    return {"log": str(path), "gauge_done": done or data["now"], "already_done": done is not None, "line": line}
 
 
 def _clock() -> datetime:
@@ -1484,6 +1573,7 @@ PROVENANCES = ("default", "sampler", "learned", "explicit", "legacy")
 PREFS_FILE = "preferences.json"
 PREFS_VERSION = 1
 MAX_WORDING = 200
+WHATS_NEW = "New: sessions run until you say 'end session'. You can also ask to cram or to study normally."
 
 
 def _default_axes() -> dict:
@@ -1514,6 +1604,10 @@ def _prefs_state(root: Path) -> tuple[dict, bool]:
     if not isinstance(state, dict) or state.get("version") != PREFS_VERSION or not isinstance(state.get("axes"), dict) \
             or set(state["axes"]) != set(AXES):
         raise damaged
+    if state.get("sampler_skipped", True) is not True:  # optional; present only once the sampler was skipped
+        raise damaged
+    if state.get("whats_new_seen", True) is not True:  # optional; present only once the what's-new line was seen
+        raise damaged
     for axis, entry in state["axes"].items():
         if not isinstance(entry, dict) or set(entry) != {"level", "provenance", "wording"} \
                 or entry["level"] not in AXES[axis] or entry["provenance"] not in PROVENANCES \
@@ -1528,37 +1622,78 @@ def _set(value: str) -> bool:
     return bool(value) and value.casefold() != "none" and not (value.startswith("<") and value.endswith(">"))
 
 
-def _prefs_out(state: dict, saved: bool) -> dict:
+def _sampler(state: dict, root: Path) -> dict:
+    """The setup sampler: open only before setup is done and until skipped; it fills default axes only."""
+    axes = state["axes"]
+    open_ = workspace.read_setup_done(root) is None and not state.get("sampler_skipped", False)
+    remaining = [a for a in AXES if axes[a]["provenance"] == "default"] if open_ else []
+    return {"open": bool(remaining), "started": any(axes[a]["provenance"] == "sampler" for a in AXES),
+            "remaining": remaining}
+
+
+def _whats_new(state: dict, root: Path) -> str | None:
+    """The one-time line for users whose setup was done before the update; the seen marker stops it."""
+    return WHATS_NEW if workspace.read_setup_done(root) is not None and not state.get("whats_new_seen") else None
+
+
+def _prefs_out(state: dict, saved: bool, root: Path) -> dict:
     axes = state["axes"]
     parts = ", ".join(f"{AXIS_NAMES[a]} {axes[a]['level']} ({axes[a]['provenance']})" for a in AXES)
-    return {"axes": axes, "saved": saved, "line": f"Teaching settings: {parts}."}
+    return {"axes": axes, "saved": saved, "sampler": _sampler(state, root), "whats_new": _whats_new(state, root),
+            "line": f"Teaching settings: {parts}."}
 
 
 def cmd_prefs(data: dict) -> dict:
-    """The global teaching settings; read-only."""
+    """The global teaching settings and the setup sampler's state; read-only."""
     _check_keys(data, set())
-    return _prefs_out(*_prefs_state(ingest._workspace_root()))
+    root = ingest._workspace_root()
+    return _prefs_out(*_prefs_state(root), root)
 
 
 def cmd_pref_event(data: dict) -> dict:
     """Apply one teaching-settings event and save the state atomically (unchanged state writes nothing)."""
     event = data.get("event")
-    if event == "legacy-import":
+    if event in ("legacy-import", "sampler-skip", "whats-new-seen"):
         _check_keys(data, {"event"})
     elif event == "explicit":
         _check_keys(data, {"event", "axis", "level", "wording"})
+    elif event == "sampler":
+        _check_keys(data, {"event", "axis", "level"})
     else:
-        raise InputError("event must be explicit or legacy-import")
-    root = ingest._workspace_root()
-    state, saved = _prefs_state(root)
-    before = json.dumps(state, sort_keys=True)
-    line = None
-    if event == "explicit":
-        axis, level, wording = data.get("axis"), data.get("level"), data.get("wording")
+        raise InputError("event must be explicit, sampler, sampler-skip, legacy-import or whats-new-seen")
+    axis, level = data.get("axis"), data.get("level")
+    if event in ("explicit", "sampler"):
         if axis not in AXES:
             raise InputError(f"axis must be one of {', '.join(AXES)}")
         if level not in AXES[axis]:
             raise InputError(f"level for {axis} must be one of {', '.join(AXES[axis])}")
+    root = ingest._workspace_root()
+    if event.startswith("sampler") and workspace.read_setup_done(root) is not None:
+        raise InputError("the sampler runs only during setup")
+    state, saved = _prefs_state(root)
+    before = json.dumps(state, sort_keys=True)
+    line = None
+    if event == "whats-new-seen":
+        line = "What's new already seen." if state.get("whats_new_seen") else "What's new seen: it will not repeat."
+        state["whats_new_seen"] = True
+    if event == "sampler-skip":
+        line = "Sampler already skipped." if state.get("sampler_skipped") else \
+            "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
+        state["sampler_skipped"] = True
+    if event == "sampler":
+        current = state["axes"][axis]
+        if state.get("sampler_skipped"):
+            line = "The sampler was skipped; settings unchanged."
+        elif current["provenance"] == "default":  # never overwrites a sampler, learned, explicit or legacy value
+            state["axes"][axis] = {"level": level, "provenance": "sampler", "wording": None}
+            line = f"Noted for now: {AXIS_NAMES[axis]} {level}."
+            if not _sampler(state, root)["remaining"]:
+                levels = ", ".join(f"{AXIS_NAMES[a]} {state['axes'][a]['level']}" for a in AXES)
+                line = f"Tentative starting settings: {levels}. They keep adapting as you study."
+        else:
+            line = f"Kept: {AXIS_NAMES[axis]} stays {current['level']} ({current['provenance']})."
+    if event == "explicit":
+        wording = data.get("wording")
         if not isinstance(wording, str) or not wording.strip() or _has_control(wording) \
                 or len(wording) > MAX_WORDING:
             raise InputError(f"wording must be the student's request, one line of at most {MAX_WORDING} characters")
@@ -1567,7 +1702,7 @@ def cmd_pref_event(data: dict) -> dict:
     changed = not saved or json.dumps(state, sort_keys=True) != before
     if changed:
         ingest._write_atomic(_prefs_path(root), json.dumps(state, indent=2) + "\n")
-    out = _prefs_out(state, True)
+    out = _prefs_out(state, True, root)
     if line is None:  # legacy-import: saved now only when nothing was saved before
         line = ("Teaching settings already saved." if not changed else
                 "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
@@ -1578,13 +1713,15 @@ def cmd_pref_event(data: dict) -> dict:
 
 COMMANDS = {
     "prefs": (cmd_prefs, "the global teaching settings: level and provenance per axis"),
-    "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, legacy import)"),
+    "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, setup sampler, legacy import, "
+                                   "what's new seen)"),
     "record": (cmd_record, "record mastery evidence and frustration overrides"),
     "now": (cmd_now, "the local time: ISO timestamp, evidence date, log name, last_session stamp and term"),
     "parse-date": (cmd_parse_date, "the student's exam date-and-time phrase as an exam value, or a refusal"),
     "start": (cmd_start, "pick the course, exam, delivery class and first topic for a session"),
     "check": (cmd_check, "status, counts and staleness for named topics"),
     "close": (cmd_close, "stamp the end of a session in its log once and report its length"),
+    "gauge": (cmd_gauge, "set the course's knowledge-gauge-done marker in the session log, once"),
     "debrief": (cmd_debrief, "post-exam debrief state, cram bill, verifier disagreements and next-course flag"),
     "progress": (cmd_progress, "every mastery row with its evidence, counts and staleness, as a table"),
     "scope": (cmd_scope, "save the confirmed scope of one exam: question types and topics in and out"),
@@ -1593,9 +1730,10 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
-                             ("Mimir session runner. Subcommands: now, parse-date, start, check, close, debrief, progress, record, "
-                              "prefs, pref-event, scope. Reads one JSON object on stdin and prints one JSON object on "
-                              "stdout. Only record, close, pref-event, scope and start with lasting write."),
+                             ("Mimir session runner. Subcommands: now, parse-date, start, check, close, gauge, debrief, "
+                              "progress, record, prefs, pref-event, scope. Reads one JSON object on stdin and prints one "
+                              "JSON object on stdout. Only record, close, gauge, pref-event, scope and start with lasting "
+                              "write."),
                              COMMANDS, argv)
 
 

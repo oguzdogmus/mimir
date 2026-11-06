@@ -274,11 +274,11 @@ def test_urgent_opening_order_and_every_right_answer_is_assisted():
     order = cargo.split("**Opening order**", 1)[1].split("\n", 1)[0]
     steps = ["class line", "gauge", "triage table", "drill"]
     assert [order.index(s) for s in steps] == sorted(order.index(s) for s in steps), order
-    assert cargo.index("Gauge slot") < cargo.index("`plan.py triage`") < cargo.index("Drill: §3")
+    assert cargo.index("Gauge offer") < cargo.index("`plan.py triage`") < cargo.index("Drill: §3")
     lazy = urgent_section("## 1. Lazy setup")
     assert "the student's first line from Mimir is that class line" in lazy
     assert "right answers always use `assisted`" in urgent_section("## 3. ")
-    assert "No Urgent answer ever sets `mastered`" in URGENT.read_text(encoding="utf-8")
+    assert "No Urgent drill answer ever sets `mastered`" in URGENT.read_text(encoding="utf-8")
 
 
 # Exams carry a time when known (issue #34): intake asks for the date and time
@@ -313,6 +313,52 @@ BARE_DATE = re.compile(r"`date` of [^.]*parse-date|its `date` is usable")
 def test_no_skill_writes_a_bare_date_from_parse_date():
     for path in MARKDOWN:
         assert not BARE_DATE.search(path.read_text(encoding="utf-8")), path
+
+
+# The knowledge gauge (issue #39): rules and the Urgent offer live once in core
+# rules; study (Standard and Urgent) and past-question practice use them.
+CORE = "skills/mimir-core-rules/SKILL.md"
+GAUGE_OFFER = "Quick gauge first? A few fresh questions, before any recipe, to see what you can already solve. Yes or no?"
+
+
+def core_section(heading):
+    return _read(CORE).split(f"\n## {heading}\n", 1)[1].split("\n## ", 1)[0]
+
+
+def test_gauge_rules_live_in_core_rules():
+    gauge = core_section("Knowledge gauge")
+    assert "`start`'s `gauge`" in gauge and "`done` false" in gauge and "`session.py gauge`" in gauge
+    assert "`topics`" in gauge  # only unseen topics; any topic with evidence is skipped
+    assert "never from the course name" in gauge and "checkable against the course files" in gauge
+    assert "before any recipe or worked answer" in gauge
+    assert "`unassisted`" in gauge and "`wrong`" in gauge and "`session.py record`" in gauge
+    assert "one right answer never marks a topic mastered" in gauge
+    assert "no teaching-preference evidence" in gauge
+    assert "skips its recipe" in gauge
+    assert "highest-priority" in gauge
+    assert "Urgent gauge offer" in gauge and "every Urgent session" in gauge
+
+
+def test_urgent_gauge_offer_is_defined_once_and_used_by_study_and_past_questions():
+    holders = [path for path in MARKDOWN if GAUGE_OFFER in path.read_text(encoding="utf-8")]
+    assert holders == [ROOT_DIR / CORE], holders
+    cargo = urgent_section("## 2. Urgent cargo")
+    assert "not built yet" not in cargo
+    assert "Urgent gauge offer" in cargo and "Knowledge gauge" in cargo and "core rules" in cargo
+    past = _read("skills/mimir-past-questions/SKILL.md")
+    assert "Urgent gauge offer" in past and "Knowledge gauge" in past
+    assert past.index("Urgent gauge offer") < past.index("§2 steps 1–3")  # the offer before the table
+    assert "the Urgent gauge offer" in core_section("Question budget")
+
+
+def test_standard_session_runs_the_gauge_once_before_any_topic():
+    episode = _read("skills/mimir-study/references/session.md").split("## 4. Episode", 1)[1]
+    gauge = episode.split("**Knowledge gauge**", 1)[1].split("\n\n", 1)[0]
+    assert "`gauge`" in gauge and "`done` false" in gauge and "`session.py gauge`" in gauge
+    assert "core rules" in gauge
+    assert episode.index("**Knowledge gauge**") < episode.index("Topic `T` is")
+    recording = _read("skills/mimir-core-rules/references/recording.md")
+    assert "gauge" in recording and "unassisted" in recording
 
 
 # The student may choose the delivery class: for this session, or lastingly for
@@ -364,3 +410,57 @@ def test_triage_and_the_standard_route_use_the_saved_scope():
     session = _read("skills/mimir-study/references/session.md")
     assert "not on your next exam" in session and "not checked" in session
     assert "never removed" in session or "none is removed" in session
+
+
+# The setup sampler: offered once during setup with a skip, run before setup is
+# marked done, one everyday demonstration per axis, saved only through session.py.
+SETUP = "skills/mimir-setup/SKILL.md"
+SAMPLER = "skills/mimir-setup/references/sampler.md"
+
+
+def test_setup_offers_the_sampler_once_with_a_skip_before_setup_is_done():
+    text = _read(SETUP)
+    assert "references/sampler.md" in text and 'session.py" prefs' in text
+    assert '"event": "sampler-skip"' in text and "skip" in text and "default" in text
+    assert text.index("references/sampler.md") < text.index("`setup_done:` set to")  # events refused after it
+    assert "`started`" in text and "`remaining`" in text  # an interrupted setup resumes, not re-offers
+
+
+def test_only_setup_runs_sampler_events():
+    for path in MARKDOWN:
+        rel = str(path.relative_to(ROOT_DIR))
+        text = path.read_text(encoding="utf-8")
+        if rel not in (SETUP, SAMPLER):
+            assert '"event": "sampler' not in text, rel
+
+
+def test_each_sampler_demonstration_isolates_one_axis():
+    text = _read(SAMPLER)
+    assert '"event": "sampler"' in text and "knowledge gauge" in text
+    assert '"Which suits you: A, B or C?" and wait' in text  # one active question per demonstration
+    sections = re.split(r"^## ", text, flags=re.M)[1:]
+    assert [s.splitlines()[0] for s in sections] == ["support", "frequency", "depth"]
+    for section, levels in zip(sections, (LEVELS[0:3], LEVELS[3:6], LEVELS[6:9])):
+        options = re.findall(r"^\*\*([ABC])\*\* \(`([^`]+)`\)", section, flags=re.M)
+        assert options == list(zip("ABC", levels)), section.splitlines()[0]
+    # frequency differs only in when questions come: every option discloses the same and ends on one fresh check
+    frequency = sections[1]
+    endings = re.findall(r"Your turn: [^\n]*", frequency)
+    assert len(endings) == 3 and len(set(endings)) == 1
+
+
+# The one-time what's-new line (issue #43): existing users hear it at their first
+# study session, Standard or Urgent; new users' setup marks it seen before setup is done.
+def test_whats_new_line_is_said_once_at_session_start_and_setup_marks_it_seen():
+    session = _read("skills/mimir-study/references/session.md")
+    start = session[session.index("## Start"):session.index("## 2. Urgent")]  # before either class branches
+    assert "`whats_new`" in start and 'session.py prefs' in start
+    assert start.index("`whats_new`") < start.index('{"event": "whats-new-seen"}')  # said, then marked seen
+    setup = _read(SETUP)
+    assert setup.index('{"event": "whats-new-seen"}') < setup.index("`setup_done:` set to")
+    for path in MARKDOWN:
+        rel = str(path.relative_to(ROOT_DIR))
+        text = path.read_text(encoding="utf-8")
+        assert "sessions run until you say" not in text, rel  # the line comes from session.py, verbatim
+        if rel not in (SETUP, "skills/mimir-study/references/session.md"):
+            assert "whats-new-seen" not in text, rel

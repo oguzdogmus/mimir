@@ -119,7 +119,7 @@ def test_calm(home, root):
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
                         "exam_date", "exam_name", "q0", "exam_problems", "ask_exam_time", "ask_exam_ahead",
                         "ask_exam_scope", "remaining",
-                        "class", "topic", "route_line", "first_contact", "scope", "debrief", "line"}
+                        "class", "topic", "route_line", "first_contact", "scope", "gauge", "debrief", "line"}
     assert out["scope"] is None and out["ask_exam_scope"] is False
 
 
@@ -1505,6 +1505,10 @@ def test_explicit_request_moves_any_distance_and_keeps_latest_wording(home, root
     ({"event": "explicit", "axis": "depth", "level": "why", "wording": "w" * 201}, "wording"),
     ({"event": "explicit", "axis": "depth", "level": "why", "wording": "x", "course": "CS201"}, "course"),
     ({"event": "legacy-import", "axis": "depth"}, "axis"),
+    ({"event": "sampler", "axis": "depth", "level": "try-first"}, "level for depth"),
+    ({"event": "sampler", "axis": "pace", "level": "why"}, "axis must be"),
+    ({"event": "sampler", "axis": "depth", "level": "why", "wording": "x"}, "wording"),
+    ({"event": "sampler-skip", "axis": "depth"}, "axis"),
     ({"event": "frustrated"}, "event must be"),
     ({}, "event must be"),
 ])
@@ -1521,6 +1525,8 @@ def test_prefs_reads_nothing_extra(home, root):
 
 
 @pytest.mark.parametrize("content", ["not json", '{"version": 1}', '{"version": 2, "axes": {}}',
+                                     json.dumps({"version": 1, "axes": DEFAULT_AXES, "sampler_skipped": False}),
+                                     json.dumps({"version": 1, "axes": DEFAULT_AXES, "whats_new_seen": "yes"}),
                                      json.dumps({"version": 1, "axes": {**{a: dict(v) for a, v in
                                                  DEFAULT_AXES.items()}, "depth": {"level": "deep",
                                                  "provenance": "default", "wording": None}}}),
@@ -1543,6 +1549,92 @@ def test_symlinked_preference_state_is_refused(home, root, tmp_path):
     (root / ".state" / "preferences.json").symlink_to(target)
     fails(home, "prefs", {}, "symlink")
     fails(home, "pref-event", {"event": "legacy-import"}, "symlink")
+
+
+# --- knowledge gauge (issue #39) -----------------------------------------------------
+
+GAUGE_LOG = "2026-10-17-0900"
+
+
+def gauge_args(cdir: Path, now: str = NOW, log_name: str = GAUGE_LOG) -> dict:
+    return {"now": now, "term": TERM, "course": cdir.name, "log": log_name}
+
+
+def test_start_gauge_covers_only_unseen_topics_until_done(home, root):
+    """The Standard gauge is due once per course and skips topics with any evidence."""
+    course(home, mastery=TWO_LEFT + [("Trees", "shaky", "2026-10-11", 1, 0)])
+    out = ok(home, "start", {"now": NOW})
+    assert out["gauge"] == {"done": False, "topics": ["Sorting"]}
+
+
+def test_start_gauge_is_null_for_a_course_without_topics(home, root):
+    """No topics: no gauge, never from the course name, and the marker stays unset."""
+    cdir = course(home)
+    assert ok(home, "start", {"now": NOW})["gauge"] is None
+    index(cdir, SLIDES)  # files indexed, still no topics
+    assert ok(home, "start", {"now": NOW})["gauge"] is None
+    index(cdir, SLIDES, SLIDE_TOPICS[:2])  # topics arrive: the gauge is due at this session
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps", "Graphs"]}
+
+
+def test_gauge_sets_the_marker_once_per_course(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    log(cdir, GAUGE_LOG, session_log(NOW))
+    path = cdir / ".state/logs" / f"{GAUGE_LOG}.md"
+    out = ok(home, "gauge", gauge_args(cdir))
+    assert (out["gauge_done"], out["already_done"]) == (NOW, False)
+    assert out["log"] == str(path)
+    assert out["line"] == "Knowledge gauge done for CS201 Theory: it will not run again."
+    assert path.read_text(encoding="utf-8") == session_log(NOW) + f"gauge_done: {NOW}\n"
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": True, "topics": []}
+    # A later session, even in another log, finds the marker and writes nothing.
+    later = "2026-10-20T09:00:00+03:00"
+    log(cdir, "2026-10-20-0900", session_log(later))
+    before = snapshot(home)
+    again = ok(home, "gauge", gauge_args(cdir, later, "2026-10-20-0900"))
+    assert snapshot(home) == before
+    assert (again["gauge_done"], again["already_done"]) == (NOW, True)
+    assert again["line"] == "Knowledge gauge already done for CS201 Theory."
+
+
+def test_existing_course_without_marker_gets_the_gauge_once(home, root):
+    """Courses from before the gauge (first_contact already logged) are still due once."""
+    cdir = course(home, mastery=TWO_LEFT)
+    log(cdir, "2026-10-01-0900", session_log("2026-10-01T09:00:00+03:00", "2026-10-01T10:00:00+03:00",
+                                             "first_contact: 2026-10-01T09:00:00+03:00\ngauge_done: soon\n"))
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Sorting"]}
+
+
+def test_gauge_refusals_write_nothing(home, root):
+    cdir = course(home)  # no topics yet: no gauge, the marker stays unset
+    log(cdir, GAUGE_LOG, session_log(NOW))
+    before = snapshot(home)
+    fails(home, "gauge", gauge_args(cdir), "no topics yet")
+    assert snapshot(home) == before
+    assert ok(home, "start", {"now": NOW})["gauge"] is None
+    index(cdir, SLIDES, SLIDE_TOPICS[:1])
+    before = snapshot(home)
+    fails(home, "gauge", gauge_args(cdir, log_name="2026-10-17-0901"), "not found")
+    fails(home, "gauge", gauge_args(cdir, log_name="../../profile"), "log must be")
+    fails(home, "gauge", {**gauge_args(cdir), "course": "NOPE1 X"}, "course")
+    fails(home, "gauge", {**gauge_args(cdir), "x": 1}, "unknown field 'x'")
+    fails(home, "gauge", {k: v for k, v in gauge_args(cdir).items() if k != "now"}, "now is required")
+    assert snapshot(home) == before
+
+
+def test_gauge_answers_record_unassisted_and_leave_teaching_settings_alone(home, root):
+    """One right gauge answer never marks a topic mastered, and the gauge is no preference evidence."""
+    cdir = course(home, mastery=TWO_LEFT)
+    log(cdir, GAUGE_LOG, session_log(NOW))
+    answer = dict(term=TERM, course="CS201 Theory", topic="Sorting", item="gauge:sorting:1",
+                  gate={"decision": "show", "counts_for_mastery": True},
+                  outcome="unassisted", real_past_paper=False, session=GAUGE_LOG, date="2026-10-17")
+    assert ok(home, "record", answer)["status"] == "shaky"
+    ok(home, "gauge", gauge_args(cdir))
+    assert not (root / ".state" / session.PREFS_FILE).exists()
+    assert ok(home, "prefs", {})["saved"] is False
+    sorting = next(t for t in ok(home, "progress", {"now": NOW})["topics"] if t["name"] == "Sorting")
+    assert (sorting["status"], sorting["unassisted"], sorting["assisted"]) == ("shaky", 1, 0)
 
 
 # --- start: the student's delivery choice (issue #36) ------------------------------
@@ -1711,6 +1803,14 @@ def test_standard_route_puts_out_of_scope_topics_last_marked_and_removes_none(ho
     assert out["scope"]["new"] == ["Tries"]
 
 
+def test_gauge_skips_unseen_topics_that_are_not_on_the_exam(home, root):
+    course(home, mastery=ROUTE4)
+    profile(root, exams=[MIDTERM, FINAL])
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps", "Tries"]}
+    save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["Tries"]})
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps"]}
+
+
 def test_standard_route_offers_out_of_scope_topics_once_nothing_else_is_left(home, root):
     course(home, mastery=[("Heaps", "mastered", "2026-10-16", 0, 2), ("Sorting", "gap", "2026-10-10", 1, 0)],
            save={"next_topic": "Sorting"})
@@ -1850,3 +1950,156 @@ def test_scope_refuses_a_symlinked_scope_file_and_reads_it_as_empty(home, root, 
     fails(home, "scope", SCOPE_BASE, "scope.md must not be a symlink")
     assert ok(home, "start", {"now": NOW})["scope"] is None
     assert target.read_text(encoding="utf-8").startswith("## 2026-11-05")
+
+
+# --- setup sampler -------------------------------------------------------------------
+
+def _setup_done(root: Path, date: str = "2026-10-01") -> None:
+    path = root / ".state" / "profile.md"
+    path.write_text(path.read_text(encoding="utf-8").replace("level:\n", f"level:\nsetup_done: {date}\n"),
+                    encoding="utf-8")
+
+
+def test_sampler_is_open_during_setup_with_every_axis_remaining(home, root):
+    profile(root)
+    before = snapshot(home)
+    out = ok(home, "prefs", {})
+    assert out["sampler"] == {"open": True, "started": False, "remaining": ["support", "frequency", "depth"]}
+    assert snapshot(home) == before
+
+
+def test_sampler_is_closed_for_users_who_finished_setup(home, root):
+    profile(root)
+    _setup_done(root)
+    assert ok(home, "prefs", {})["sampler"] == {"open": False, "started": False, "remaining": []}
+
+
+def test_sampler_choice_fills_a_default_axis_and_resumes_with_the_rest(home, root):
+    profile(root)
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "example-first"})
+    assert out["changed"] is True and out["line"] == "Noted for now: support example-first."
+    assert out["axes"] == {**DEFAULT_AXES, "support": {"level": "example-first", "provenance": "sampler",
+                                                       "wording": None}}
+    # an interrupted setup resumes the remaining demonstrations from the saved state
+    assert ok(home, "prefs", {})["sampler"] == {"open": True, "started": True, "remaining": ["frequency", "depth"]}
+
+
+def _saved_axis(root: Path, axis: str, entry: dict) -> None:
+    state = root / ".state" / "preferences.json"
+    state.write_text(json.dumps({"version": 1, "axes": {**DEFAULT_AXES, axis: entry}}, indent=2) + "\n",
+                     encoding="utf-8")
+
+
+@pytest.mark.parametrize("setup", ["explicit", "learned", "legacy", "sampler"])
+def test_sampler_never_overwrites_a_value_that_is_not_default(home, root, setup):
+    if setup == "legacy":
+        _legacy_profile(root, "fewer questions (2026-10-01)")
+        ok(home, "pref-event", {"event": "legacy-import"})
+    else:
+        profile(root)
+        if setup == "explicit":
+            ok(home, "pref-event", {"event": "explicit", "axis": "frequency", "level": "every step",
+                                    "wording": "ask me at every step"})
+        elif setup == "learned":
+            _saved_axis(root, "frequency", {"level": "every step", "provenance": "learned", "wording": None})
+        else:
+            ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "every step"})
+    kept = ok(home, "prefs", {})["axes"]["frequency"]
+    assert ok(home, "prefs", {})["sampler"]["remaining"] == ["support", "depth"]
+    before = snapshot(home)
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "key decisions"})
+    assert out["changed"] is False and out["axes"]["frequency"] == kept
+    assert out["line"] == f"Kept: guiding-question frequency stays {kept['level']} ({setup})."
+    assert snapshot(home) == before  # nothing rewritten
+
+
+def test_unsaved_legacy_value_is_saved_but_never_overwritten_by_the_sampler(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "every step"})
+    assert out["axes"] == LEGACY_AXES and out["saved"] is True
+    assert json.loads((root / ".state" / "preferences.json").read_text(encoding="utf-8"))["axes"] == LEGACY_AXES
+
+
+@pytest.mark.parametrize("payload", [{"event": "sampler", "axis": "support", "level": "try-first"},
+                                     {"event": "sampler-skip"}])
+def test_sampler_is_refused_after_setup(home, root, payload):
+    profile(root)
+    _setup_done(root)
+    before = snapshot(home)
+    fails(home, "pref-event", payload, "the sampler runs only during setup")
+    assert snapshot(home) == before
+
+
+def test_sampler_skip_keeps_completed_choices_and_ends_the_sampler(home, root):
+    profile(root)
+    ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "try-first"})
+    out = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert out["changed"] is True
+    assert out["line"] == "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
+    assert out["axes"] == {**DEFAULT_AXES, "support": {"level": "try-first", "provenance": "sampler",
+                                                       "wording": None}}
+    assert out["sampler"] == {"open": False, "started": True, "remaining": []}  # never offered again
+    before = snapshot(home)
+    again = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert again["changed"] is False and again["line"] == "Sampler already skipped."
+    late = ok(home, "pref-event", {"event": "sampler", "axis": "depth", "level": "what-if"})
+    assert late["changed"] is False and late["axes"]["depth"] == DEFAULT_AXES["depth"]
+    assert late["line"] == "The sampler was skipped; settings unchanged."
+    assert snapshot(home) == before
+
+
+def test_sampler_skip_before_any_choice_saves_the_defaults(home, root):
+    profile(root)
+    out = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert out["axes"] == DEFAULT_AXES and out["saved"] is True
+    assert ok(home, "prefs", {})["sampler"] == {"open": False, "started": False, "remaining": []}
+
+
+def test_last_sampler_choice_ends_with_a_tentative_summary(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")  # frequency is legacy: the sampler skips it
+    ok(home, "pref-event", {"event": "sampler", "axis": "depth", "level": "what-if"})
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "example-first"})
+    assert out["line"] == ("Tentative starting settings: support example-first, guiding-question frequency "
+                           "checks only, guiding-question depth what-if. They keep adapting as you study.")
+    assert out["sampler"] == {"open": False, "started": True, "remaining": []}
+    assert out["axes"]["frequency"] == LEGACY_AXES["frequency"]
+
+
+# --- what's-new line for existing users (issue #43) ------------------------------------
+
+WHATS_NEW = "New: sessions run until you say 'end session'. You can also ask to cram or to study normally."
+
+
+def test_existing_user_gets_the_whats_new_line_at_the_first_session(home, root):
+    profile(root)
+    _setup_done(root)  # setup finished before the update: no seen marker
+    before = snapshot(home)
+    assert ok(home, "prefs", {})["whats_new"] == WHATS_NEW
+    assert snapshot(home) == before  # prefs stays read-only
+
+
+def test_whats_new_line_is_shown_once_and_never_again(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    _setup_done(root)
+    out = ok(home, "pref-event", {"event": "whats-new-seen"})
+    assert out["changed"] is True and out["whats_new"] is None
+    assert out["axes"] == LEGACY_AXES  # the settings are untouched; the legacy value is saved with the marker
+    state = json.loads((root / ".state" / "preferences.json").read_text(encoding="utf-8"))
+    assert state["whats_new_seen"] is True  # the global seen marker lives in the preference state
+    before = snapshot(home)
+    for _ in range(2):  # later sessions
+        assert ok(home, "prefs", {})["whats_new"] is None
+    again = ok(home, "pref-event", {"event": "whats-new-seen"})
+    assert again["changed"] is False and again["whats_new"] is None
+    assert snapshot(home) == before  # a rerun rewrites nothing
+
+
+def test_new_users_never_see_the_whats_new_line(home, root):
+    profile(root)  # a new user in setup: no setup_done yet
+    assert ok(home, "prefs", {})["whats_new"] is None
+    ok(home, "pref-event", {"event": "sampler-skip"})
+    out = ok(home, "pref-event", {"event": "whats-new-seen"})  # setup marks it seen before setup_done
+    assert out["changed"] is True and out["whats_new"] is None
+    _setup_done(root, "2026-10-17")
+    assert ok(home, "prefs", {})["whats_new"] is None  # first study session after setup
+    assert ok(home, "prefs", {})["sampler"]["open"] is False
