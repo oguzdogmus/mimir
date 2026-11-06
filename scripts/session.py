@@ -314,7 +314,7 @@ prefs -- the global teaching settings. Read-only.
           "default", "wording": null}, "frequency": {...}, "depth": {...}},
           "saved": false, "sampler": {"open": true, "started": false,
           "remaining": ["support", "frequency", "depth"]}, "trial": null,
-          "probe_axes": [], "whats_new": null, "line": "Teaching settings:
+          "trial_paused": false, "probe_axes": [], "whats_new": null, "line": "Teaching settings:
           support method-first (default), ..."}
     Axes and levels, more guided to more independent: support example-first,
     method-first, try-first; frequency checks only, key decisions, every
@@ -332,6 +332,11 @@ prefs -- the global teaching settings. Read-only.
     ``trial`` is the one active probe trial across all courses, null when
     none: {"axis", "from" (the saved level), "to" (one level toward more
     independent), "evidence" (the sessions that gave positive evidence)}.
+    ``trial_paused``: a trial is running but this output does not belong to
+    this session's counted session, so the trial is not applied (teach at the
+    saved level): always for ``prefs`` with a trial (the ``session`` event's
+    output replaces it in a counted session), and for a ``pref-event`` event
+    that names no session; false with no trial.
     ``probe_axes``: the axes a trial may start on now, in order, else [];
     see the session and trial-start events.
     ``whats_new``: the one-time line "New: sessions run until you say 'end
@@ -1806,10 +1811,13 @@ def _whats_new(state: dict, root: Path) -> str | None:
     return WHATS_NEW if workspace.read_setup_done(root) is not None and not state.get("whats_new_seen") else None
 
 
-def _prefs_out(state: dict, saved: bool, root: Path) -> dict:
+def _prefs_out(state: dict, saved: bool, root: Path, in_session: bool = False) -> dict:
+    """The settings as ``prefs`` reports them. ``in_session``: the output belongs to this session's
+    counted session (an event naming it), the only place a running trial applies."""
     axes = state["axes"]
     parts = ", ".join(f"{AXIS_NAMES[a]} {axes[a]['level']} ({axes[a]['provenance']})" for a in AXES)
     return {"axes": axes, "saved": saved, "sampler": _sampler(state, root), "trial": state["trial"],
+            "trial_paused": state["trial"] is not None and not in_session,
             "probe_axes": [a for a in AXES if _probe_block(state, a) is None], "whats_new": _whats_new(state, root),
             "line": f"Teaching settings: {parts}."}
 
@@ -1993,7 +2001,7 @@ def cmd_pref_event(data: dict) -> dict:
     changed = not saved or json.dumps(state, sort_keys=True) != before
     if changed:
         ingest._write_atomic(_prefs_path(root), json.dumps(_compact(state), indent=2) + "\n")
-    out = _prefs_out(state, True, root)
+    out = _prefs_out(state, True, root, in_session="session" in EVENT_FIELDS[event])
     if line is None:  # legacy-import: saved now only when nothing was saved before
         line = ("Teaching settings already saved." if not changed else
                 "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."

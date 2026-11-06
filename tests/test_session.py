@@ -2230,6 +2230,22 @@ def test_sessions_near_an_exam_give_no_evidence_run_no_probe_and_do_not_advance_
     assert "frequency" not in after["probe_axes"]  # the near-exam session did not count as the skipped one
 
 
+def test_a_running_trial_is_paused_outside_the_counted_session(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-10-21T09:00:00+03:00")])
+    assert ok(home, "prefs", {})["trial_paused"] is False  # no trial at all
+    pref(home, "session", DAY1)
+    started = pref(home, "trial-start", DAY1, axis="depth")
+    assert started["trial"]["to"] == "what-if" and started["trial_paused"] is False  # applies in this session
+    near = "2026-10-19T18:00:00+03:00"  # Standard by choice, 39 hours before the exam: no session event
+    assert ok(home, "start", {"now": near, "choice": "Standard"})["preference_session"] is False
+    paused = ok(home, "prefs", {})
+    assert paused["trial"]["to"] == "what-if" and paused["trial_paused"] is True  # teach at the saved level
+    assert paused["axes"]["depth"] == DEFAULT_AXES["depth"]
+    resumed = pref(home, "session", "2026-10-22T09:00:00+03:00")
+    assert resumed["trial"]["to"] == "what-if" and resumed["trial_paused"] is False
+
+
 def test_explicit_values_are_never_probed_and_an_explicit_request_ends_a_trial_on_its_axis(home, root):
     profile(root)
     pref(home, "explicit", axis="support", level="example-first", wording="always show an example first")

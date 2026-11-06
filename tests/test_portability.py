@@ -487,6 +487,15 @@ def test_only_eligible_standard_sessions_are_counted_for_probes():
             assert '"event": "session"' not in path.read_text(encoding="utf-8"), path
 
 
+def test_a_paused_trial_is_not_applied_outside_a_counted_session():
+    text = TEACHING.read_text(encoding="utf-8")
+    inputs = text.split("## 0. Inputs", 1)[1].split("\n## ", 1)[0]
+    assert "`trial_paused`" in inputs and "saved level" in inputs
+    session = STUDY_SESSION.read_text(encoding="utf-8")
+    episode = session.split("## 4. Episode", 1)[1].split("### Questions", 1)[0]
+    assert "`trial_paused`" in episode and "saved level" in episode
+
+
 def test_the_fewer_questions_offer_is_asked_once_by_the_script():
     text = TEACHING.read_text(encoding="utf-8")
     assert text.count('"Want fewer questions from now on?"') == 1

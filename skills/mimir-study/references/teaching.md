@@ -5,7 +5,7 @@
 ## 0. Inputs
 
 - Profile (read once, at episode start, `session.md` §4): `course_language` and `teaching_language`. A value that is empty, `none` or still a template placeholder (`<...>`) counts as not set; when `profile.md` was missing or unreadable, both are not set. Other profile lines left by older versions are not inputs; never edit or delete them.
-- Teaching settings (from `session.py prefs`, or the session event that replaces it, run once at episode start, `session.md` §4): the level of each axis, `support`, `frequency` and `depth` (§3), plus `trial` and `probe_axes` (§8). They hold for the whole session; change them only through §7 and §8. While `trial` is set, teach its axis at the trial's `to` level instead.
+- Teaching settings (from `session.py prefs`, or the session event that replaces it, run once at episode start, `session.md` §4): the level of each axis, `support`, `frequency` and `depth` (§3), plus `trial` and `probe_axes` (§8). They hold for the whole session; change them only through §7 and §8. While `trial` is set and `trial_paused` is false, teach its axis at the trial's `to` level instead. When `trial_paused` is true (a session that ran no session event, such as one within 48 hours of an exam), the trial is paused: teach every axis at its saved level and send no trial event.
 - Read the `## Topics` rows for `T` in `<course_dir>/INDEX.md` and the files they point to (at the anchored page), and `<course_dir>/.state/fingerprint.md` (notation, phrasing, disguise types, question types).
 - `attempt_first` for `T`: from the latest `start` `topic` or `check` output for `T`. When the recheck (`session.md` step 1) recorded an answer on `T`, run `check` on `T` again first and use that.
 
