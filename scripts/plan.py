@@ -488,7 +488,7 @@ def parse_types(data: dict) -> list[dict]:
         name = item.get("name")
         if not isinstance(name, str) or not name.strip():
             raise InputError(f"types[{i}].name must be a non-empty string")
-        key = " ".join(name.split()).casefold()
+        key = name_key(name)
         if key in seen_names:
             raise InputError(f"types[{i}].name repeats an earlier type name")
         seen_names.add(key)
@@ -514,12 +514,24 @@ _STATUS_REASONS = {"unseen": "not studied yet", "gap": "gap", "shaky": "shaky", 
 OUT_OF_SCOPE = "not on this exam"
 
 
-def _name_key(name: str) -> str:
+def name_key(name: str) -> str:
+    """A name compared ignoring case and repeated spaces (topics, question types, exam names)."""
     return " ".join(name.split()).casefold()
 
 
-def parse_scope(data: dict) -> tuple[set[str], set[str]] | None:
-    """The exam scope as (in, out) name keys, or None when no scope is recorded."""
+def scope_mark(scope: dict | None, name: str) -> str | None:
+    """A topic's or type's mark under an exam scope {"in": [...], "out": [...]}: "in", "out" or
+    "not checked" (in neither list); None without a scope."""
+    if scope is None:
+        return None
+    for side in ("in", "out"):
+        if name_key(name) in {name_key(n) for n in scope[side]}:
+            return side
+    return "not checked"
+
+
+def parse_scope(data: dict) -> dict | None:
+    """The exam scope as {"in": [names], "out": [names]}, or None when no scope is recorded."""
     scope = data.get("scope")
     if scope is None:
         return None
@@ -528,16 +540,16 @@ def parse_scope(data: dict) -> tuple[set[str], set[str]] | None:
     unknown = set(scope) - {"in", "out"}
     if unknown:
         raise InputError(f"scope has unknown field {sorted(unknown)[0]}")
-    sides = []
+    sides = {}
     for side in ("in", "out"):
         names = scope.get(side)
         names = [] if names is None else names
         if not isinstance(names, list) or not all(isinstance(n, str) and n.strip() for n in names):
             raise InputError(f"scope.{side} must be a list of non-empty strings")
-        sides.append({_name_key(n) for n in names})
-    if sides[0] & sides[1]:
+        sides[side] = names
+    if {name_key(n) for n in sides["in"]} & {name_key(n) for n in sides["out"]}:
         raise InputError("scope names a type both in and out")
-    return sides[0], sides[1]
+    return sides
 
 
 def triage(data: dict) -> dict:
@@ -562,8 +574,7 @@ def triage(data: dict) -> dict:
         frequency = Fraction(t["seen"], t["papers"]) if t["papers"] else Fraction(1)
         # Urgent spends the time left on gaps; Standard practice revises mastered types too.
         # A type outside the exam scope is never drilled, in either class.
-        mark = None if scope is None else ("in" if _name_key(t["name"]) in scope[0] else
-                                           "out" if _name_key(t["name"]) in scope[1] else "not checked")
+        mark = scope_mark(scope, t["name"])
         skip = mark == "out" or (klass == "Urgent" and t["status"] == "mastered")
         reason = OUT_OF_SCOPE if mark == "out" else "mastered" if skip else _STATUS_REASONS[t["status"]]
         rows.append({

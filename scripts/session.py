@@ -386,7 +386,8 @@ pref-event -- apply one teaching-settings event and save the state.
     unanswered axes keep their defaults. Both sampler events exit 2 once
     setup is done. ``legacy-import``: saves the state ``prefs``
     shows (the legacy value included) when nothing is saved yet; otherwise
-    changes nothing. ``whats-new-seen``: sets the global seen marker, so
+    changes nothing. No skill sends it (any first write saves the legacy
+    value anyway); it is kept for migration tests and manual use. ``whats-new-seen``: sets the global seen marker, so
     ``whats_new`` is null from then on; allowed before and after setup.
     A state that would not change is not rewritten, so a
     rerun leaves the file byte-identical. An unknown event, axis, or a level
@@ -479,6 +480,7 @@ from workspace import InputError, _check_keys, _has_control, _short, parse_segme
 
 STALE_DAYS = 14
 ATTEMPT_FIRST_ASSISTED = 3
+MAX_WORDING = 200  # the student's own words kept verbatim: an explicit request's wording, an exam scope's words
 
 NO_ROUTE_LINE = ("No topics on the route yet: drop the outline, slides or past papers into `_inbox/` "
                  "and run mimir-ingest.")
@@ -555,8 +557,7 @@ def _section_rows(text: str, section) -> list[list[str]]:
             for l in lines[first:end]]
 
 
-def _norm(name: str) -> str:
-    return " ".join(name.split()).casefold()
+_norm = plan.name_key  # names compare ignoring case and repeated spaces
 
 
 def mastery(course_dir: Path) -> list[dict]:
@@ -676,23 +677,24 @@ def _logs(course_dir: Path):
             continue
 
 
-def _first_contact(course_dir: Path) -> str | None:
+def _first_log_moment(course_dir: Path, key: str) -> str | None:
+    """The value of the first ``key:`` line, across the course's logs in name order, that holds a
+    date or datetime; None when there is none."""
     for _, text in _logs(course_dir):
         for line in text.splitlines():
-            m = re.fullmatch(r"first_contact:(.*)", line.strip())
-            if m and _valid_moment(m.group(1).strip()):
+            m = re.fullmatch(rf"{key}:(.*)", line.strip())
+            if m and _valid_moment(m.group(1).strip(), key):
                 return m.group(1).strip()
     return None
+
+
+def _first_contact(course_dir: Path) -> str | None:
+    return _first_log_moment(course_dir, "first_contact")
 
 
 def _gauge_done(course_dir: Path) -> str | None:
     """The course's gauge-done marker: the first ``gauge_done:`` log line holding a date or datetime."""
-    for _, text in _logs(course_dir):
-        for line in text.splitlines():
-            m = re.fullmatch(r"gauge_done:(.*)", line.strip())
-            if m and _valid_moment(m.group(1).strip()):
-                return m.group(1).strip()
-    return None
+    return _first_log_moment(course_dir, "gauge_done")
 
 
 def _gauge(course_dir: Path, rows: list[dict], scope: dict | None) -> dict | None:
@@ -705,12 +707,12 @@ def _gauge(course_dir: Path, rows: list[dict], scope: dict | None) -> dict | Non
                                                      and scope_mark(scope, r["name"]) != "out"]}
 
 
-def _valid_moment(text: str) -> bool:
-    """True for a date or datetime under plan.py's parse rules."""
+def _valid_moment(text: str, field: str) -> bool:
+    """True for a date or datetime under plan.py's parse rules (``field`` names it in plan's errors)."""
     if not text:
         return False
     try:
-        plan.parse_moment(text, "first_contact")
+        plan.parse_moment(text, field)
     except plan.InputError:
         return False
     return True
@@ -729,6 +731,19 @@ def _pick(courses: list[dict], profile: str) -> dict:
         if hit:
             return hit
     return max(courses, key=lambda c: (workspace.term_key(c["term"]), c["course"]))
+
+
+def course_code(course: str) -> str:
+    """A course's code: the first word of its folder name."""
+    return course.split()[0]
+
+
+def _indexed_course(root: Path, term: str, course: str) -> Path:
+    """The folder of a named course; exits 2 unless it exists with an ``INDEX.md``."""
+    course_dir = workspace.course_folder(root, term, course)
+    if not (course_dir / "INDEX.md").is_file():
+        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
+    return course_dir
 
 
 def _usable(root: Path, course: dict) -> bool:
@@ -908,14 +923,7 @@ def scope_view(root: Path, course_dir: Path, code: str, rows: list[dict], exam: 
     return {"words": saved["words"], **{side: saved[side] for side in SCOPE_SIDES}, "new": new}, False, None
 
 
-def scope_mark(scope: dict | None, name: str) -> str | None:
-    """A route topic's mark: "in", "out" or "not checked"; None without a scope."""
-    if scope is None:
-        return None
-    for side in ("in", "out"):
-        if _norm(name) in {_norm(n) for n in scope[side]}:
-            return side
-    return "not checked"
+scope_mark = plan.scope_mark  # a route topic's mark: "in", "out", "not checked", or None without a scope
 
 
 # --- Debrief ------------------------------------------------------------------------
@@ -1203,7 +1211,7 @@ def _start(data: dict, choice: str | None = None,
                 "remaining": [], "remaining_line": None, "class": None, "topic": None, "route_line": None,
                 "first_contact": None, "scope": None, "gauge": None, "debrief": None, "preference_session": None,
                 "line": NO_COURSE_LINE}, None
-    code = chosen["course"].split()[0]
+    code = course_code(chosen["course"])
     today = now.date()
     exam = _exam(profile, code, now)
     rows = route(course_dir)
@@ -1294,10 +1302,8 @@ def cmd_scope(data: dict) -> dict:
     if noted:
         course_dir, folder = None, root
     else:
-        course_dir = folder = workspace.course_folder(root, term, course)
-        if not (course_dir / "INDEX.md").is_file():
-            raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
-        code = course.split()[0]
+        course_dir = folder = _indexed_course(root, term, course)
+        code = course_code(course)
     exams = _code_exams(_text(root / ".state" / "profile.md"), code, now.tzinfo)
     if not any(day.isoformat() == exam_date and _norm(name) == _norm(exam_name) for day, name in exams):
         raise InputError(f"no ## Exam dates row of {_short(code)} named {_short(exam_name or '(none)')} "
@@ -1379,7 +1385,7 @@ def cmd_progress(data: dict) -> dict:
     counts = {s: sum(1 for t in topics if t["status"] == s) for s in STATUSES}
     out = {"courses": courses, "term": chosen["term"], "course": chosen["course"],
            "course_dir": str(course_dir),
-           "code": chosen["course"].split()[0], "inferred": inferred, "topics": topics, "counts": counts}
+           "code": course_code(chosen["course"]), "inferred": inferred, "topics": topics, "counts": counts}
     if not topics:
         return {**out, "table": None, "line": NO_ROUTE_LINE}
     rows = [_PROGRESS_HEAD] + [
@@ -1408,10 +1414,7 @@ def cmd_check(data: dict) -> dict:
     for n, name in enumerate(names, 1):
         if not isinstance(name, str) or not name.strip() or _has_control(name):
             raise InputError(f"topics[{n}] must be a one-line topic name")
-    root = ingest._workspace_root()
-    course_dir = workspace.course_folder(root, term, course)
-    if not (course_dir / "INDEX.md").is_file():
-        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
+    course_dir = _indexed_course(ingest._workspace_root(), term, course)
     rows = {_norm(r["name"]): r for r in mastery(course_dir)}
     today = now.date()
     out = [topic_state(rows.get(_norm(name)), " ".join(name.split()), today) for name in names]
@@ -1428,9 +1431,7 @@ def _session_log(data: dict) -> tuple[Path, Path]:
     name = data.get("log")
     if not isinstance(name, str) or not _CLOSE_LOG.fullmatch(name):
         raise InputError("log must be a log name from `session.py now` (YYYY-MM-DD-HHMM)")
-    course_dir = workspace.course_folder(ingest._workspace_root(), term, course)
-    if not (course_dir / "INDEX.md").is_file():
-        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
+    course_dir = _indexed_course(ingest._workspace_root(), term, course)
     path = course_dir / ".state" / "logs" / f"{name}.md"
     if path.is_symlink() or not path.is_file():
         raise InputError(f"log {name} not found in {_short(course)}")
@@ -1734,7 +1735,6 @@ AXIS_NAMES = {"support": "support", "frequency": "guiding-question frequency", "
 PROVENANCES = ("default", "sampler", "learned", "explicit", "legacy")
 PREFS_FILE = "preferences.json"
 PREFS_VERSION = 1
-MAX_WORDING = 200
 # Probe trials (docs/teaching-preferences-design.md, Probes; the numbers are tunable heuristics).
 ADOPT_SESSIONS = 2          # positive evidence in this many sessions, on different calendar days, adopts a trial
 MAX_REJECTIONS = 3          # the third rejection of a transition stops it; before that, skip as many sessions
@@ -1931,11 +1931,17 @@ def _axis_level(data: dict, *, level: bool) -> tuple[str, str | None]:
     return axis, data.get("level")
 
 
-def _this_session(state: dict, data: dict) -> str:
-    """The counted session the event belongs to; any other session gives no evidence."""
-    moment, current = _session_moment(data.get("session")), state["sessions"]["current"]
+def _session_arg(data: dict) -> datetime:
+    """The event's ``session``: this session's ``started:`` datetime, with its offset."""
+    moment = _session_moment(data.get("session"))
     if moment is None:
         raise InputError("session must be this session's `session.py now` datetime (its started: line)")
+    return moment
+
+
+def _this_session(state: dict, data: dict) -> str:
+    """The counted session the event belongs to; any other session gives no evidence."""
+    moment, current = _session_arg(data), state["sessions"]["current"]
     if current is None or moment != _session_moment(current):
         raise InputError(NO_SESSION)
     return current
@@ -1948,10 +1954,10 @@ def _active_trial(state: dict, data: dict) -> dict:
     return state["trial"]
 
 
-def _ev_session(state: dict, data: dict) -> str:
-    moment, sessions = _session_moment(data.get("session")), state["sessions"]
-    if moment is None:
-        raise InputError("session must be this session's `session.py now` datetime (its started: line)")
+# Event handlers: (state, data, root=..., saved=...) -> line; each changes ``state`` in place.
+
+def _ev_session(state: dict, data: dict, **_) -> str:
+    moment, sessions = _session_arg(data), state["sessions"]
     if sessions["current"] is not None:
         last = _session_moment(sessions["current"])
         if moment == last:
@@ -1965,7 +1971,7 @@ def _ev_session(state: dict, data: dict) -> str:
     return f"Standard session {sessions['count']} counted for teaching settings."
 
 
-def _ev_trial_start(state: dict, data: dict) -> str:
+def _ev_trial_start(state: dict, data: dict, **_) -> str:
     current = _this_session(state, data)
     axis, _ = _axis_level(data, level=False)
     block = _probe_block(state, axis)
@@ -1977,7 +1983,7 @@ def _ev_trial_start(state: dict, data: dict) -> str:
     return f"Trial started: {AXIS_NAMES[axis]} {state['trial']['to']} instead of {frm}."
 
 
-def _ev_positive(state: dict, data: dict) -> str:
+def _ev_positive(state: dict, data: dict, **_) -> str:
     trial = _active_trial(state, data)
     current = state["sessions"]["current"]
     if current in trial["evidence"]:
@@ -1993,12 +1999,12 @@ def _ev_positive(state: dict, data: dict) -> str:
     return f"Saved for every course: {AXIS_NAMES[axis]} is now {trial['to']}."
 
 
-def _ev_neutral(state: dict, data: dict) -> str:
+def _ev_neutral(state: dict, data: dict, **_) -> str:
     _active_trial(state, data)
     return "Neutral: nothing counted; the trial continues."
 
 
-def _ev_pushback(state: dict, data: dict) -> str:
+def _ev_pushback(state: dict, data: dict, **_) -> str:
     trial = _active_trial(state, data)
     key = _transition(trial["axis"], trial["from"])
     rec = state["transitions"].setdefault(key, {"rejections": 0, "next": 0})
@@ -2011,7 +2017,7 @@ def _ev_pushback(state: dict, data: dict) -> str:
     return f"{back} It may be tried again from eligible session {rec['next']}."
 
 
-def _ev_reopen(state: dict, data: dict) -> str:
+def _ev_reopen(state: dict, data: dict, **_) -> str:
     axis, _ = _axis_level(data, level=False)
     entry = state["axes"][axis]
     if entry["provenance"] == "explicit":
@@ -2023,7 +2029,7 @@ def _ev_reopen(state: dict, data: dict) -> str:
     return f"Reopened: Mimir may try {AXIS_NAMES[axis]} {_next_level(axis, entry['level'])} again."
 
 
-def _ev_frustration(state: dict, data: dict) -> str:
+def _ev_frustration(state: dict, data: dict, **_) -> str:
     current = _this_session(state, data)
     seen = state["frustration"]
     if seen["last"] == current:
@@ -2035,21 +2041,21 @@ def _ev_frustration(state: dict, data: dict) -> str:
     return "Noted; no offer."
 
 
-def _ev_whats_new_seen(state: dict, data: dict) -> str:
+def _ev_whats_new_seen(state: dict, data: dict, **_) -> str:
     line = "What's new already seen." if state["whats_new_seen"] else "What's new seen: it will not repeat."
     state["whats_new_seen"] = True
     return line
 
 
-def _ev_sampler_skip(state: dict, data: dict) -> str:
+def _ev_sampler_skip(state: dict, data: dict, **_) -> str:
     line = "Sampler already skipped." if state["sampler_skipped"] else \
         "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
     state["sampler_skipped"] = True
     return line
 
 
-def _ev_sampler(state: dict, data: dict, root: Path) -> str:
-    axis, level = _axis_level(data, level=True)
+def _ev_sampler(state: dict, data: dict, *, root: Path, **_) -> str:
+    axis, level = data["axis"], data["level"]  # checked by cmd_pref_event
     current = state["axes"][axis]
     if state["sampler_skipped"]:
         return "The sampler was skipped; settings unchanged."
@@ -2062,8 +2068,8 @@ def _ev_sampler(state: dict, data: dict, root: Path) -> str:
     return f"Tentative starting settings: {levels}. They keep adapting as you study."
 
 
-def _ev_explicit(state: dict, data: dict) -> str:
-    axis, level = _axis_level(data, level=True)
+def _ev_explicit(state: dict, data: dict, **_) -> str:
+    axis, level = data["axis"], data["level"]  # checked by cmd_pref_event
     wording = data.get("wording")
     if not isinstance(wording, str) or not wording.strip() or _has_control(wording) or len(wording) > MAX_WORDING:
         raise InputError(f"wording must be the student's request, one line of at most {MAX_WORDING} characters")
@@ -2073,33 +2079,40 @@ def _ev_explicit(state: dict, data: dict) -> str:
     return f"Saved for every course: {AXIS_NAMES[axis]} is now {level}."
 
 
+def _ev_legacy_import(state: dict, data: dict, *, saved: bool, **_) -> str:
+    """Saves the state ``prefs`` shows (the legacy value included) when nothing is saved yet."""
+    if saved:
+        return "Teaching settings already saved."
+    if state["axes"]["frequency"]["provenance"] == "legacy":
+        return "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
+    return "Teaching settings saved with the defaults."
+
+
+EVENT_HANDLERS = {"legacy-import": _ev_legacy_import, "sampler-skip": _ev_sampler_skip,
+                  "whats-new-seen": _ev_whats_new_seen, "explicit": _ev_explicit, "sampler": _ev_sampler,
+                  "session": _ev_session, "trial-start": _ev_trial_start, "positive": _ev_positive,
+                  "neutral": _ev_neutral, "pushback": _ev_pushback, "reopen": _ev_reopen,
+                  "frustration": _ev_frustration}
+
+
 def cmd_pref_event(data: dict) -> dict:
     """Apply one teaching-settings event and save the state atomically (unchanged state writes nothing)."""
     event = data.get("event")
     if event not in EVENT_FIELDS:
         raise InputError(f"event must be one of {', '.join(EVENT_FIELDS)}")
     _check_keys(data, {"event"} | EVENT_FIELDS[event])
-    if event in ("explicit", "sampler"):
+    if event in ("explicit", "sampler"):  # checked before any file is read
         _axis_level(data, level=True)
     root = ingest._workspace_root()
     if event.startswith("sampler") and workspace.read_setup_done(root) is not None:
         raise InputError("the sampler runs only during setup")
     state, saved = _prefs_state(root)
     before = json.dumps(state, sort_keys=True)
-    handlers = {"whats-new-seen": _ev_whats_new_seen, "sampler-skip": _ev_sampler_skip, "explicit": _ev_explicit,
-                "session": _ev_session, "trial-start": _ev_trial_start, "positive": _ev_positive, "neutral": _ev_neutral,
-                "pushback": _ev_pushback, "reopen": _ev_reopen, "frustration": _ev_frustration}
-    line = _ev_sampler(state, data, root) if event == "sampler" else \
-        handlers[event](state, data) if event in handlers else None
+    line = EVENT_HANDLERS[event](state, data, root=root, saved=saved)
     changed = not saved or json.dumps(state, sort_keys=True) != before
     if changed:
         ingest._write_atomic(_prefs_path(root), json.dumps(_compact(state), indent=2) + "\n")
     out = _prefs_out(state, True, root, in_session="session" in EVENT_FIELDS[event])
-    if line is None:  # legacy-import: saved now only when nothing was saved before
-        line = ("Teaching settings already saved." if not changed else
-                "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
-                if state["axes"]["frequency"]["provenance"] == "legacy" else
-                "Teaching settings saved with the defaults.")
     if event == "frustration":
         out["offer"] = line == FEWER_QUESTIONS_OFFER
     return {**out, "changed": changed, "line": line}
