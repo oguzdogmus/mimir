@@ -1917,6 +1917,31 @@ def test_saving_the_same_scope_again_changes_nothing_and_another_exam_keeps_its_
     assert text.count("## ") == 2 and "- in: Graphs" in text and "words: all of it" in text
 
 
+def test_a_saved_scope_follows_its_exam_when_the_date_or_time_changes(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM, FINAL])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})
+    profile(root, exams=[("CS201", "midterm", "2026-11-07 14:00"), FINAL])  # the midterm moved, same name
+    out = ok(home, "start", {"now": NOW})
+    assert (out["exam_date"], out["exam_name"]) == ("2026-11-07", "midterm")
+    assert out["scope"]["words"] == WORDS and out["scope"]["out"] == ["Sorting"]
+    near = ok(home, "start", {"now": "2026-11-06T09:00:00+02:00"})
+    assert near["ask_exam_scope"] is False  # it was answered for this exam: not asked again
+    # Saving it again under the new date moves the section instead of adding a second one.
+    save_scope(home, exam_date="2026-11-07", **{"in": ["Heaps", "Graphs"], "out": ["Sorting"]})
+    text = (cdir / ".state" / "scope.md").read_text(encoding="utf-8")
+    assert text.count("## ") == 1 and "## 2026-11-07 midterm" in text
+
+
+def test_a_passed_exams_scope_does_not_carry_over_to_a_later_exam_of_the_same_name(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})
+    profile(root, exams=[MIDTERM, ("CS201", "midterm", "2026-12-01")])  # a second midterm; the first stays
+    out = ok(home, "start", {"now": "2026-11-10T09:00:00+02:00"})
+    assert out["exam_date"] == "2026-12-01" and out["scope"] is None
+
+
 SCOPE_BASE = {"now": NOW, "term": TERM, "course": "CS201 Theory", "exam_name": "midterm", "exam_date": "2026-11-05",
               "words": WORDS, "in": ["Heaps"]}
 

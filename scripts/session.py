@@ -136,9 +136,13 @@ start -- pick the course, the exam and the class for a new session.
     not marked ``time unknown``, and at most TIME_ASK_DAYS days ahead (ask for
     its time once more). ``ask_exam_ahead``: the exam is date-only and today
     (ask whether it is still ahead). ``scope``: null when ``scope.md`` has no
-    section for the picked exam (same ``exam_date``, same name ignoring case
-    and repeated spaces) or that section lists no name (scope unknown);
-    else {"words", "in", "out", "unsure", "new"}, ``new`` being the route
+    section for the picked exam or that section lists no name (scope
+    unknown). A section is the exam's when it has the same ``exam_date`` and
+    the same name (case and repeated spaces ignored); else, when the exam's
+    date or time changed, the first section with the same name whose date no
+    ``## Exam dates`` row of ``code`` has under that name any more (the scope
+    follows its exam; a passed exam whose row stays keeps its own). Otherwise
+    ``scope`` is {"words", "in", "out", "unsure", "new"}, ``new`` being the route
     topics and fingerprint question types in none of the three lists (found
     after the scope was confirmed), route first. Once the exam passes,
     ``start`` picks another exam and that exam's scope (or none) applies.
@@ -425,8 +429,9 @@ scope -- save the confirmed scope of one exam.
     MAX_WORDING characters. ``in``, ``out`` and ``unsure`` (each optional,
     default []): one-line names of at most MAX_SCOPE_NAME characters, spaces
     collapsed, repeats dropped; a name in two lists exits 2. The section of
-    that exam is replaced whole, else appended; other exams' sections are
-    kept. All three lists empty saves "scope unknown" (``start`` then gives
+    that exam (found as in ``start``, so a section saved before the exam
+    moved is moved to the new date) is replaced whole, else appended; other
+    exams' sections are kept. All three lists empty saves "scope unknown" (``start`` then gives
     ``scope`` null and ``ask_exam_scope`` false; line "Scope of your <name> on
     <date>: unknown, saved so it is not asked again."). A save that would not
     change the file is not written (``changed`` false). No such exam row, a
@@ -809,12 +814,18 @@ def scopes(course_dir: Path) -> list[dict]:
     return out
 
 
-def _scope_for(sections: list[dict], exam_date: str | None, exam_name: str | None) -> dict | None:
-    """The first section saved for that exam (same date, same name ignoring case and spaces)."""
+def _scope_for(sections: list[dict], exam_date: str | None, exam_name: str | None,
+               exams: list[tuple[date, str]]) -> dict | None:
+    """The section saved for that exam: the first with the same date and name (case and spaces
+    ignored); else, when the exam moved, the first with the same name whose date no row in
+    ``exams`` (the course code's dated rows) has under that name any more."""
     if exam_date is None:
         return None
-    return next((s for s in sections if s["exam_date"] == exam_date
-                 and _norm(s["exam_name"]) == _norm(exam_name or "")), None)
+    name = _norm(exam_name or "")
+    same = [s for s in sections if _norm(s["exam_name"]) == name]
+    rows = {day.isoformat() for day, exam in exams if _norm(exam) == name}
+    return (next((s for s in same if s["exam_date"] == exam_date), None)
+            or next((s for s in same if s["exam_date"] not in rows), None))
 
 
 def _scope_text(sections: list[dict]) -> str:
@@ -840,12 +851,13 @@ def question_types(course_dir: Path) -> list[str]:
     return names
 
 
-def scope_view(course_dir: Path, rows: list[dict], exam: dict, today: date) -> tuple[dict | None, bool]:
+def scope_view(course_dir: Path, rows: list[dict], exam: dict, exams: list[tuple[date, str]],
+               today: date) -> tuple[dict | None, bool]:
     """``start``'s ``scope`` and ``ask_exam_scope``. ``scope``: the saved lists of the picked exam
     plus ``new``, the route topics and question types in none of them; None when no list is saved
     for it (scope unknown). ``ask_exam_scope``: nothing at all is saved for the exam (not even
     "don't know") and it is at most TIME_ASK_DAYS days ahead."""
-    saved = _scope_for(scopes(course_dir), exam["exam_date"], exam["exam_name"])
+    saved = _scope_for(scopes(course_dir), exam["exam_date"], exam["exam_name"], exams)
     ask = (saved is None and exam["exam_date"] is not None
            and (date.fromisoformat(exam["exam_date"]) - today).days <= TIME_ASK_DAYS)
     if saved is None or not any(saved[side] for side in SCOPE_SIDES):
@@ -1143,7 +1155,7 @@ def _start(data: dict, choice: str | None = None,
     today = now.date()
     exam = _exam(profile, code, now)
     rows = route(course_dir)
-    scope, ask_scope = scope_view(course_dir, rows, exam, today)
+    scope, ask_scope = scope_view(course_dir, rows, exam, _code_exams(profile, code, now.tzinfo), today)
     # The next exam's scope orders the route: topics not on it go last; none is removed.
     rows = sorted(rows, key=lambda r: scope_mark(scope, r["name"]) == "out")
     remaining = [r for r in rows if r["status"] != "mastered"]
@@ -1217,11 +1229,8 @@ def cmd_scope(data: dict) -> dict:
     if not (course_dir / "INDEX.md").is_file():
         raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
     code = course.split()[0]
-    profile = _text(root / ".state" / "profile.md")
-    if not any(c.strip().casefold() == code.casefold() and _norm(e) == _norm(exam_name)
-               and isinstance(v := exam_value(w, now.tzinfo), (date, datetime))
-               and _exam_day(v, now.tzinfo).isoformat() == exam_date
-               for c, e, w in _section_rows(profile, _EXAM_TABLE)):
+    exams = _code_exams(_text(root / ".state" / "profile.md"), code, now.tzinfo)
+    if not any(day.isoformat() == exam_date and _norm(name) == _norm(exam_name) for day, name in exams):
         raise InputError(f"no ## Exam dates row of {_short(code)} named {_short(exam_name or '(none)')} "
                          f"on {exam_date} in profile.md")
     path = course_dir / ".state" / SCOPE_FILE
@@ -1229,7 +1238,7 @@ def cmd_scope(data: dict) -> dict:
         raise InputError(f"{SCOPE_FILE} must not be a symlink")
     sections = scopes(course_dir)
     entry = {"exam_date": exam_date, "exam_name": exam_name, "words": " ".join(words.split()), **lists}
-    old = _scope_for(sections, exam_date, exam_name)
+    old = _scope_for(sections, exam_date, exam_name, exams)
     if old is None:
         sections.append(entry)
     else:
