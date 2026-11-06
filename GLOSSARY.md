@@ -43,6 +43,9 @@ A complete worked demonstration on a separate example before the student attempt
 How a study session runs: Standard (teaching) or Urgent (exam-focused drilling). Set by exam proximity unless the student chooses.
 _Avoid_: Normal mode
 
+**Lasting delivery choice**:
+A student's choice of delivery class saved for one exam ("always study normally for this exam"). It expires when that exam passes; any other choice lasts one session.
+
 **Key decision**:
 A step where a plausible wrong choice gives a different final answer.
 _Avoid_: Meaningful moment

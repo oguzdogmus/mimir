@@ -8,8 +8,9 @@ Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
-``line``. Only record (mastery.md), close (a session log) and pref-event
-(``.state/preferences.json``) write, atomically; other commands are read-only. Only ``now``
+``line``. Only record (mastery.md), close (a session log), pref-event
+(``.state/preferences.json``) and start with ``lasting`` (``save.md``) write,
+atomically; other commands are read-only. Only ``now``
 reads the clock; every other subcommand takes "now" as an input (``now``, from
 ``session.py now``), so the same input and files always give the same output.
 
@@ -30,8 +31,10 @@ Files read (all inside the learning root, see ``workspace.py``)
   by ``pref-event``. Before it exists, ``dial_preference:`` in the profile
   (set unless empty, ``none`` or a ``<...>`` placeholder) is the legacy value.
 * ``<course>/.state/save.md``: ``last_session:`` (``YYYY-MM-DD HH:MM`` or
-  ``YYYY-MM-DD``), ``next_topic:`` and ``pending_debrief:`` (``YYYY-MM-DD
-  <exam name>``; ``no``, empty or anything else means none pending).
+  ``YYYY-MM-DD``), ``next_topic:``, ``pending_debrief:`` (``YYYY-MM-DD
+  <exam name>``; ``no``, empty or anything else means none pending) and
+  ``delivery_choice:`` (``Standard|Urgent YYYY-MM-DD <exam name>``, the
+  lasting choice ``start`` saves; anything else means none).
 * ``<course>/.state/mastery.md``: the table ``| topic | status | evidence |
   evidence_date | last_check | assisted | unassisted | frustration_override |``.
   Columns are found by header name (topic, status, evidence, evidence_date,
@@ -88,7 +91,10 @@ start -- pick the course, the exam and the class for a new session.
     in : {"now": "2026-10-17T09:00:00+03:00"}
          optional "course" (a course folder name, e.g. "CS201 Theory") and
          "term" (YYYY-Term). A term alone limits the pick to that term; a
-         course name found in several terms needs its term.
+         course name found in several terms needs its term. Optional
+         "choice" ("Standard" or "Urgent"): the student's choice of class,
+         for this session only; with "lasting": true, for every session
+         until the picked exam passes.
     out: {"root": "/home/u/learning", "courses": [{"term": "2026-Fall",
           "course": "CS201 Theory", "course_dir": "..."}], "term":
           "2026-Fall", "course": "CS201 Theory", "course_dir": "...",
@@ -101,6 +107,7 @@ start -- pick the course, the exam and the class for a new session.
           null, "stale": false, "attempt_first": false}, "route_line": null, "first_contact":
           "2026-10-10T20:00:00+03:00",
           "line": "Standard delivery: exam in 19 days"}
+    (``class`` here includes "decided_by": "exam date".)
     Course: the given one (``inferred`` false); else the latest ``save.md``
     ``last_session:`` (ties: first by course name); else the first ``##
     Active courses`` row whose folder exists; else the last course in
@@ -121,8 +128,26 @@ start -- pick the course, the exam and the class for a new session.
     ``INDEX.md`` registry has no ``outline`` row, each ``## Topics`` name not
     yet listed (ignoring case and repeated spaces) follows as an unseen row,
     in ``INDEX.md`` order. ``remaining`` = route rows not
-    ``mastered``. ``class``: ``plan.py class`` with ``now`` and the exam only (exam
-    proximity alone decides; the route's size never does). ``topic``:
+    ``mastered``. ``class``: ``plan.py class`` with ``now`` and the exam only (the
+    route's size never decides) plus ``decided_by``, the rule that decided,
+    first match wins:
+      "session choice" -- ``choice`` without ``lasting``: that class, line
+          "<choice> delivery: you asked; <plan.py line after 'delivery: '>",
+          e.g. "Standard delivery: you asked; exam in 30 hours". Nothing is saved.
+      "lasting choice" -- ``choice`` with ``lasting``, or a saved
+          ``delivery_choice:`` whose date is ``exam_date`` and whose name is
+          ``exam_name`` (case and repeated spaces ignored): that class, line
+          "<class> delivery: you asked, until your <exam_name, else exam>;
+          <plan.py tail>". With ``lasting``, ``save.md`` gets the line
+          ``delivery_choice: <choice> <exam_date> <exam_name>``, replacing the
+          first ``delivery_choice:`` line, else after the last ``key:`` line
+          above the first ``##`` heading; an equal line is not rewritten.
+          Once that exam passes, ``start`` picks another exam (or none), so the
+          saved choice stops applying. ``lasting`` with exam null, or a
+          symlinked ``save.md``, exits 2 and writes nothing.
+      "exam date" -- otherwise: ``plan.py class`` unchanged.
+    ``reason``, ``hours_to_exam`` and ``days_to_exam`` are always the exam
+    date's. ``topic``:
     ``save.md`` ``next_topic`` when it is remaining, else the first remaining
     topic; with none remaining, the same pick among the stale mastered topics
     (stale as in ``check``: the one-question recheck); else null. Its
@@ -137,7 +162,7 @@ start -- pick the course, the exam and the class for a new session.
     before today: the target exam is the latest ``## Exam dates`` row of
     ``code`` dated after P and before today (a later passed exam supersedes;
     debriefs never stack), else P (named by the pending value, else by a row
-    dated P); ``deferred`` = the class is Urgent, ``due`` = not deferred.
+    dated P); ``deferred`` = the class (as decided above) is Urgent, ``due`` = not deferred.
     A workspace with no course folder gives
     ``course`` null, every course field null, and the line "No course yet:
     run mimir-setup, then mimir-ingest."
@@ -737,7 +762,12 @@ def _cram(course_dir: Path, logs, first_contact: str | None, target: date,
 # --- Subcommands ----------------------------------------------------------------------
 
 def cmd_start(data: dict) -> dict:
-    return _start(data)[0]
+    choice, lasting = data.get("choice"), data.get("lasting", False)
+    if choice is not None and choice not in plan.TRIAGE_CLASSES:
+        raise InputError("choice must be Standard or Urgent")
+    if not isinstance(lasting, bool) or (lasting and choice is None):
+        raise InputError("lasting must be true or false, and true needs a choice")
+    return _start({k: v for k, v in data.items() if k not in ("choice", "lasting")}, choice, lasting)[0]
 
 
 def _course_pick(data: dict) -> tuple[datetime, Path, str, list[dict], dict | None, bool | None,
@@ -772,7 +802,61 @@ def _course_pick(data: dict) -> tuple[datetime, Path, str, list[dict], dict | No
     return now, root, profile, courses, chosen, inferred, course_dir
 
 
-def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
+_CHOICE = re.compile(r"(Standard|Urgent)\s+([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\s+(.*))?", re.IGNORECASE)
+
+
+def _lasting_choice(save: str, exam: dict) -> str | None:
+    """The saved ``delivery_choice:`` class when it names the exam ``start`` picked, else None:
+    once that exam passes, ``start`` picks another exam (or none) and the choice stops applying."""
+    m = _CHOICE.fullmatch(_key(save, "delivery_choice"))
+    if not m or exam["exam_date"] is None or m.group(2) != exam["exam_date"]:
+        return None
+    if _norm(m.group(3) or "") != _norm(exam["exam_name"] or ""):
+        return None
+    return m.group(1).capitalize()
+
+
+def _choice_line(choice: str, exam: dict) -> str:
+    name = " ".join((exam["exam_name"] or "").split())
+    return f"delivery_choice: {choice} {exam['exam_date']} {name}".rstrip()
+
+
+def _save_choice(course_dir: Path, line: str) -> None:
+    """Write the ``delivery_choice:`` line into ``save.md``: replace the first one, else add it
+    after the last key line above the first ``##`` heading (else at the end)."""
+    path = course_dir / ".state" / "save.md"
+    if path.is_symlink():
+        raise InputError("save.md must not be a symlink")
+    lines = _text(path).splitlines()
+    at = next((i for i, row in enumerate(lines) if re.fullmatch(r"delivery_choice:.*", row.strip())), None)
+    if at is not None:
+        if lines[at] == line:
+            return
+        lines[at] = line
+    else:
+        head = next((i for i, row in enumerate(lines) if row.startswith("## ")), len(lines))
+        keys = [i for i in range(head) if re.fullmatch(r"[a-z_]+:.*", lines[i])]
+        lines.insert(keys[-1] + 1 if keys else head, line)
+    ingest._write_atomic(path, "\n".join(lines) + "\n")
+
+
+def _class(now: str, exam: dict, choice: str | None, lasting: bool, save: str) -> dict:
+    """``start``'s class: the student's choice for this session, else a saved lasting
+    choice for this exam, else ``plan.py class`` for the exam."""
+    klass = _plan(plan.delivery_class, {"now": now, "exam": exam["exam"]})
+    tail = klass["line"].split(": ", 1)[1]  # "exam in 30 hours"
+    if choice is not None and not lasting:
+        return {**klass, "class": choice, "decided_by": "session choice",
+                "line": f"{choice} delivery: you asked; {tail}"}
+    saved = choice if lasting else _lasting_choice(save, exam)
+    if saved is None:
+        return {**klass, "decided_by": "exam date"}
+    return {**klass, "class": saved, "decided_by": "lasting choice",
+            "line": f"{saved} delivery: you asked, until your {exam['exam_name'] or 'exam'}; {tail}"}
+
+
+def _start(data: dict, choice: str | None = None,
+           lasting: bool = False) -> tuple[dict, tuple[date, date | None] | None]:
     """``start``'s output and the due debrief window (see ``debrief_state``)."""
     now, root, profile, courses, chosen, inferred, course_dir = _course_pick(data)
     if chosen is None:
@@ -786,8 +870,12 @@ def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
     exam = _exam(profile, code, now)
     rows = route(course_dir)
     remaining = [r for r in rows if r["status"] != "mastered"]
-    klass = _plan(plan.delivery_class, {"now": data["now"], "exam": exam["exam"]})
     save = _memory(course_dir, "save.md")
+    if lasting:
+        if exam["exam"] is None:
+            raise InputError("lasting needs an upcoming exam; without one a choice lasts this session only")
+        _save_choice(course_dir, _choice_line(choice, exam))
+    klass = _class(data["now"], exam, choice, lasting, save)
     next_topic = _norm(_key(save, "next_topic"))
     # Nothing unmastered left: a stale mastered topic gets the one-question recheck.
     candidates = remaining or [r for r in rows if topic_state(r, r["name"], today)["stale"]]
@@ -1294,7 +1382,7 @@ def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
                              ("Mimir session runner. Subcommands: now, parse-date, start, check, close, debrief, progress, record, "
                               "prefs, pref-event. Reads one JSON object on stdin and prints one JSON object on stdout. "
-                              "Only record, close and pref-event write."),
+                              "Only record, close, pref-event and start with lasting write."),
                              COMMANDS, argv)
 
 
