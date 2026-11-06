@@ -4,11 +4,11 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <now|parse-date|start|check|close|debrief|progress|record|prefs|pref-event>  < input.json
+    python3 session.py <now|parse-date|start|check|close|gauge|debrief|progress|record|prefs|pref-event>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
-``line``. Only record (mastery.md), close (a session log), pref-event
+``line``. Only record (mastery.md), close and gauge (a session log), pref-event
 (``.state/preferences.json``) and start with ``lasting`` (``save.md``) write,
 atomically; other commands are read-only. Only ``now``
 reads the clock; every other subcommand takes "now" as an input (``now``, from
@@ -47,6 +47,8 @@ Files read (all inside the learning root, see ``workspace.py``)
   (``ingest.py`` rules; a non-UTF-8 one exits 2) for the route.
 * ``<course>/.state/logs/*.md`` (name order): the first ``first_contact:``
   line whose value is a date or datetime (``plan.py`` rules); for ``debrief``
+  and the first ``gauge_done:`` line whose value is a date or datetime (the
+  gauge-done marker); for ``debrief``
   also ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
   disagreements``, and ``next_course_offer:`` lines in every course of the
   term. Symlinked, unreadable or non-UTF-8 logs are skipped.
@@ -105,7 +107,7 @@ start -- pick the course, the exam and the class for a new session.
           "class": {<plan.py class output>},
           "topic": {"name": "Graphs", "status": "unseen", "evidence_date":
           null, "stale": false, "attempt_first": false}, "route_line": null, "first_contact":
-          "2026-10-10T20:00:00+03:00",
+          "2026-10-10T20:00:00+03:00", "gauge": {"done": false, "topics": ["Graphs"]},
           "line": "Standard delivery: exam in 19 days"}
     (``class`` here includes "decided_by": "exam date".)
     Course: the given one (``inferred`` false); else the latest ``save.md``
@@ -155,7 +157,11 @@ start -- pick the course, the exam and the class for a new session.
     is set; else "No topics on the route yet: drop the outline, slides or
     past papers into `_inbox/` and run mimir-ingest." for an empty route, or
     "Your route is complete: every topic is mastered in mastery.md. Want a
-    `mimir-quiz` to keep it fresh?". ``line`` is the class line. ``debrief``: null when ``pending_debrief:``
+    `mimir-quiz` to keep it fresh?". ``gauge`` (the knowledge gauge): null when the
+    route is empty (no gauge; never gauge from the course name); else ``done``
+    (the course has a gauge-done marker, set by ``gauge``) and ``topics``, the
+    route's ``unseen`` topic names in route order ([] when done).
+    ``line`` is the class line. ``debrief``: null when ``pending_debrief:``
     holds no valid date P; else {"exam", "exam_name", "due", "deferred"}.
     P today or later: P with the pending name, due and deferred false (a
     date-only exam is past only from the next day, as in ``plan.py``). P
@@ -200,6 +206,19 @@ close -- stamp a session's end in its log, once.
     has no such ``started:`` line, a later session already started in it
     while this one is open, its ``ended:`` line is not a datetime, or ``now``
     is before ``started`` or mixes offset and no-offset with it.
+
+gauge -- set the course's gauge-done marker, once.
+    in : {"now": "2026-10-17T09:40:00+03:00", "term": "2026-Fall", "course":
+          "CS201 Theory", "log": "2026-10-17-0900"}
+    out: {"log": ".../.state/logs/2026-10-17-0900.md", "gauge_done":
+          "2026-10-17T09:40:00+03:00", "already_done": false,
+          "line": "Knowledge gauge done for CS201 Theory: it will not run again."}
+    ``log`` is this session's log name (it must exist). When no log of the
+    course has a gauge-done marker, appends ``gauge_done: <now>`` to the log;
+    otherwise writes nothing and reports the existing marker with
+    ``already_done`` true ("Knowledge gauge already done for <course>.").
+    Exits 2 when the course has no topics yet (the route is empty: no gauge, so
+    the marker stays unset), or on the ``close`` log errors.
 
 debrief -- what the post-exam debrief needs. Read-only, like the rest.
     in : as ``start`` ({"now": ..., optional "term" and "course"}).
@@ -531,6 +550,24 @@ def _first_contact(course_dir: Path) -> str | None:
             if m and _valid_moment(m.group(1).strip()):
                 return m.group(1).strip()
     return None
+
+
+def _gauge_done(course_dir: Path) -> str | None:
+    """The course's gauge-done marker: the first ``gauge_done:`` log line holding a date or datetime."""
+    for _, text in _logs(course_dir):
+        for line in text.splitlines():
+            m = re.fullmatch(r"gauge_done:(.*)", line.strip())
+            if m and _valid_moment(m.group(1).strip()):
+                return m.group(1).strip()
+    return None
+
+
+def _gauge(course_dir: Path, rows: list[dict]) -> dict | None:
+    """``start``'s gauge: null with no topics; else done, and the unseen topics while not done."""
+    if not rows:
+        return None
+    done = _gauge_done(course_dir) is not None
+    return {"done": done, "topics": [] if done else [r["name"] for r in rows if r["status"] == "unseen"]}
 
 
 def _valid_moment(text: str) -> bool:
@@ -877,7 +914,7 @@ def _start(data: dict, choice: str | None = None,
                 "code": None, "inferred": None, "exam": None, "exam_date": None, "exam_name": None, "q0": None,
                 "exam_problems": None, "ask_exam_time": None, "ask_exam_ahead": None,
                 "remaining": [], "class": None, "topic": None, "route_line": None,
-                "first_contact": None, "debrief": None, "line": NO_COURSE_LINE}, None
+                "first_contact": None, "gauge": None, "debrief": None, "line": NO_COURSE_LINE}, None
     code = chosen["course"].split()[0]
     today = now.date()
     exam = _exam(profile, code, now)
@@ -904,7 +941,7 @@ def _start(data: dict, choice: str | None = None,
             "course_dir": str(course_dir), "code": code, "inferred": inferred, **exam,
             "remaining": [{"name": r["name"], "status": r["status"]} for r in remaining],
             "class": klass, "topic": topic, "route_line": route_line,
-            "first_contact": _first_contact(course_dir),
+            "first_contact": _first_contact(course_dir), "gauge": _gauge(course_dir, rows),
             "debrief": debrief, "line": klass["line"]}, window
 
 
@@ -998,10 +1035,9 @@ def cmd_check(data: dict) -> dict:
     return {"course_dir": str(course_dir), "topics": out, "line": line}
 
 
-def cmd_close(data: dict) -> dict:
-    """Stamp a session's end in its log once; a repeated close reuses the stamp and writes nothing."""
-    _check_keys(data, {"now", "term", "course", "log", "started"})
-    now, started = _moment(data, "now"), _moment(data, "started")
+def _session_log(data: dict) -> tuple[Path, Path]:
+    """(course folder, log path) for a ``term``, ``course`` and ``log`` name from ``session.py now``;
+    exits 2 when the course or the log is missing, or the log is a symlink."""
     term, course = parse_term(data), parse_segment(data, "course")
     name = data.get("log")
     if not isinstance(name, str) or not _CLOSE_LOG.fullmatch(name):
@@ -1012,6 +1048,19 @@ def cmd_close(data: dict) -> dict:
     path = course_dir / ".state" / "logs" / f"{name}.md"
     if path.is_symlink() or not path.is_file():
         raise InputError(f"log {name} not found in {_short(course)}")
+    return course_dir, path
+
+
+def _append(path: Path, text: str, line: str) -> None:
+    ingest._write_atomic(path, text + ("" if text.endswith("\n") or not text else "\n") + line + "\n")
+
+
+def cmd_close(data: dict) -> dict:
+    """Stamp a session's end in its log once; a repeated close reuses the stamp and writes nothing."""
+    _check_keys(data, {"now", "term", "course", "log", "started"})
+    now, started = _moment(data, "now"), _moment(data, "started")
+    _, path = _session_log(data)
+    name = data["log"]
     text = _text(path)
     ended, found, inside = None, False, False
     for line in text.splitlines():
@@ -1038,12 +1087,27 @@ def cmd_close(data: dict) -> dict:
         if now < started:
             raise InputError("now is before started")
         ended = now
-        ingest._write_atomic(path, text + ("" if text.endswith("\n") or not text else "\n")
-                             + f"ended: {data['now']}\n")
+        _append(path, text, f"ended: {data['now']}")
     minutes = max(0, int((ended - started).total_seconds() // 60))
     line = f"Session {'already closed' if already else 'closed'} after {minutes} min."
     return {"log": str(path), "started": data["started"], "ended": ended.isoformat(), "minutes": minutes,
             "last_session": ended.strftime("%Y-%m-%d %H:%M"), "already_closed": already, "line": line}
+
+
+def cmd_gauge(data: dict) -> dict:
+    """Set the course's gauge-done marker once: a ``gauge_done:`` line in this session's log."""
+    _check_keys(data, {"now", "term", "course", "log"})
+    _moment(data, "now")
+    course_dir, path = _session_log(data)
+    course = course_dir.name
+    if not route(course_dir):
+        raise InputError(f"course {_short(course)} has no topics yet: no gauge, and its marker stays unset")
+    done = _gauge_done(course_dir)
+    if done is None:
+        _append(path, _text(path), f"gauge_done: {data['now']}")
+    line = (f"Knowledge gauge already done for {course}." if done else
+            f"Knowledge gauge done for {course}: it will not run again.")
+    return {"log": str(path), "gauge_done": done or data["now"], "already_done": done is not None, "line": line}
 
 
 def _clock() -> datetime:
@@ -1420,6 +1484,7 @@ COMMANDS = {
     "start": (cmd_start, "pick the course, exam, delivery class and first topic for a session"),
     "check": (cmd_check, "status, counts and staleness for named topics"),
     "close": (cmd_close, "stamp the end of a session in its log once and report its length"),
+    "gauge": (cmd_gauge, "set the course's knowledge-gauge-done marker in the session log, once"),
     "debrief": (cmd_debrief, "post-exam debrief state, cram bill, verifier disagreements and next-course flag"),
     "progress": (cmd_progress, "every mastery row with its evidence, counts and staleness, as a table"),
 }
@@ -1427,9 +1492,9 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
-                             ("Mimir session runner. Subcommands: now, parse-date, start, check, close, debrief, progress, record, "
-                              "prefs, pref-event. Reads one JSON object on stdin and prints one JSON object on stdout. "
-                              "Only record, close, pref-event and start with lasting write."),
+                             ("Mimir session runner. Subcommands: now, parse-date, start, check, close, gauge, debrief, "
+                              "progress, record, prefs, pref-event. Reads one JSON object on stdin and prints one JSON "
+                              "object on stdout. Only record, close, gauge, pref-event and start with lasting write."),
                              COMMANDS, argv)
 
 
