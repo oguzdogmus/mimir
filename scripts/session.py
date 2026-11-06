@@ -189,6 +189,11 @@ start -- pick the course, the exam and the class for a new session.
     ``code`` dated after P and before today (a later passed exam supersedes;
     debriefs never stack), else P (named by the pending value, else by a row
     dated P); ``deferred`` = the class (as decided above) is Urgent, ``due`` = not deferred.
+    ``preference_session``: true when the class is Standard and the exam date
+    alone would not make it Urgent (``reason`` calm or unknown), so the
+    session may give teaching-preference evidence and run a probe; false for
+    Urgent and for Standard within 48 hours of the exam (a date-only exam
+    today or tomorrow counts as within 48 hours).
     A workspace with no course folder gives
     ``course`` null, every course field null, and the line "No course yet:
     run mimir-setup, then mimir-ingest."
@@ -307,8 +312,9 @@ prefs -- the global teaching settings. Read-only.
     out: {"axes": {"support": {"level": "method-first", "provenance":
           "default", "wording": null}, "frequency": {...}, "depth": {...}},
           "saved": false, "sampler": {"open": true, "started": false,
-          "remaining": ["support", "frequency", "depth"]}, "whats_new": null,
-          "line": "Teaching settings: support method-first (default), ..."}
+          "remaining": ["support", "frequency", "depth"]}, "trial": null,
+          "probe_axes": [], "whats_new": null, "line": "Teaching settings:
+          support method-first (default), ..."}
     Axes and levels, more guided to more independent: support example-first,
     method-first, try-first; frequency checks only, key decisions, every
     step; depth next step, why, what-if. Provenance is default, sampler,
@@ -322,6 +328,11 @@ prefs -- the global teaching settings. Read-only.
     default, in order, while setup is not done (no ``setup_done:`` date in the
     profile) and the sampler was not skipped, else []; ``open`` = remaining is
     non-empty; ``started`` = some axis has provenance sampler.
+    ``trial`` is the one active probe trial across all courses, null when
+    none: {"axis", "from" (the saved level), "to" (one level toward more
+    independent), "evidence" (the sessions that gave positive evidence)}.
+    ``probe_axes``: the axes a trial may start on now, in order, else [];
+    see the session and trial-start events.
     ``whats_new``: the one-time line "New: sessions run until you say 'end
     session'. You can also ask to cram or to study normally." while setup is
     done and the seen marker is unset (users set up before the update), else
@@ -332,6 +343,10 @@ pref-event -- apply one teaching-settings event and save the state.
           "wording": "ask fewer questions"}
          or {"event": "sampler", "axis": "support", "level": "example-first"}
          or {"event": "sampler-skip"} or {"event": "legacy-import"}
+         or {"event": "session", "session": "<S>"}
+         or {"event": "trial-start", "session": "<S>", "axis": "depth"}
+         or {"event": "positive" | "neutral" | "pushback" | "frustration",
+             "session": "<S>"} or {"event": "reopen", "axis": "frequency"}
          or {"event": "whats-new-seen"}
     out: as ``prefs`` plus "changed", with ``saved`` true; line e.g.
          "Saved for every course: guiding-question frequency is now checks only."
@@ -350,7 +365,41 @@ pref-event -- apply one teaching-settings event and save the state.
     ``whats_new`` is null from then on; allowed before and after setup.
     A state that would not change is not rewritten, so a
     rerun leaves the file byte-identical. An unknown event, axis, or a level
-    from another axis exits 2 and writes nothing.
+    from another axis exits 2 and writes nothing. An explicit request on the
+    axis of the active trial ends that trial (no rejection counted).
+    Probe trials. ``<S>`` is the session's ``started:`` datetime (``session.py
+    now``'s ``now``, with its offset); a session is one ``started:`` record.
+    ``session``: run once per session that ``start`` gives
+    ``preference_session`` true; it counts one eligible Standard session
+    (a rerun changes nothing; an earlier session than the last counted one
+    exits 2). Continuing an active trial uses that session's one probe.
+    Every other event naming a session exits 2 unless it is the counted
+    session, so Urgent and near-exam sessions give no evidence, run no probe
+    and do not advance cool-downs. ``trial-start``: starts one trial, one
+    level toward more independent on ``axis``; exits 2 when the axis is not
+    in ``probe_axes``: a trial is running, the session already had its probe,
+    the axis is explicit (never probed) or already at its most independent
+    level, or its transition is cooling down or stopped. ``positive``:
+    positive evidence for the trial; a session counts once, and a session on
+    the same calendar day as earlier evidence adds nothing. Evidence from
+    ADOPT_SESSIONS sessions on different days adopts the trial: the axis
+    moves to ``to`` with provenance learned ("Saved for every course: ...").
+    ``neutral``: nothing counts or resets. ``pushback``: rejects the trial at
+    once; the saved level never moved, so nothing reverts in the file, and
+    its evidence is dropped. Rejections count per transition: after the
+    first, the next eligible session is skipped; after the second, the next
+    two; the third stops it. ``reopen``: the student's explicit request
+    clears the rejections of the axis's next transition (exits 2 for an
+    explicit axis or one at its most independent level). positive, neutral
+    and pushback exit 2 with no trial running. ``frustration``: the
+    frustration override gave the answer in this session; the second
+    session with one (not counted near an exam) returns ``offer`` true and
+    the line "Want fewer questions from now on?", once ever, unless frequency
+    is already checks only; otherwise ``offer`` false. The saved state is
+    closed: levels, provenance, wording of explicit values, the trial,
+    rejection counts with the next eligible session index, the eligible
+    session counter, the frustration count and the sampler-skipped and
+    what's-new-seen markers; never free-text notes.
 
 scope -- save the confirmed scope of one exam.
     in : {"now": "...", "term": "2026-Fall", "course": "CS201 Theory",
@@ -1048,6 +1097,11 @@ def _class(now: str, exam: dict, choice: str | None, lasting: bool, save: str) -
             "line": f"{saved} delivery: you asked, until your {exam['exam_name'] or 'exam'}; {tail}"}
 
 
+def _preference_session(klass: dict) -> bool:
+    """Standard, and not within 48 hours of the exam (the exam date alone would not make it Urgent)."""
+    return klass["class"] == "Standard" and klass["reason"] in ("calm", "unknown")
+
+
 def _start(data: dict, choice: str | None = None,
            lasting: bool = False) -> tuple[dict, tuple[date, date | None] | None]:
     """``start``'s output and the due debrief window (see ``debrief_state``)."""
@@ -1057,7 +1111,7 @@ def _start(data: dict, choice: str | None = None,
                 "code": None, "inferred": None, "exam": None, "exam_date": None, "exam_name": None, "q0": None,
                 "exam_problems": None, "ask_exam_time": None, "ask_exam_ahead": None, "ask_exam_scope": None,
                 "remaining": [], "class": None, "topic": None, "route_line": None,
-                "first_contact": None, "scope": None, "gauge": None, "debrief": None,
+                "first_contact": None, "scope": None, "gauge": None, "debrief": None, "preference_session": None,
                 "line": NO_COURSE_LINE}, None
     code = chosen["course"].split()[0]
     today = now.date()
@@ -1094,7 +1148,7 @@ def _start(data: dict, choice: str | None = None,
             "class": klass, "topic": topic, "route_line": route_line,
             "first_contact": _first_contact(course_dir), "scope": scope,
             "gauge": _gauge(course_dir, rows, scope),
-            "debrief": debrief, "line": klass["line"]}, window
+            "debrief": debrief, "preference_session": _preference_session(klass), "line": klass["line"]}, window
 
 
 def _scope_names(data: dict, side: str) -> list[str]:
@@ -1573,6 +1627,21 @@ PROVENANCES = ("default", "sampler", "learned", "explicit", "legacy")
 PREFS_FILE = "preferences.json"
 PREFS_VERSION = 1
 MAX_WORDING = 200
+# Probe trials (docs/teaching-preferences-design.md, Probes; the numbers are tunable heuristics).
+ADOPT_SESSIONS = 2          # positive evidence in this many sessions, on different calendar days, adopts a trial
+MAX_REJECTIONS = 3          # the third rejection of a transition stops it; before that, skip as many sessions
+OFFER_SESSIONS = 2          # frustration overrides in this many sessions bring the one-time offer
+FEWER_QUESTIONS_OFFER = "Want fewer questions from now on?"
+# State keys beyond ``version`` and ``axes``; each is written only once it differs from its default.
+OPTIONAL_STATE = {"sampler_skipped": False, "whats_new_seen": False, "trial": None,
+                  "sessions": {"count": 0, "current": None, "probed": None},
+                  "transitions": {}, "frustration": {"count": 0, "last": None, "offered": False}}
+NO_SESSION = ("this session gives no preference evidence and runs no probe: run the session event first "
+              "(only when start gives preference_session true)")
+EVENT_FIELDS = {"legacy-import": set(), "sampler-skip": set(), "whats-new-seen": set(), "explicit": {"axis", "level", "wording"},
+                "sampler": {"axis", "level"}, "session": {"session"}, "trial-start": {"session", "axis"},
+                "positive": {"session"}, "neutral": {"session"}, "pushback": {"session"},
+                "reopen": {"axis"}, "frustration": {"session"}}
 WHATS_NEW = "New: sessions run until you say 'end session'. You can also ask to cram or to study normally."
 
 
@@ -1587,22 +1656,75 @@ def _prefs_path(root: Path) -> Path:
     return path
 
 
+def _next_level(axis: str, level: str) -> str | None:
+    """The adjacent level one step toward more independent teaching, else None."""
+    levels = AXES[axis]
+    at = levels.index(level)
+    return levels[at + 1] if at + 1 < len(levels) else None
+
+
+def _transition(axis: str, level: str) -> str:
+    """The name of the transition from ``level`` one step toward more independent teaching."""
+    return f"{axis}: {level} > {_next_level(axis, level)}"
+
+
+def _session_moment(value) -> datetime | None:
+    """A session identity: its ``started:`` datetime with an offset, else None."""
+    if not isinstance(value, str):
+        return None
+    try:
+        moment = plan.parse_moment(value, "session", need_time=True)
+    except plan.InputError:
+        return None
+    return moment if moment.tzinfo is not None else None
+
+
+def _count(value, low: int, high: int | None = None) -> bool:
+    return type(value) is int and value >= low and (high is None or value <= high)
+
+
+def _valid_extras(state: dict) -> bool:
+    """The optional state keys hold closed values only: no free text, every level and transition known."""
+    trial, sessions, transitions, frustration = (state[k] for k in ("trial", "sessions", "transitions", "frustration"))
+    if not (isinstance(sessions, dict) and set(sessions) == {"count", "current", "probed"}
+            and _count(sessions["count"], 0) and all(sessions[k] is None or _session_moment(sessions[k])
+                                                      for k in ("current", "probed"))):
+        return False
+    if trial is not None:
+        if not (isinstance(trial, dict) and set(trial) == {"axis", "from", "to", "evidence"}
+                and trial["axis"] in AXES and state["axes"][trial["axis"]]["provenance"] != "explicit"
+                and trial["from"] == state["axes"][trial["axis"]]["level"]
+                and trial["to"] is not None and trial["to"] == _next_level(trial["axis"], trial["from"])
+                and isinstance(trial["evidence"], list) and len(trial["evidence"]) < ADOPT_SESSIONS
+                and all(_session_moment(e) for e in trial["evidence"])):
+            return False
+    names = {_transition(a, level) for a, levels in AXES.items() for level in levels[:-1]}
+    if not (isinstance(transitions, dict) and all(
+            key in names and isinstance(rec, dict) and set(rec) == {"rejections", "next"}
+            and _count(rec["rejections"], 1, MAX_REJECTIONS) and _count(rec["next"], 0)
+            for key, rec in transitions.items())):
+        return False
+    return (isinstance(frustration, dict) and set(frustration) == {"count", "last", "offered"}
+            and _count(frustration["count"], 0, OFFER_SESSIONS) and isinstance(frustration["offered"], bool)
+            and (frustration["last"] is None or bool(_session_moment(frustration["last"]))))
+
+
 def _prefs_state(root: Path) -> tuple[dict, bool]:
-    """(state, saved): the saved preference state, else defaults with any legacy
-    ``dial_preference`` already imported (what the legacy-import event would save)."""
+    """(state, saved): the saved preference state with every optional key filled in, else defaults
+    with any legacy ``dial_preference`` already imported (what the legacy-import event would save)."""
     path = _prefs_path(root)
     if not path.exists():
         axes = _default_axes()
         if _set(_key(_text(root / ".state" / "profile.md"), "dial_preference")):
             axes["frequency"] = {"level": "checks only", "provenance": "legacy", "wording": None}
-        return {"version": PREFS_VERSION, "axes": axes}, False
+        return {"version": PREFS_VERSION, "axes": axes, **json.loads(json.dumps(OPTIONAL_STATE))}, False
     damaged = InputError(f"{PREFS_FILE} is damaged; restore it or delete it to use the defaults")
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, ValueError):
         raise damaged from None
     if not isinstance(state, dict) or state.get("version") != PREFS_VERSION or not isinstance(state.get("axes"), dict) \
-            or set(state["axes"]) != set(AXES):
+            or set(state["axes"]) != set(AXES) or not set(state) <= {"version", "axes", *OPTIONAL_STATE}:
         raise damaged
     if state.get("sampler_skipped", True) is not True:  # optional; present only once the sampler was skipped
         raise damaged
@@ -1614,7 +1736,15 @@ def _prefs_state(root: Path) -> tuple[dict, bool]:
                 or (entry["wording"] is None) == (entry["provenance"] == "explicit") \
                 or not (entry["wording"] is None or isinstance(entry["wording"], str)):
             raise damaged
+    state = {**json.loads(json.dumps(OPTIONAL_STATE)), **state}
+    if not _valid_extras(state):
+        raise damaged
     return state, True
+
+
+def _compact(state: dict) -> dict:
+    """The state as saved: optional keys still at their default are left out."""
+    return {k: v for k, v in state.items() if k not in OPTIONAL_STATE or v != OPTIONAL_STATE[k]}
 
 
 def _set(value: str) -> bool:
@@ -1631,6 +1761,27 @@ def _sampler(state: dict, root: Path) -> dict:
             "remaining": remaining}
 
 
+def _probe_block(state: dict, axis: str) -> str | None:
+    """Why no trial may start on ``axis`` in the counted session now, else None."""
+    sessions, entry = state["sessions"], state["axes"][axis]
+    if sessions["current"] is None:
+        return NO_SESSION
+    if state["trial"] is not None:
+        return f"a trial of {AXIS_NAMES[state['trial']['axis']]} is already running; only one at a time"
+    if sessions["probed"] == sessions["current"]:
+        return "this session already had its probe"
+    if entry["provenance"] == "explicit":
+        return f"{AXIS_NAMES[axis]} is the student's standing instruction and is never probed"
+    if _next_level(axis, entry["level"]) is None:
+        return f"{AXIS_NAMES[axis]} is already at its most independent level"
+    rec = state["transitions"].get(_transition(axis, entry["level"]))
+    if rec and rec["rejections"] >= MAX_REJECTIONS:
+        return f"{_transition(axis, entry['level'])} was rejected {MAX_REJECTIONS} times; only the student can reopen it"
+    if rec and sessions["count"] < rec["next"]:
+        return f"{_transition(axis, entry['level'])} was rejected recently; it waits until eligible session {rec['next']}"
+    return None
+
+
 def _whats_new(state: dict, root: Path) -> str | None:
     """The one-time line for users whose setup was done before the update; the seen marker stops it."""
     return WHATS_NEW if workspace.read_setup_done(root) is not None and not state.get("whats_new_seen") else None
@@ -1639,82 +1790,205 @@ def _whats_new(state: dict, root: Path) -> str | None:
 def _prefs_out(state: dict, saved: bool, root: Path) -> dict:
     axes = state["axes"]
     parts = ", ".join(f"{AXIS_NAMES[a]} {axes[a]['level']} ({axes[a]['provenance']})" for a in AXES)
-    return {"axes": axes, "saved": saved, "sampler": _sampler(state, root), "whats_new": _whats_new(state, root),
+    return {"axes": axes, "saved": saved, "sampler": _sampler(state, root), "trial": state["trial"],
+            "probe_axes": [a for a in AXES if _probe_block(state, a) is None], "whats_new": _whats_new(state, root),
             "line": f"Teaching settings: {parts}."}
 
 
 def cmd_prefs(data: dict) -> dict:
-    """The global teaching settings and the setup sampler's state; read-only."""
+    """The global teaching settings, the active trial and the setup sampler's state; read-only."""
     _check_keys(data, set())
     root = ingest._workspace_root()
     return _prefs_out(*_prefs_state(root), root)
 
 
+def _axis_level(data: dict, *, level: bool) -> tuple[str, str | None]:
+    axis = data.get("axis")
+    if axis not in AXES:
+        raise InputError(f"axis must be one of {', '.join(AXES)}")
+    if level and data.get("level") not in AXES[axis]:
+        raise InputError(f"level for {axis} must be one of {', '.join(AXES[axis])}")
+    return axis, data.get("level")
+
+
+def _this_session(state: dict, data: dict) -> str:
+    """The counted session the event belongs to; any other session gives no evidence."""
+    moment, current = _session_moment(data.get("session")), state["sessions"]["current"]
+    if moment is None:
+        raise InputError("session must be this session's `session.py now` datetime (its started: line)")
+    if current is None or moment != _session_moment(current):
+        raise InputError(NO_SESSION)
+    return current
+
+
+def _active_trial(state: dict, data: dict) -> dict:
+    _this_session(state, data)
+    if state["trial"] is None:
+        raise InputError("no trial is running")
+    return state["trial"]
+
+
+def _ev_session(state: dict, data: dict) -> str:
+    moment, sessions = _session_moment(data.get("session")), state["sessions"]
+    if moment is None:
+        raise InputError("session must be this session's `session.py now` datetime (its started: line)")
+    if sessions["current"] is not None:
+        last = _session_moment(sessions["current"])
+        if moment == last:
+            return "This session is already counted."
+        if moment < last:
+            raise InputError("session is earlier than the last counted session")
+    sessions["count"] += 1
+    sessions["current"] = data["session"]
+    if state["trial"] is not None:  # continuing the active trial is this session's probe
+        sessions["probed"] = data["session"]
+    return f"Standard session {sessions['count']} counted for teaching settings."
+
+
+def _ev_trial_start(state: dict, data: dict) -> str:
+    current = _this_session(state, data)
+    axis, _ = _axis_level(data, level=False)
+    block = _probe_block(state, axis)
+    if block:
+        raise InputError(block)
+    frm = state["axes"][axis]["level"]
+    state["trial"] = {"axis": axis, "from": frm, "to": _next_level(axis, frm), "evidence": []}
+    state["sessions"]["probed"] = current
+    return f"Trial started: {AXIS_NAMES[axis]} {state['trial']['to']} instead of {frm}."
+
+
+def _ev_positive(state: dict, data: dict) -> str:
+    trial = _active_trial(state, data)
+    current = state["sessions"]["current"]
+    if current in trial["evidence"]:
+        return "Already noted for this session; the trial continues."
+    if any(_session_moment(e).date() == _session_moment(current).date() for e in trial["evidence"]):
+        return "Evidence from the same day counts once; the trial continues."
+    trial["evidence"].append(current)
+    if len(trial["evidence"]) < ADOPT_SESSIONS:
+        return "Noted; the trial continues."
+    axis = trial["axis"]
+    state["axes"][axis] = {"level": trial["to"], "provenance": "learned", "wording": None}
+    state["trial"] = None
+    return f"Saved for every course: {AXIS_NAMES[axis]} is now {trial['to']}."
+
+
+def _ev_neutral(state: dict, data: dict) -> str:
+    _active_trial(state, data)
+    return "Neutral: nothing counted; the trial continues."
+
+
+def _ev_pushback(state: dict, data: dict) -> str:
+    trial = _active_trial(state, data)
+    key = _transition(trial["axis"], trial["from"])
+    rec = state["transitions"].setdefault(key, {"rejections": 0, "next": 0})
+    rec["rejections"] += 1
+    rec["next"] = state["sessions"]["count"] + rec["rejections"] + 1  # skip one, then two, eligible sessions
+    state["trial"] = None
+    back = f"Trial rejected: {AXIS_NAMES[trial['axis']]} back to {trial['from']}."
+    if rec["rejections"] >= MAX_REJECTIONS:
+        return f"{back} This change is not tried again unless the student asks."
+    return f"{back} It may be tried again from eligible session {rec['next']}."
+
+
+def _ev_reopen(state: dict, data: dict) -> str:
+    axis, _ = _axis_level(data, level=False)
+    entry = state["axes"][axis]
+    if entry["provenance"] == "explicit":
+        raise InputError(f"{AXIS_NAMES[axis]} is the student's standing instruction; a new lasting request changes it")
+    if _next_level(axis, entry["level"]) is None:
+        raise InputError(f"{AXIS_NAMES[axis]} is already at its most independent level")
+    if state["transitions"].pop(_transition(axis, entry["level"]), None) is None:
+        return f"Nothing to reopen: {AXIS_NAMES[axis]} was never rejected at {entry['level']}."
+    return f"Reopened: Mimir may try {AXIS_NAMES[axis]} {_next_level(axis, entry['level'])} again."
+
+
+def _ev_frustration(state: dict, data: dict) -> str:
+    current = _this_session(state, data)
+    seen = state["frustration"]
+    if seen["last"] == current:
+        return "Already counted for this session."
+    seen["count"], seen["last"] = min(seen["count"] + 1, OFFER_SESSIONS), current
+    if seen["count"] >= OFFER_SESSIONS and not seen["offered"] and state["axes"]["frequency"]["level"] != "checks only":
+        seen["offered"] = True
+        return FEWER_QUESTIONS_OFFER
+    return "Noted; no offer."
+
+
+def _ev_whats_new_seen(state: dict, data: dict) -> str:
+    line = "What's new already seen." if state["whats_new_seen"] else "What's new seen: it will not repeat."
+    state["whats_new_seen"] = True
+    return line
+
+
+def _ev_sampler_skip(state: dict, data: dict) -> str:
+    line = "Sampler already skipped." if state["sampler_skipped"] else \
+        "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
+    state["sampler_skipped"] = True
+    return line
+
+
+def _ev_sampler(state: dict, data: dict, root: Path) -> str:
+    axis, level = _axis_level(data, level=True)
+    current = state["axes"][axis]
+    if state["sampler_skipped"]:
+        return "The sampler was skipped; settings unchanged."
+    if current["provenance"] != "default":  # never overwrites a sampler, learned, explicit or legacy value
+        return f"Kept: {AXIS_NAMES[axis]} stays {current['level']} ({current['provenance']})."
+    state["axes"][axis] = {"level": level, "provenance": "sampler", "wording": None}
+    if _sampler(state, root)["remaining"]:
+        return f"Noted for now: {AXIS_NAMES[axis]} {level}."
+    levels = ", ".join(f"{AXIS_NAMES[a]} {state['axes'][a]['level']}" for a in AXES)
+    return f"Tentative starting settings: {levels}. They keep adapting as you study."
+
+
+def _ev_explicit(state: dict, data: dict) -> str:
+    axis, level = _axis_level(data, level=True)
+    wording = data.get("wording")
+    if not isinstance(wording, str) or not wording.strip() or _has_control(wording) or len(wording) > MAX_WORDING:
+        raise InputError(f"wording must be the student's request, one line of at most {MAX_WORDING} characters")
+    state["axes"][axis] = {"level": level, "provenance": "explicit", "wording": " ".join(wording.split())}
+    if state["trial"] is not None and state["trial"]["axis"] == axis:  # never probe against a standing instruction
+        state["trial"] = None
+    return f"Saved for every course: {AXIS_NAMES[axis]} is now {level}."
+
+
 def cmd_pref_event(data: dict) -> dict:
     """Apply one teaching-settings event and save the state atomically (unchanged state writes nothing)."""
     event = data.get("event")
-    if event in ("legacy-import", "sampler-skip", "whats-new-seen"):
-        _check_keys(data, {"event"})
-    elif event == "explicit":
-        _check_keys(data, {"event", "axis", "level", "wording"})
-    elif event == "sampler":
-        _check_keys(data, {"event", "axis", "level"})
-    else:
-        raise InputError("event must be explicit, sampler, sampler-skip, legacy-import or whats-new-seen")
-    axis, level = data.get("axis"), data.get("level")
+    if event not in EVENT_FIELDS:
+        raise InputError(f"event must be one of {', '.join(EVENT_FIELDS)}")
+    _check_keys(data, {"event"} | EVENT_FIELDS[event])
     if event in ("explicit", "sampler"):
-        if axis not in AXES:
-            raise InputError(f"axis must be one of {', '.join(AXES)}")
-        if level not in AXES[axis]:
-            raise InputError(f"level for {axis} must be one of {', '.join(AXES[axis])}")
+        _axis_level(data, level=True)
     root = ingest._workspace_root()
     if event.startswith("sampler") and workspace.read_setup_done(root) is not None:
         raise InputError("the sampler runs only during setup")
     state, saved = _prefs_state(root)
     before = json.dumps(state, sort_keys=True)
-    line = None
-    if event == "whats-new-seen":
-        line = "What's new already seen." if state.get("whats_new_seen") else "What's new seen: it will not repeat."
-        state["whats_new_seen"] = True
-    if event == "sampler-skip":
-        line = "Sampler already skipped." if state.get("sampler_skipped") else \
-            "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
-        state["sampler_skipped"] = True
-    if event == "sampler":
-        current = state["axes"][axis]
-        if state.get("sampler_skipped"):
-            line = "The sampler was skipped; settings unchanged."
-        elif current["provenance"] == "default":  # never overwrites a sampler, learned, explicit or legacy value
-            state["axes"][axis] = {"level": level, "provenance": "sampler", "wording": None}
-            line = f"Noted for now: {AXIS_NAMES[axis]} {level}."
-            if not _sampler(state, root)["remaining"]:
-                levels = ", ".join(f"{AXIS_NAMES[a]} {state['axes'][a]['level']}" for a in AXES)
-                line = f"Tentative starting settings: {levels}. They keep adapting as you study."
-        else:
-            line = f"Kept: {AXIS_NAMES[axis]} stays {current['level']} ({current['provenance']})."
-    if event == "explicit":
-        wording = data.get("wording")
-        if not isinstance(wording, str) or not wording.strip() or _has_control(wording) \
-                or len(wording) > MAX_WORDING:
-            raise InputError(f"wording must be the student's request, one line of at most {MAX_WORDING} characters")
-        state["axes"][axis] = {"level": level, "provenance": "explicit", "wording": " ".join(wording.split())}
-        line = f"Saved for every course: {AXIS_NAMES[axis]} is now {level}."
+    handlers = {"whats-new-seen": _ev_whats_new_seen, "sampler-skip": _ev_sampler_skip, "explicit": _ev_explicit,
+                "session": _ev_session, "trial-start": _ev_trial_start, "positive": _ev_positive, "neutral": _ev_neutral,
+                "pushback": _ev_pushback, "reopen": _ev_reopen, "frustration": _ev_frustration}
+    line = _ev_sampler(state, data, root) if event == "sampler" else \
+        handlers[event](state, data) if event in handlers else None
     changed = not saved or json.dumps(state, sort_keys=True) != before
     if changed:
-        ingest._write_atomic(_prefs_path(root), json.dumps(state, indent=2) + "\n")
+        ingest._write_atomic(_prefs_path(root), json.dumps(_compact(state), indent=2) + "\n")
     out = _prefs_out(state, True, root)
     if line is None:  # legacy-import: saved now only when nothing was saved before
         line = ("Teaching settings already saved." if not changed else
                 "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
                 if state["axes"]["frequency"]["provenance"] == "legacy" else
                 "Teaching settings saved with the defaults.")
+    if event == "frustration":
+        out["offer"] = line == FEWER_QUESTIONS_OFFER
     return {**out, "changed": changed, "line": line}
 
 
 COMMANDS = {
     "prefs": (cmd_prefs, "the global teaching settings: level and provenance per axis"),
     "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, setup sampler, legacy import, "
-                                   "what's new seen)"),
+                                   "probe trial, what's new seen)"),
     "record": (cmd_record, "record mastery evidence and frustration overrides"),
     "now": (cmd_now, "the local time: ISO timestamp, evidence date, log name, last_session stamp and term"),
     "parse-date": (cmd_parse_date, "the student's exam date-and-time phrase as an exam value, or a refusal"),

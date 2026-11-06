@@ -119,7 +119,8 @@ def test_calm(home, root):
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
                         "exam_date", "exam_name", "q0", "exam_problems", "ask_exam_time", "ask_exam_ahead",
                         "ask_exam_scope", "remaining",
-                        "class", "topic", "route_line", "first_contact", "scope", "gauge", "debrief", "line"}
+                        "class", "topic", "route_line", "first_contact", "scope", "gauge", "debrief",
+                        "preference_session", "line"}
     assert out["scope"] is None and out["ask_exam_scope"] is False
 
 
@@ -2063,6 +2064,246 @@ def test_last_sampler_choice_ends_with_a_tentative_summary(home, root):
                            "checks only, guiding-question depth what-if. They keep adapting as you study.")
     assert out["sampler"] == {"open": False, "started": True, "remaining": []}
     assert out["axes"]["frequency"] == LEGACY_AXES["frequency"]
+
+
+# --- Probe trials: one step toward more independent teaching (issue #41) -------------
+
+@pytest.mark.parametrize("cell,choice,expected", [
+    ("2026-11-05", None, True),                         # calm Standard
+    ("unknown", None, True),                            # no exam date: Standard
+    ("2026-10-19T00:00:00+03:00", None, False),         # Urgent within 48 hours
+    ("2026-10-19T00:00:00+03:00", "Standard", False),   # Standard by choice, but within 48 hours of the exam
+    ("2026-10-18", "Standard", False),                  # date-only exam tomorrow counts as within 48 hours
+    ("2026-11-05", "Urgent", False),                    # Urgent by choice
+])
+def test_start_says_whether_the_session_may_give_preference_evidence(home, root, cell, choice, expected):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", cell)])
+    payload = {"now": "2026-10-17T18:00:00+03:00", **({"choice": choice} if choice else {})}
+    assert ok(home, "start", payload)["preference_session"] is expected
+
+
+DAY1 = "2026-10-17T09:00:00+03:00"
+DAY1_EVENING = "2026-10-17T19:00:00+03:00"
+DAY2 = "2026-10-18T09:00:00+03:00"
+DAY3 = "2026-10-19T09:00:00+03:00"
+ALL_AXES = ["support", "frequency", "depth"]
+
+
+def pref(home: Path, event: str, session: str | None = None, **fields) -> dict:
+    return ok(home, "pref-event", {"event": event, **({"session": session} if session else {}), **fields})
+
+
+def test_an_eligible_session_counts_once_and_opens_one_probe(home, root):
+    profile(root)
+    before = ok(home, "prefs", {})
+    assert before["trial"] is None and before["probe_axes"] == []  # no eligible session yet
+    out = pref(home, "session", DAY1)
+    assert out["changed"] is True and out["trial"] is None and out["probe_axes"] == ALL_AXES
+    assert out["axes"] == DEFAULT_AXES
+    saved = (root / ".state" / "preferences.json").read_bytes()
+    again = pref(home, "session", DAY1)  # a rerun in the same session changes nothing
+    assert again["changed"] is False and (root / ".state" / "preferences.json").read_bytes() == saved
+    fails(home, "pref-event", {"event": "session", "session": "2026-10-16T09:00:00+03:00"}, "earlier")
+
+
+def test_a_trial_moves_one_level_toward_independence_and_shows_while_it_runs(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    out = pref(home, "trial-start", DAY1, axis="frequency")
+    trial = {"axis": "frequency", "from": "key decisions", "to": "every step", "evidence": []}
+    assert out["changed"] is True and out["trial"] == trial
+    assert out["axes"] == DEFAULT_AXES  # the saved level changes only on adoption
+    assert out["probe_axes"] == []  # one probe per session, one active trial
+    assert ok(home, "prefs", {})["trial"] == trial
+    fails(home, "pref-event", {"event": "trial-start", "session": DAY1, "axis": "depth"}, "already running")
+    nxt = pref(home, "session", DAY2)  # the trial continues: it is the next session's probe
+    assert nxt["trial"] == trial and nxt["probe_axes"] == []
+
+
+def test_adoption_needs_positive_evidence_in_two_sessions_on_different_days(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    pref(home, "trial-start", DAY1, axis="depth")
+    first = pref(home, "positive", DAY1)
+    assert first["trial"]["evidence"] == [DAY1] and first["axes"]["depth"] == DEFAULT_AXES["depth"]
+    assert pref(home, "positive", DAY1)["changed"] is False  # a second answer in the same session adds nothing
+    pref(home, "session", DAY2)
+    neutral = pref(home, "neutral", DAY2)  # brief answers neither count nor reset
+    assert neutral["changed"] is False and neutral["trial"]["evidence"] == [DAY1]
+    pref(home, "session", DAY3)
+    out = pref(home, "positive", DAY3)
+    assert out["trial"] is None
+    assert out["axes"] == {**DEFAULT_AXES, "depth": {"level": "what-if", "provenance": "learned", "wording": None}}
+    assert out["line"] == "Saved for every course: guiding-question depth is now what-if."
+    assert out["probe_axes"] == []  # adoption used this session's probe
+    nxt = pref(home, "session", "2026-10-20T09:00:00+03:00")
+    assert nxt["probe_axes"] == ["support", "frequency"]  # depth is at its most independent level
+
+
+def test_positive_evidence_on_the_same_day_counts_once(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    pref(home, "trial-start", DAY1, axis="support")
+    pref(home, "positive", DAY1)
+    pref(home, "session", DAY1_EVENING)
+    same_day = pref(home, "positive", DAY1_EVENING)
+    assert same_day["changed"] is False and same_day["trial"]["evidence"] == [DAY1]
+    assert same_day["axes"]["support"] == DEFAULT_AXES["support"]
+    pref(home, "session", DAY2)
+    assert pref(home, "positive", DAY2)["axes"]["support"]["level"] == "try-first"
+
+
+def _reject(home: Path, session: str, axis: str = "frequency") -> dict:
+    pref(home, "trial-start", session, axis=axis)
+    return pref(home, "pushback", session)
+
+
+def test_pushback_reverts_and_the_same_change_waits_one_then_two_sessions_then_stops(home, root):
+    profile(root)
+    days = iter(f"2026-10-{d:02d}T09:00:00+03:00" for d in range(17, 31))
+
+    def session() -> tuple[str, dict]:
+        s = next(days)
+        return s, pref(home, "session", s)
+
+    s, _ = session()
+    pref(home, "trial-start", s, axis="frequency")
+    pref(home, "positive", s)
+    out = pref(home, "pushback", s)
+    assert out["trial"] is None and out["axes"] == DEFAULT_AXES  # reverted at once
+    assert out["probe_axes"] == []  # the session's probe is spent
+    s, skipped = session()
+    assert "frequency" not in skipped["probe_axes"] and "support" in skipped["probe_axes"]  # other changes stay open
+    fails(home, "pref-event", {"event": "trial-start", "session": s, "axis": "frequency"}, "rejected recently")
+    s, back = session()
+    assert "frequency" in back["probe_axes"]
+    again = _reject(home, s)  # the second rejection: positive evidence was reset, two sessions wait
+    assert again["trial"] is None
+    for _ in range(2):
+        _, skipped = session()
+        assert "frequency" not in skipped["probe_axes"]
+    s, back = session()
+    assert "frequency" in back["probe_axes"]
+    third = _reject(home, s)
+    assert third["line"].endswith("This change is not tried again unless the student asks.")
+    for _ in range(4):
+        s, later = session()
+        assert "frequency" not in later["probe_axes"]
+    fails(home, "pref-event", {"event": "trial-start", "session": s, "axis": "frequency"},
+          "only the student can reopen it")
+    reopened = pref(home, "reopen", axis="frequency")
+    assert reopened["line"] == "Reopened: Mimir may try guiding-question frequency every step again."
+    assert "frequency" in reopened["probe_axes"]
+
+
+def test_sessions_near_an_exam_give_no_evidence_run_no_probe_and_do_not_advance_cool_downs(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-10-21T09:00:00+03:00")])
+    assert ok(home, "start", {"now": DAY1})["preference_session"] is True
+    pref(home, "session", DAY1)
+    _reject(home, DAY1)  # the first rejection: skip one eligible session
+    near = "2026-10-19T18:00:00+03:00"  # Standard by choice, 39 hours before the exam
+    assert ok(home, "start", {"now": near, "choice": "Standard"})["preference_session"] is False
+    before = snapshot(home)
+    for payload in [{"event": "trial-start", "session": near, "axis": "support"},
+                    {"event": "positive", "session": near}, {"event": "frustration", "session": near}]:
+        fails(home, "pref-event", payload, "no preference evidence")
+    assert snapshot(home) == before
+    after = pref(home, "session", "2026-10-22T09:00:00+03:00")  # the first eligible session after the rejection
+    assert "frequency" not in after["probe_axes"]  # the near-exam session did not count as the skipped one
+
+
+def test_explicit_values_are_never_probed_and_an_explicit_request_ends_a_trial_on_its_axis(home, root):
+    profile(root)
+    pref(home, "explicit", axis="support", level="example-first", wording="always show an example first")
+    out = pref(home, "session", DAY1)
+    assert out["probe_axes"] == ["frequency", "depth"]
+    fails(home, "pref-event", {"event": "trial-start", "session": DAY1, "axis": "support"}, "standing instruction")
+    fails(home, "pref-event", {"event": "reopen", "axis": "support"}, "standing instruction")
+    pref(home, "trial-start", DAY1, axis="depth")
+    ended = pref(home, "explicit", axis="depth", level="why", wording="keep asking me why")
+    assert ended["trial"] is None and ended["axes"]["depth"]["provenance"] == "explicit"
+    pref(home, "session", DAY2)
+    assert ok(home, "prefs", {})["probe_axes"] == ["frequency"]  # no rejection was counted for depth
+
+
+def test_frustration_in_two_separate_sessions_offers_fewer_questions_once(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    first = pref(home, "frustration", DAY1)
+    assert first["offer"] is False
+    assert pref(home, "frustration", DAY1)["offer"] is False  # a second override in the same session
+    pref(home, "session", DAY2)
+    second = pref(home, "frustration", DAY2)
+    assert second["offer"] is True and second["line"] == "Want fewer questions from now on?"
+    assert second["axes"] == DEFAULT_AXES  # the offer changes nothing; a yes is an explicit request
+    pref(home, "session", DAY3)
+    assert pref(home, "frustration", DAY3)["offer"] is False  # asked once only
+
+
+def test_no_offer_when_questions_are_already_at_checks_only(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    for s in (DAY1, DAY2):
+        pref(home, "session", s)
+        assert pref(home, "frustration", s)["offer"] is False
+
+
+@pytest.mark.parametrize("payload,needle", [
+    ({"event": "session"}, "session must be"),
+    ({"event": "session", "session": "2026-10-17"}, "session must be"),
+    ({"event": "session", "session": "2026-10-17T09:00:00"}, "session must be"),  # no offset
+    ({"event": "session", "session": DAY1, "axis": "depth"}, "axis"),
+    ({"event": "trial-start", "session": DAY1, "axis": "pace"}, "no preference evidence"),
+    ({"event": "positive", "session": DAY1}, "no preference evidence"),
+    ({"event": "neutral", "session": DAY1, "level": "why"}, "level"),
+    ({"event": "reopen", "axis": "pace"}, "axis must be"),
+    ({"event": "reopen", "axis": "depth", "session": DAY1}, "session"),
+    ({"event": "frustration"}, "session must be"),
+])
+def test_probe_events_reject_invalid_input_and_write_nothing(home, root, payload, needle):
+    profile(root)
+    before = snapshot(home)
+    fails(home, "pref-event", payload, needle)
+    assert snapshot(home) == before
+
+
+def test_evidence_needs_a_running_trial(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    for event in ("positive", "neutral", "pushback"):
+        fails(home, "pref-event", {"event": event, "session": DAY1}, "no trial is running")
+    fails(home, "pref-event", {"event": "trial-start", "session": DAY1, "axis": "pace"}, "axis must be")
+    assert pref(home, "reopen", axis="depth")["changed"] is False
+
+
+@pytest.mark.parametrize("extra", [
+    {"trial": {"axis": "depth", "from": "why", "to": "next step", "evidence": []}},   # a move toward more guided
+    {"trial": {"axis": "depth", "from": "next step", "to": "why", "evidence": []}},   # from is not the saved level
+    {"trial": {"axis": "depth", "from": "why", "to": "what-if", "evidence": ["felt keen"]}},
+    {"sessions": {"count": -1, "current": None, "probed": None}},
+    {"transitions": {"depth: why > what-if": {"rejections": 4, "next": 0}}},
+    {"transitions": {"depth: what-if > why": {"rejections": 1, "next": 0}}},
+    {"frustration": {"count": 1, "last": None, "offered": "no"}},
+    {"notes": "seemed tired"},
+])
+def test_damaged_probe_state_is_refused(home, root, extra):
+    profile(root)
+    (root / ".state" / "preferences.json").write_text(json.dumps({"version": 1, "axes": DEFAULT_AXES, **extra}),
+                                                      encoding="utf-8")
+    fails(home, "prefs", {}, "preferences.json is damaged")
+
+
+def test_probe_state_survives_a_new_conversation_byte_for_byte(home, root):
+    profile(root)
+    pref(home, "session", DAY1)
+    pref(home, "trial-start", DAY1, axis="support")
+    saved = (root / ".state" / "preferences.json").read_bytes()
+    state = json.loads(saved)
+    assert state["trial"]["to"] == "try-first" and state["sessions"]["count"] == 1
+    assert ok(home, "prefs", {})["trial"] == state["trial"]
+    assert pref(home, "session", DAY1)["changed"] is False
+    assert (root / ".state" / "preferences.json").read_bytes() == saved
 
 
 # --- what's-new line for existing users (issue #43) ------------------------------------
