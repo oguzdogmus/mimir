@@ -242,8 +242,9 @@ prefs -- the global teaching settings. Read-only.
     in : {}
     out: {"axes": {"support": {"level": "method-first", "provenance":
           "default", "wording": null}, "frequency": {...}, "depth": {...}},
-          "saved": false, "line": "Teaching settings: support method-first
-          (default), ..."}
+          "saved": false, "sampler": {"open": true, "started": false,
+          "remaining": ["support", "frequency", "depth"]}, "line": "Teaching
+          settings: support method-first (default), ..."}
     Axes and levels, more guided to more independent: support example-first,
     method-first, try-first; frequency checks only, key decisions, every
     step; depth next step, why, what-if. Provenance is default, sampler,
@@ -253,16 +254,28 @@ prefs -- the global teaching settings. Read-only.
     that a set profile ``dial_preference:`` reads as frequency checks only with
     provenance legacy (``## Rung hints`` are ignored). A damaged or symlinked
     ``preferences.json`` exits 2.
+    ``sampler`` is the setup sampler: ``remaining`` lists the axes still at
+    default, in order, while setup is not done (no ``setup_done:`` date in the
+    profile) and the sampler was not skipped, else []; ``open`` = remaining is
+    non-empty; ``started`` = some axis has provenance sampler.
 
 pref-event -- apply one teaching-settings event and save the state.
     in : {"event": "explicit", "axis": "frequency", "level": "checks only",
           "wording": "ask fewer questions"}
-         or {"event": "legacy-import"}
+         or {"event": "sampler", "axis": "support", "level": "example-first"}
+         or {"event": "sampler-skip"} or {"event": "legacy-import"}
     out: as ``prefs`` plus "changed", with ``saved`` true; line e.g.
          "Saved for every course: guiding-question frequency is now checks only."
     ``explicit``: the student's lasting request sets that axis to that level
     (any distance), provenance explicit, wording kept with spaces collapsed;
-    other axes are untouched. ``legacy-import``: saves the state ``prefs``
+    other axes are untouched. ``sampler``: one setup-sampler choice; it
+    fills the axis only while that axis is at default (provenance sampler),
+    never overwriting a sampler, learned, explicit or legacy value ("Kept:
+    ..."), and after a skip changes nothing. The choice that leaves no axis
+    remaining says the tentative summary of all three levels.
+    ``sampler-skip``: ends the sampler for good; completed choices stay and
+    unanswered axes keep their defaults. Both sampler events exit 2 once
+    setup is done. ``legacy-import``: saves the state ``prefs``
     shows (the legacy value included) when nothing is saved yet; otherwise
     changes nothing. A state that would not change is not rewritten, so a
     rerun leaves the file byte-identical. An unknown event, axis, or a level
@@ -1214,6 +1227,8 @@ def _prefs_state(root: Path) -> tuple[dict, bool]:
     if not isinstance(state, dict) or state.get("version") != PREFS_VERSION or not isinstance(state.get("axes"), dict) \
             or set(state["axes"]) != set(AXES):
         raise damaged
+    if state.get("sampler_skipped", True) is not True:  # optional; present only once the sampler was skipped
+        raise damaged
     for axis, entry in state["axes"].items():
         if not isinstance(entry, dict) or set(entry) != {"level", "provenance", "wording"} \
                 or entry["level"] not in AXES[axis] or entry["provenance"] not in PROVENANCES \
@@ -1228,37 +1243,69 @@ def _set(value: str) -> bool:
     return bool(value) and value.casefold() != "none" and not (value.startswith("<") and value.endswith(">"))
 
 
-def _prefs_out(state: dict, saved: bool) -> dict:
+def _sampler(state: dict, root: Path) -> dict:
+    """The setup sampler: open only before setup is done and until skipped; it fills default axes only."""
+    axes = state["axes"]
+    open_ = workspace.read_setup_done(root) is None and not state.get("sampler_skipped", False)
+    remaining = [a for a in AXES if axes[a]["provenance"] == "default"] if open_ else []
+    return {"open": bool(remaining), "started": any(axes[a]["provenance"] == "sampler" for a in AXES),
+            "remaining": remaining}
+
+
+def _prefs_out(state: dict, saved: bool, root: Path) -> dict:
     axes = state["axes"]
     parts = ", ".join(f"{AXIS_NAMES[a]} {axes[a]['level']} ({axes[a]['provenance']})" for a in AXES)
-    return {"axes": axes, "saved": saved, "line": f"Teaching settings: {parts}."}
+    return {"axes": axes, "saved": saved, "sampler": _sampler(state, root), "line": f"Teaching settings: {parts}."}
 
 
 def cmd_prefs(data: dict) -> dict:
-    """The global teaching settings; read-only."""
+    """The global teaching settings and the setup sampler's state; read-only."""
     _check_keys(data, set())
-    return _prefs_out(*_prefs_state(ingest._workspace_root()))
+    root = ingest._workspace_root()
+    return _prefs_out(*_prefs_state(root), root)
 
 
 def cmd_pref_event(data: dict) -> dict:
     """Apply one teaching-settings event and save the state atomically (unchanged state writes nothing)."""
     event = data.get("event")
-    if event == "legacy-import":
+    if event in ("legacy-import", "sampler-skip"):
         _check_keys(data, {"event"})
     elif event == "explicit":
         _check_keys(data, {"event", "axis", "level", "wording"})
+    elif event == "sampler":
+        _check_keys(data, {"event", "axis", "level"})
     else:
-        raise InputError("event must be explicit or legacy-import")
-    root = ingest._workspace_root()
-    state, saved = _prefs_state(root)
-    before = json.dumps(state, sort_keys=True)
-    line = None
-    if event == "explicit":
-        axis, level, wording = data.get("axis"), data.get("level"), data.get("wording")
+        raise InputError("event must be explicit, sampler, sampler-skip or legacy-import")
+    axis, level = data.get("axis"), data.get("level")
+    if event in ("explicit", "sampler"):
         if axis not in AXES:
             raise InputError(f"axis must be one of {', '.join(AXES)}")
         if level not in AXES[axis]:
             raise InputError(f"level for {axis} must be one of {', '.join(AXES[axis])}")
+    root = ingest._workspace_root()
+    if event.startswith("sampler") and workspace.read_setup_done(root) is not None:
+        raise InputError("the sampler runs only during setup")
+    state, saved = _prefs_state(root)
+    before = json.dumps(state, sort_keys=True)
+    line = None
+    if event == "sampler-skip":
+        line = "Sampler already skipped." if state.get("sampler_skipped") else \
+            "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
+        state["sampler_skipped"] = True
+    if event == "sampler":
+        current = state["axes"][axis]
+        if state.get("sampler_skipped"):
+            line = "The sampler was skipped; settings unchanged."
+        elif current["provenance"] == "default":  # never overwrites a sampler, learned, explicit or legacy value
+            state["axes"][axis] = {"level": level, "provenance": "sampler", "wording": None}
+            line = f"Noted for now: {AXIS_NAMES[axis]} {level}."
+            if not _sampler(state, root)["remaining"]:
+                levels = ", ".join(f"{AXIS_NAMES[a]} {state['axes'][a]['level']}" for a in AXES)
+                line = f"Tentative starting settings: {levels}. They keep adapting as you study."
+        else:
+            line = f"Kept: {AXIS_NAMES[axis]} stays {current['level']} ({current['provenance']})."
+    if event == "explicit":
+        wording = data.get("wording")
         if not isinstance(wording, str) or not wording.strip() or _has_control(wording) \
                 or len(wording) > MAX_WORDING:
             raise InputError(f"wording must be the student's request, one line of at most {MAX_WORDING} characters")
@@ -1267,7 +1314,7 @@ def cmd_pref_event(data: dict) -> dict:
     changed = not saved or json.dumps(state, sort_keys=True) != before
     if changed:
         ingest._write_atomic(_prefs_path(root), json.dumps(state, indent=2) + "\n")
-    out = _prefs_out(state, True)
+    out = _prefs_out(state, True, root)
     if line is None:  # legacy-import: saved now only when nothing was saved before
         line = ("Teaching settings already saved." if not changed else
                 "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
@@ -1278,7 +1325,7 @@ def cmd_pref_event(data: dict) -> dict:
 
 COMMANDS = {
     "prefs": (cmd_prefs, "the global teaching settings: level and provenance per axis"),
-    "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, legacy import)"),
+    "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, setup sampler, legacy import)"),
     "record": (cmd_record, "record mastery evidence and frustration overrides"),
     "now": (cmd_now, "the local time: ISO timestamp, evidence date, log name, last_session stamp and term"),
     "parse-date": (cmd_parse_date, "the student's exam date-and-time phrase as an exam value, or a refusal"),

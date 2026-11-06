@@ -1500,6 +1500,10 @@ def test_explicit_request_moves_any_distance_and_keeps_latest_wording(home, root
     ({"event": "explicit", "axis": "depth", "level": "why", "wording": "w" * 201}, "wording"),
     ({"event": "explicit", "axis": "depth", "level": "why", "wording": "x", "course": "CS201"}, "course"),
     ({"event": "legacy-import", "axis": "depth"}, "axis"),
+    ({"event": "sampler", "axis": "depth", "level": "try-first"}, "level for depth"),
+    ({"event": "sampler", "axis": "pace", "level": "why"}, "axis must be"),
+    ({"event": "sampler", "axis": "depth", "level": "why", "wording": "x"}, "wording"),
+    ({"event": "sampler-skip", "axis": "depth"}, "axis"),
     ({"event": "frustrated"}, "event must be"),
     ({}, "event must be"),
 ])
@@ -1516,6 +1520,7 @@ def test_prefs_reads_nothing_extra(home, root):
 
 
 @pytest.mark.parametrize("content", ["not json", '{"version": 1}', '{"version": 2, "axes": {}}',
+                                     json.dumps({"version": 1, "axes": DEFAULT_AXES, "sampler_skipped": False}),
                                      json.dumps({"version": 1, "axes": {**{a: dict(v) for a, v in
                                                  DEFAULT_AXES.items()}, "depth": {"level": "deep",
                                                  "provenance": "default", "wording": None}}}),
@@ -1538,3 +1543,116 @@ def test_symlinked_preference_state_is_refused(home, root, tmp_path):
     (root / ".state" / "preferences.json").symlink_to(target)
     fails(home, "prefs", {}, "symlink")
     fails(home, "pref-event", {"event": "legacy-import"}, "symlink")
+
+
+# --- setup sampler -------------------------------------------------------------------
+
+def _setup_done(root: Path, date: str = "2026-10-01") -> None:
+    path = root / ".state" / "profile.md"
+    path.write_text(path.read_text(encoding="utf-8").replace("level:\n", f"level:\nsetup_done: {date}\n"),
+                    encoding="utf-8")
+
+
+def test_sampler_is_open_during_setup_with_every_axis_remaining(home, root):
+    profile(root)
+    before = snapshot(home)
+    out = ok(home, "prefs", {})
+    assert out["sampler"] == {"open": True, "started": False, "remaining": ["support", "frequency", "depth"]}
+    assert snapshot(home) == before
+
+
+def test_sampler_is_closed_for_users_who_finished_setup(home, root):
+    profile(root)
+    _setup_done(root)
+    assert ok(home, "prefs", {})["sampler"] == {"open": False, "started": False, "remaining": []}
+
+
+def test_sampler_choice_fills_a_default_axis_and_resumes_with_the_rest(home, root):
+    profile(root)
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "example-first"})
+    assert out["changed"] is True and out["line"] == "Noted for now: support example-first."
+    assert out["axes"] == {**DEFAULT_AXES, "support": {"level": "example-first", "provenance": "sampler",
+                                                       "wording": None}}
+    # an interrupted setup resumes the remaining demonstrations from the saved state
+    assert ok(home, "prefs", {})["sampler"] == {"open": True, "started": True, "remaining": ["frequency", "depth"]}
+
+
+def _saved_axis(root: Path, axis: str, entry: dict) -> None:
+    state = root / ".state" / "preferences.json"
+    state.write_text(json.dumps({"version": 1, "axes": {**DEFAULT_AXES, axis: entry}}, indent=2) + "\n",
+                     encoding="utf-8")
+
+
+@pytest.mark.parametrize("setup", ["explicit", "learned", "legacy", "sampler"])
+def test_sampler_never_overwrites_a_value_that_is_not_default(home, root, setup):
+    if setup == "legacy":
+        _legacy_profile(root, "fewer questions (2026-10-01)")
+        ok(home, "pref-event", {"event": "legacy-import"})
+    else:
+        profile(root)
+        if setup == "explicit":
+            ok(home, "pref-event", {"event": "explicit", "axis": "frequency", "level": "every step",
+                                    "wording": "ask me at every step"})
+        elif setup == "learned":
+            _saved_axis(root, "frequency", {"level": "every step", "provenance": "learned", "wording": None})
+        else:
+            ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "every step"})
+    kept = ok(home, "prefs", {})["axes"]["frequency"]
+    assert ok(home, "prefs", {})["sampler"]["remaining"] == ["support", "depth"]
+    before = snapshot(home)
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "key decisions"})
+    assert out["changed"] is False and out["axes"]["frequency"] == kept
+    assert out["line"] == f"Kept: guiding-question frequency stays {kept['level']} ({setup})."
+    assert snapshot(home) == before  # nothing rewritten
+
+
+def test_unsaved_legacy_value_is_saved_but_never_overwritten_by_the_sampler(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "every step"})
+    assert out["axes"] == LEGACY_AXES and out["saved"] is True
+    assert json.loads((root / ".state" / "preferences.json").read_text(encoding="utf-8"))["axes"] == LEGACY_AXES
+
+
+@pytest.mark.parametrize("payload", [{"event": "sampler", "axis": "support", "level": "try-first"},
+                                     {"event": "sampler-skip"}])
+def test_sampler_is_refused_after_setup(home, root, payload):
+    profile(root)
+    _setup_done(root)
+    before = snapshot(home)
+    fails(home, "pref-event", payload, "the sampler runs only during setup")
+    assert snapshot(home) == before
+
+
+def test_sampler_skip_keeps_completed_choices_and_ends_the_sampler(home, root):
+    profile(root)
+    ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "try-first"})
+    out = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert out["changed"] is True
+    assert out["line"] == "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
+    assert out["axes"] == {**DEFAULT_AXES, "support": {"level": "try-first", "provenance": "sampler",
+                                                       "wording": None}}
+    assert out["sampler"] == {"open": False, "started": True, "remaining": []}  # never offered again
+    before = snapshot(home)
+    again = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert again["changed"] is False and again["line"] == "Sampler already skipped."
+    late = ok(home, "pref-event", {"event": "sampler", "axis": "depth", "level": "what-if"})
+    assert late["changed"] is False and late["axes"]["depth"] == DEFAULT_AXES["depth"]
+    assert late["line"] == "The sampler was skipped; settings unchanged."
+    assert snapshot(home) == before
+
+
+def test_sampler_skip_before_any_choice_saves_the_defaults(home, root):
+    profile(root)
+    out = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert out["axes"] == DEFAULT_AXES and out["saved"] is True
+    assert ok(home, "prefs", {})["sampler"] == {"open": False, "started": False, "remaining": []}
+
+
+def test_last_sampler_choice_ends_with_a_tentative_summary(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")  # frequency is legacy: the sampler skips it
+    ok(home, "pref-event", {"event": "sampler", "axis": "depth", "level": "what-if"})
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "example-first"})
+    assert out["line"] == ("Tentative starting settings: support example-first, guiding-question frequency "
+                           "checks only, guiding-question depth what-if. They keep adapting as you study.")
+    assert out["sampler"] == {"open": False, "started": True, "remaining": []}
+    assert out["axes"]["frequency"] == LEGACY_AXES["frequency"]

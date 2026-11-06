@@ -17,7 +17,7 @@ Print this table and stop:
 
 | Command | What it is for |
 |---|---|
-| `mimir-setup` | One-time setup: your learning folder, languages and any exam dates you know. |
+| `mimir-setup` | One-time setup: your learning folder, languages, any exam dates you know and, optionally, your teaching style. |
 | `mimir-ingest` | File everything in your `_inbox/` (outline, slides, past papers) into course folders. |
 | `mimir-study` | Study for an exam. Start here: "exam Friday, help" works, even with just a photo of a past paper. |
 | `mimir-past-questions` | Drill a course's real past-paper questions, most marks and most often asked first. |

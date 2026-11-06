@@ -313,3 +313,40 @@ BARE_DATE = re.compile(r"`date` of [^.]*parse-date|its `date` is usable")
 def test_no_skill_writes_a_bare_date_from_parse_date():
     for path in MARKDOWN:
         assert not BARE_DATE.search(path.read_text(encoding="utf-8")), path
+
+
+# The setup sampler: offered once during setup with a skip, run before setup is
+# marked done, one everyday demonstration per axis, saved only through session.py.
+SETUP = "skills/mimir-setup/SKILL.md"
+SAMPLER = "skills/mimir-setup/references/sampler.md"
+
+
+def test_setup_offers_the_sampler_once_with_a_skip_before_setup_is_done():
+    text = _read(SETUP)
+    assert "references/sampler.md" in text and 'session.py" prefs' in text
+    assert '"event": "sampler-skip"' in text and "skip" in text and "default" in text
+    assert text.index("references/sampler.md") < text.index("`setup_done:` set to")  # events refused after it
+    assert "`started`" in text and "`remaining`" in text  # an interrupted setup resumes, not re-offers
+
+
+def test_only_setup_runs_sampler_events():
+    for path in MARKDOWN:
+        rel = str(path.relative_to(ROOT_DIR))
+        text = path.read_text(encoding="utf-8")
+        if rel not in (SETUP, SAMPLER):
+            assert '"event": "sampler' not in text, rel
+
+
+def test_each_sampler_demonstration_isolates_one_axis():
+    text = _read(SAMPLER)
+    assert '"event": "sampler"' in text and "knowledge gauge" in text
+    assert '"Which suits you: A, B or C?" and wait' in text  # one active question per demonstration
+    sections = re.split(r"^## ", text, flags=re.M)[1:]
+    assert [s.splitlines()[0] for s in sections] == ["support", "frequency", "depth"]
+    for section, levels in zip(sections, (LEVELS[0:3], LEVELS[3:6], LEVELS[6:9])):
+        options = re.findall(r"^\*\*([ABC])\*\* \(`([^`]+)`\)", section, flags=re.M)
+        assert options == list(zip("ABC", levels)), section.splitlines()[0]
+    # frequency differs only in when questions come: every option discloses the same and ends on one fresh check
+    frequency = sections[1]
+    endings = re.findall(r"Your turn: [^\n]*", frequency)
+    assert len(endings) == 3 and len(set(endings)) == 1
