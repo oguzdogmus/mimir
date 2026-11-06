@@ -163,7 +163,11 @@ start -- pick the course, the exam and the class for a new session.
     in ``INDEX.md`` order. With a ``scope``, rows named in ``out`` move to the
     end (order kept, none removed). ``remaining`` = route rows not
     ``mastered``, each with ``scope``: "in", "out", "not checked" (in neither
-    list) or null (no scope). ``class``: ``plan.py class`` with ``now`` and the exam only (the
+    list) or null (no scope). ``remaining_line``: null when ``remaining`` is
+    empty, else "Left on your route:" and one line per entry, in order,
+    "- <name> (<status>)", adding ", not on your next exam" for ``out`` and
+    ", not checked" for "not checked" (e.g. "- Sorting (gap, not on your
+    next exam)"), joined by newlines. ``class``: ``plan.py class`` with ``now`` and the exam only (the
     route's size never decides) plus ``decided_by``, the rule that decided,
     first match wins:
       "session choice" -- ``choice`` without ``lasting``: that class, line
@@ -1168,6 +1172,20 @@ def _near_exam(profile: str, now: datetime) -> bool:
     return False
 
 
+_ROUTE_MARKS = {"out": "not on your next exam", "not checked": "not checked"}
+
+
+def _remaining_line(remaining: list[dict]) -> str | None:
+    """What is left on the route, one line per topic with its status and scope mark; None when empty."""
+    if not remaining:
+        return None
+    rows = ["Left on your route:"]
+    for r in remaining:
+        mark = _ROUTE_MARKS.get(r["scope"])
+        rows.append(f"- {r['name']} ({r['status']}{', ' + mark if mark else ''})")
+    return "\n".join(rows)
+
+
 def _preference_session(klass: dict, profile: str, now: datetime) -> bool:
     """Standard, and not within 48 hours of any exam in the profile."""
     return klass["class"] == "Standard" and not _near_exam(profile, now)
@@ -1182,7 +1200,7 @@ def _start(data: dict, choice: str | None = None,
                 "code": None, "inferred": None, "exam": None, "exam_date": None, "exam_name": None, "q0": None,
                 "exam_problems": None, "ask_exam_time": None, "ask_exam_ahead": None, "ask_exam_scope": None,
                 "scope_words": None,
-                "remaining": [], "class": None, "topic": None, "route_line": None,
+                "remaining": [], "remaining_line": None, "class": None, "topic": None, "route_line": None,
                 "first_contact": None, "scope": None, "gauge": None, "debrief": None, "preference_session": None,
                 "line": NO_COURSE_LINE}, None
     code = chosen["course"].split()[0]
@@ -1213,11 +1231,11 @@ def _start(data: dict, choice: str | None = None,
         state = topic_state(pick, pick["name"], today)
         topic = {k: state[k] for k in ("name", "status", "evidence_date", "stale", "attempt_first")}
     route_line = None if pick is not None else ROUTE_DONE_LINE if rows else NO_ROUTE_LINE
+    left = [{"name": r["name"], "status": r["status"], "scope": scope_mark(scope, r["name"])} for r in remaining]
     return {"root": str(root), "courses": courses, "term": chosen["term"], "course": chosen["course"],
             "course_dir": str(course_dir), "code": code, "inferred": inferred, **exam,
             "ask_exam_scope": ask_scope, "scope_words": scope_words,
-            "remaining": [{"name": r["name"], "status": r["status"], "scope": scope_mark(scope, r["name"])}
-                          for r in remaining],
+            "remaining": left, "remaining_line": _remaining_line(left),
             "class": klass, "topic": topic, "route_line": route_line,
             "first_contact": _first_contact(course_dir), "scope": scope,
             "gauge": _gauge(course_dir, rows, scope),

@@ -118,7 +118,7 @@ def test_calm(home, root):
     assert out["exam_date"] == "2026-11-05"
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
                         "exam_date", "exam_name", "q0", "exam_problems", "ask_exam_time", "ask_exam_ahead",
-                        "ask_exam_scope", "scope_words", "remaining",
+                        "ask_exam_scope", "scope_words", "remaining", "remaining_line",
                         "class", "topic", "route_line", "first_contact", "scope", "gauge", "debrief",
                         "preference_session", "line"}
     assert out["scope"] is None and out["ask_exam_scope"] is False
@@ -1810,6 +1810,24 @@ def test_gauge_skips_unseen_topics_that_are_not_on_the_exam(home, root):
     assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps", "Tries"]}
     save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["Tries"]})
     assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps"]}
+
+
+def test_remaining_line_lists_whats_left_with_the_next_exams_scope_marks(home, root):
+    course(home, mastery=ROUTE4)
+    profile(root, exams=[MIDTERM, FINAL])
+    assert ok(home, "start", {"now": NOW})["remaining_line"] == (
+        "Left on your route:\n- Sorting (gap)\n- Heaps (unseen)\n- Graphs (shaky)\n- Tries (unseen)")
+    save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["sorting"]})
+    assert ok(home, "start", {"now": NOW})["remaining_line"] == (
+        "Left on your route:\n- Heaps (unseen)\n- Graphs (shaky)\n- Tries (unseen, not checked)\n"
+        "- Sorting (gap, not on your next exam)")
+
+
+def test_remaining_line_is_null_when_nothing_is_left(home, root):
+    course(home, mastery=[("Heaps", "mastered", "2026-10-10", 0, 2)])
+    profile(root)
+    out = ok(home, "start", {"now": NOW})
+    assert out["remaining"] == [] and out["remaining_line"] is None
 
 
 def test_standard_route_offers_out_of_scope_topics_once_nothing_else_is_left(home, root):

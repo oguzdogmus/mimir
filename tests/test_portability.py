@@ -415,6 +415,12 @@ def test_setup_asks_the_scope_with_each_exam_and_the_first_session_confirms_it()
     assert "no scope question in a lazy setup" in lazy  # lazy setup still leaves it out on purpose
 
 
+def test_plan_says_the_scripts_remaining_line_verbatim():
+    plan = _read("skills/mimir-plan/SKILL.md")
+    assert "`remaining_line`" in plan and "verbatim" in plan.split("`remaining_line`", 1)[1].split("\n", 1)[0]
+    assert "(<status>)" not in plan  # the list with its scope marks comes from session.py, not composed here
+
+
 def test_triage_and_the_standard_route_use_the_saved_scope():
     urgent = _read("skills/mimir-study/references/urgent.md")
     assert '"scope"' in urgent and "`start`'s `scope`" in urgent  # passed to plan.py triage
