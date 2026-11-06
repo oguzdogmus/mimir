@@ -650,7 +650,8 @@ def _write_atomic(index: Path, text: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
             handle.write(text)
-        os.chmod(tmp, stat.S_IMODE(index.stat().st_mode))
+        if index.exists():  # a new file keeps mkstemp's private mode
+            os.chmod(tmp, stat.S_IMODE(index.stat().st_mode))
         os.replace(tmp, index)
     except BaseException:
         try:
