@@ -376,11 +376,11 @@ def test_triage_rows_rank_every_type_by_marks_times_frequency():
     out = ok("triage", {"types": [qtype("B", 10, 1, 2), qtype("A", 20, 2, 2, "gap"), qtype("C", 8, 3, 3, "shaky")]})
     assert out["rows"] == [
         {"name": "A", "marks": 20, "marks_source": "printed", "frequency": "2 of 2 papers",
-         "decision": "drill", "reason": "gap"},
+         "decision": "drill", "reason": "gap", "scope": None},
         {"name": "C", "marks": 8, "marks_source": "printed", "frequency": "3 of 3 papers",
-         "decision": "drill", "reason": "shaky"},
+         "decision": "drill", "reason": "shaky", "scope": None},
         {"name": "B", "marks": 10, "marks_source": "printed", "frequency": "1 of 2 papers",
-         "decision": "drill", "reason": "not studied yet"},
+         "decision": "drill", "reason": "not studied yet", "scope": None},
     ]
     assert out["drill"] == ["A", "C", "B"]
     assert out["line"] == "Ranked by marks × how often each type appeared in past papers."
@@ -461,7 +461,7 @@ def test_triage_edge_cases():
     assert out["line"] == "Nothing to drill: every question type is mastered."
     only = ok("triage", {"types": [{"name": "A"}]})["rows"]
     assert only == [{"name": "A", "marks": 1, "marks_source": "estimated", "frequency": None,
-                     "decision": "drill", "reason": "not studied yet"}]
+                     "decision": "drill", "reason": "not studied yet", "scope": None}]
 
 
 def test_triage_marks_near_the_float_limit_still_rank():
@@ -473,6 +473,63 @@ def test_triage_marks_near_the_float_limit_still_rank():
 def test_triage_is_deterministic():
     payload = {"now": NOW, "exam": in_hours(8), "types": [qtype("A", 7, 1, 3), qtype("B", 3, 2, 3)]}
     assert run("triage", payload).stdout == run("triage", payload).stdout
+
+
+# --- triage: exam scope (#45) ---------------------------------------------------
+
+CMPE471_TYPES = [qtype("Pumping lemma proof", 20, 3, 4, "gap"), qtype("DFA construction", 15, 4, 4, "gap"),
+                 qtype("PDA construction", 15, 3, 4), qtype("CNF conversion", 10, 2, 4),
+                 qtype("Regex to NFA", 10, 4, 4, "shaky")]
+CMPE471_MIDTERM = {"in": ["DFA construction", "Regex to NFA"],
+                   "out": ["pumping lemma proof", "PDA construction", "CNF  conversion"]}
+
+
+def test_triage_cmpe471_midterm_lists_final_only_types_last_and_never_drills_them():
+    # #29: a midterm whose scope excludes PDA, CNF and the pumping lemma (names match ignoring
+    # case and repeated spaces). They stay visible at the bottom, marked, in rank order.
+    out = ok("triage", {"types": CMPE471_TYPES, "scope": CMPE471_MIDTERM})
+    assert [(r["name"], r["decision"], r["reason"], r["scope"]) for r in out["rows"]] == [
+        ("DFA construction", "drill", "gap", "in"),
+        ("Regex to NFA", "drill", "shaky", "in"),
+        ("Pumping lemma proof", "skip", "not on this exam", "out"),
+        ("PDA construction", "skip", "not on this exam", "out"),
+        ("CNF conversion", "skip", "not on this exam", "out"),
+    ]
+    assert out["drill"] == ["DFA construction", "Regex to NFA"]
+
+
+def test_triage_type_missing_from_the_scope_is_ranked_normally_and_marked_not_checked():
+    # A type found after the scope was confirmed: drilled in its normal rank, marked.
+    types = CMPE471_TYPES + [qtype("Closure proof", 30, 1, 4, "gap")]
+    out = ok("triage", {"types": types, "scope": CMPE471_MIDTERM})
+    assert [(r["name"], r["scope"]) for r in out["rows"]][:3] == [
+        ("DFA construction", "in"), ("Regex to NFA", "in"), ("Closure proof", "not checked")]
+    assert out["drill"] == ["DFA construction", "Regex to NFA", "Closure proof"]
+
+
+def test_triage_out_of_scope_types_come_after_skipped_mastered_ones_and_stay_skipped_in_standard():
+    types = [qtype("Out", 50, status="mastered"), qtype("M", 40, status="mastered"), qtype("A", 5)]
+    scope = {"in": ["A", "M"], "out": ["Out"]}
+    assert rows(ok("triage", {"types": types, "scope": scope})) == [
+        ("A", "drill", "not studied yet"), ("M", "skip", "mastered"), ("Out", "skip", "not on this exam")]
+    standard = ok("triage", {"class": "Standard", "types": types, "scope": scope})
+    assert rows(standard) == [("M", "drill", "mastered: revision"), ("A", "drill", "not studied yet"),
+                              ("Out", "skip", "not on this exam")]
+
+
+def test_triage_nothing_to_drill_when_every_type_is_mastered_or_out_of_scope():
+    out = ok("triage", {"types": [qtype("A", status="mastered"), qtype("B")], "scope": {"out": ["B"]}})
+    assert out["drill"] == []
+    assert out["line"] == "Nothing to drill: every question type is mastered or not on this exam."
+
+
+def test_triage_without_a_scope_is_unchanged():
+    plain = ok("triage", {"types": CMPE471_TYPES})
+    assert ok("triage", {"types": CMPE471_TYPES, "scope": None}) == plain
+    assert [r["scope"] for r in plain["rows"]] == [None] * 5
+    # 20 x 3/4 = 15, 15 x 4/4 = 15, 15 x 3/4 = 11.25, 10 x 4/4 = 10, 10 x 2/4 = 5
+    assert plain["drill"] == ["Pumping lemma proof", "DFA construction", "PDA construction", "Regex to NFA",
+                              "CNF conversion"]
 
 
 TRIAGE = {"now": NOW, "exam": None}
@@ -492,6 +549,11 @@ TRIAGE = {"now": NOW, "exam": None}
     ({**TRIAGE}, "types is required"),
     ({**TRIAGE, "types": [], "basis": "slides"}, "basis must be one of"),
     ({**TRIAGE, "types": [], "class": "standard"}, "class must be one of"),
+    ({**TRIAGE, "types": [], "scope": ["A"]}, "scope must be an object"),
+    ({**TRIAGE, "types": [], "scope": {"in": "A"}}, "scope.in must be a list of non-empty strings"),
+    ({**TRIAGE, "types": [], "scope": {"out": [" "]}}, "scope.out must be a list of non-empty strings"),
+    ({**TRIAGE, "types": [], "scope": {"in": ["A"], "out": [" a "]}}, "both in and out"),
+    ({**TRIAGE, "types": [], "scope": {"in": [], "words": "x"}}, "scope has unknown field words"),
 ])
 def test_triage_invalid_input_exits_2(payload, message):
     proc = run("triage", payload)
