@@ -189,11 +189,12 @@ start -- pick the course, the exam and the class for a new session.
     ``code`` dated after P and before today (a later passed exam supersedes;
     debriefs never stack), else P (named by the pending value, else by a row
     dated P); ``deferred`` = the class (as decided above) is Urgent, ``due`` = not deferred.
-    ``preference_session``: true when the class is Standard and the exam date
-    alone would not make it Urgent (``reason`` calm or unknown), so the
-    session may give teaching-preference evidence and run a probe; false for
-    Urgent and for Standard within 48 hours of the exam (a date-only exam
-    today or tomorrow counts as within 48 hours).
+    ``preference_session``: true when the class is Standard and no upcoming
+    ``## Exam dates`` row of any course is within NEAR_EXAM_HOURS hours of
+    ``now``, so the session may give teaching-settings evidence and run a
+    probe trial; false for Urgent and for Standard near any exam. A date-only
+    exam counts as near when its day is at most NEAR_EXAM_HOURS // 24 days
+    after today (some moment of that day is within 48 hours).
     A workspace with no course folder gives
     ``course`` null, every course field null, and the line "No course yet:
     run mimir-setup, then mimir-ingest."
@@ -1097,9 +1098,27 @@ def _class(now: str, exam: dict, choice: str | None, lasting: bool, save: str) -
             "line": f"{saved} delivery: you asked, until your {exam['exam_name'] or 'exam'}; {tail}"}
 
 
-def _preference_session(klass: dict) -> bool:
-    """Standard, and not within 48 hours of the exam (the exam date alone would not make it Urgent)."""
-    return klass["class"] == "Standard" and klass["reason"] in ("calm", "unknown")
+NEAR_EXAM_HOURS = 48  # Standard sessions this close to any exam give no preference evidence and run no probe
+
+
+def _near_exam(profile: str, now: datetime) -> bool:
+    """True when any course's upcoming exam is within NEAR_EXAM_HOURS of ``now``. A date-only exam
+    counts when its day is at most NEAR_EXAM_HOURS // 24 days after today: some moment of it is."""
+    for _, _, when in _section_rows(profile, _EXAM_TABLE):
+        value = exam_value(when, now.tzinfo)
+        if not isinstance(value, date):  # unknown or unreadable
+            continue
+        if plan.is_date_only(value):
+            if 0 <= (value - now.date()).days <= NEAR_EXAM_HOURS // 24:
+                return True
+        elif timedelta(0) < value - now <= timedelta(hours=NEAR_EXAM_HOURS):
+            return True
+    return False
+
+
+def _preference_session(klass: dict, profile: str, now: datetime) -> bool:
+    """Standard, and not within 48 hours of any exam in the profile."""
+    return klass["class"] == "Standard" and not _near_exam(profile, now)
 
 
 def _start(data: dict, choice: str | None = None,
@@ -1148,7 +1167,7 @@ def _start(data: dict, choice: str | None = None,
             "class": klass, "topic": topic, "route_line": route_line,
             "first_contact": _first_contact(course_dir), "scope": scope,
             "gauge": _gauge(course_dir, rows, scope),
-            "debrief": debrief, "preference_session": _preference_session(klass), "line": klass["line"]}, window
+            "debrief": debrief, "preference_session": _preference_session(klass, profile, now), "line": klass["line"]}, window
 
 
 def _scope_names(data: dict, side: str) -> list[str]:

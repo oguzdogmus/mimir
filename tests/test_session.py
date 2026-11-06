@@ -2083,7 +2083,23 @@ def test_start_says_whether_the_session_may_give_preference_evidence(home, root,
     assert ok(home, "start", payload)["preference_session"] is expected
 
 
-DAY1 = "2026-10-17T09:00:00+03:00"
+@pytest.mark.parametrize("exams,expected", [
+    ([("CS201", "final", "2026-11-04")], False),                 # date-only, 2 days on: part of that day is within 48 h
+    ([("CS201", "final", "2026-11-05")], True),                  # date-only, 3 days on: none of it is
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-03")], False),  # another course's exam counts
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-04T20:00:00+02:00")], False),  # 47 hours away
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-04T22:00:00+02:00")], True),   # 49 hours away
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-02T20:00:00+02:00")], True),   # already over
+])
+def test_no_preference_session_within_48_hours_of_any_exam(home, root, exams, expected):
+    course(home, mastery=TWO_LEFT)
+    course(home, "MA101 Calculus", mastery=TWO_LEFT)
+    profile(root, exams=exams)
+    out = ok(home, "start", {"now": "2026-11-02T21:00:00+02:00", "course": "CS201 Theory", "choice": "Standard"})
+    assert out["class"]["class"] == "Standard" and out["preference_session"] is expected
+
+
+DAY1 ="2026-10-17T09:00:00+03:00"
 DAY1_EVENING = "2026-10-17T19:00:00+03:00"
 DAY2 = "2026-10-18T09:00:00+03:00"
 DAY3 = "2026-10-19T09:00:00+03:00"
