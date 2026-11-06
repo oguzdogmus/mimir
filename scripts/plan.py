@@ -30,6 +30,8 @@ types          triage only, required (use [] for none): list of {"name": str,
 basis          triage only: "papers" (default) or "outline".
 class          triage only: "Urgent" (default) or "Standard" -- the session's
                delivery class.
+scope          triage only: the exam scope ``session.py start`` reports,
+               {"in": [names], "out": [names]}, or null/missing (no scope).
 
 Date rules
 ----------
@@ -92,11 +94,12 @@ triage -- question-type triage: every type in one ranked table, none cut.
             {"name": "Regex", "marks": 5, "seen": 2, "papers": 2, "status": "mastered"}]}
     out: {"rows": [
             {"name": "Pumping lemma proof", "marks": 20, "marks_source": "printed",
-             "frequency": "2 of 2 papers", "decision": "drill", "reason": "gap"},
+             "frequency": "2 of 2 papers", "decision": "drill", "reason": "gap", "scope": null},
             {"name": "DFA construction", "marks": 12.5, "marks_source": "estimated",
-             "frequency": "1 of 2 papers", "decision": "drill", "reason": "not studied yet"},
+             "frequency": "1 of 2 papers", "decision": "drill", "reason": "not studied yet",
+             "scope": null},
             {"name": "Regex", "marks": 5, "marks_source": "printed",
-             "frequency": "2 of 2 papers", "decision": "skip", "reason": "mastered"}],
+             "frequency": "2 of 2 papers", "decision": "skip", "reason": "mastered", "scope": null}],
           "drill": ["Pumping lemma proof", "DFA construction"], "basis": "papers",
           "line": "Ranked by marks × how often each type appeared in past papers."}
     One row per type. ``marks`` null is estimated as the mean of the known
@@ -108,9 +111,14 @@ triage -- question-type triage: every type in one ranked table, none cut.
     ``class`` Urgent (default), ``mastered`` types, which are skipped with
     reason "mastered" and listed after every drilled type. For Standard they
     are drilled with reason "mastered: revision". Other reasons are the status:
-    "not studied yet" (unseen), "gap", "shaky". ``drill`` is the drilled names
-    in rank order. ``line`` states the ranking basis, or "Nothing to drill:
-    ..." when no type is drilled; ``basis`` "outline" gives "No past papers:
+    "not studied yet" (unseen), "gap", "shaky". With a ``scope``, a type whose
+    name is in ``out`` (ignoring case and repeated spaces) is skipped in both
+    classes with reason "not on this exam" and listed after every other row;
+    each row's ``scope`` is "in", "out", or "not checked" (in neither list:
+    ranked normally). Without a scope, ``scope`` is null on every row and
+    nothing changes. A name in both lists exits 2. ``drill`` is the drilled
+    names in rank order. ``line`` states the ranking basis, or "Nothing to drill:
+    ..." when no type is drilled (naming "not on this exam" when a type is out); ``basis`` "outline" gives "No past papers:
     ranked from the course outline, without paper statistics." Type names must
     be unique (ignoring case and repeated spaces).
 
@@ -503,6 +511,33 @@ def parse_types(data: dict) -> list[dict]:
 
 
 _STATUS_REASONS = {"unseen": "not studied yet", "gap": "gap", "shaky": "shaky", "mastered": "mastered: revision"}
+OUT_OF_SCOPE = "not on this exam"
+
+
+def _name_key(name: str) -> str:
+    return " ".join(name.split()).casefold()
+
+
+def parse_scope(data: dict) -> tuple[set[str], set[str]] | None:
+    """The exam scope as (in, out) name keys, or None when no scope is recorded."""
+    scope = data.get("scope")
+    if scope is None:
+        return None
+    if not isinstance(scope, dict):
+        raise InputError("scope must be an object with in and out lists, or null")
+    unknown = set(scope) - {"in", "out"}
+    if unknown:
+        raise InputError(f"scope has unknown field {sorted(unknown)[0]}")
+    sides = []
+    for side in ("in", "out"):
+        names = scope.get(side)
+        names = [] if names is None else names
+        if not isinstance(names, list) or not all(isinstance(n, str) and n.strip() for n in names):
+            raise InputError(f"scope.{side} must be a list of non-empty strings")
+        sides.append({_name_key(n) for n in names})
+    if sides[0] & sides[1]:
+        raise InputError("scope names a type both in and out")
+    return sides[0], sides[1]
 
 
 def triage(data: dict) -> dict:
@@ -516,6 +551,8 @@ def triage(data: dict) -> dict:
     if klass not in TRIAGE_CLASSES:
         raise InputError(f"class must be one of {', '.join(TRIAGE_CLASSES)}")
 
+    scope = parse_scope(data)
+
     known = [t["marks"] for t in types if t["marks"] is not None]
     fill = sum(known, Fraction(0)) / len(known) if known else Fraction(1)
     rows = []
@@ -524,27 +561,35 @@ def triage(data: dict) -> dict:
         marks = t["marks"] if printed else fill
         frequency = Fraction(t["seen"], t["papers"]) if t["papers"] else Fraction(1)
         # Urgent spends the time left on gaps; Standard practice revises mastered types too.
-        skip = klass == "Urgent" and t["status"] == "mastered"
+        # A type outside the exam scope is never drilled, in either class.
+        mark = None if scope is None else ("in" if _name_key(t["name"]) in scope[0] else
+                                           "out" if _name_key(t["name"]) in scope[1] else "not checked")
+        skip = mark == "out" or (klass == "Urgent" and t["status"] == "mastered")
+        reason = OUT_OF_SCOPE if mark == "out" else "mastered" if skip else _STATUS_REASONS[t["status"]]
         rows.append({
             "score": marks * frequency,
             "skip": skip,
+            "out": mark == "out",
             "row": {
                 "name": t["name"],
                 "marks": num(marks),
                 "marks_source": "printed" if printed else "estimated",
                 "frequency": f"{t['seen']} of {count(t['papers'], 'paper')}" if t["papers"] else None,
                 "decision": "skip" if skip else "drill",
-                "reason": "mastered" if skip else _STATUS_REASONS[t["status"]],
+                "reason": reason,
+                "scope": mark,
             },
         })
     # Every type is listed: drilled types by score, highest first (ties in input
-    # order), then the skipped mastered ones in the same order. Nothing is cut.
-    rows.sort(key=lambda r: (r["skip"], -r["score"]))
+    # order), then the skipped mastered ones, then the types not on this exam, each
+    # group in the same order. Nothing is cut.
+    rows.sort(key=lambda r: (r["out"], r["skip"], -r["score"]))
     drill = [r["row"]["name"] for r in rows if not r["skip"]]
     if not types:
         line = "Nothing to drill: no question types."
     elif not drill:
-        line = "Nothing to drill: every question type is mastered."
+        line = "Nothing to drill: every question type is mastered" + (
+            " or not on this exam." if any(r["out"] for r in rows) else ".")
     elif basis == "outline":
         line = "No past papers: ranked from the course outline, without paper statistics."
     else:

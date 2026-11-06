@@ -109,15 +109,18 @@ def test_calm(home, root):
     assert out["line"] == out["class"]["line"] == "Standard delivery: exam in 19 days"
     assert out["topic"] == {"name": "Sorting", "status": "unseen", "evidence_date": None, "stale": False,
                             "attempt_first": False}
-    assert out["remaining"] == [{"name": "Graphs", "status": "gap"}, {"name": "Sorting", "status": "unseen"}]
+    assert out["remaining"] == [{"name": "Graphs", "status": "gap", "scope": None},
+                                {"name": "Sorting", "status": "unseen", "scope": None}]
     assert set(out["class"]) == {"class", "reason", "hours_to_exam", "days_to_exam", "line", "decided_by"}
     assert (out["exam"], out["exam_name"], out["q0"], out["code"]) == ("2026-11-05", "final", False, "CS201")
     assert out["inferred"] is True and out["first_contact"] is None
     assert (out["exam_problems"], out["ask_exam_time"], out["ask_exam_ahead"]) == ([], False, False)
     assert out["exam_date"] == "2026-11-05"
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
-                        "exam_date", "exam_name", "q0", "exam_problems", "ask_exam_time", "ask_exam_ahead", "remaining",
-                        "class", "topic", "route_line", "first_contact", "gauge", "debrief", "line"}
+                        "exam_date", "exam_name", "q0", "exam_problems", "ask_exam_time", "ask_exam_ahead",
+                        "ask_exam_scope", "remaining",
+                        "class", "topic", "route_line", "first_contact", "scope", "gauge", "debrief", "line"}
+    assert out["scope"] is None and out["ask_exam_scope"] is False
 
 
 def test_near_exam_is_urgent_floor(home, root):
@@ -378,8 +381,10 @@ def test_route_from_index_without_outline(home, root):
     cdir = course(home)
     index(cdir, SLIDES, SLIDE_TOPICS)
     out = ok(home, "start", {"now": NOW})
-    assert out["remaining"] == [{"name": "Heaps", "status": "unseen"}, {"name": "Graphs", "status": "unseen"},
-                                {"name": "Sorting | merge", "status": "unseen"}]  # ingestion order, no duplicate
+    # ingestion order, no duplicate
+    assert out["remaining"] == [{"name": "Heaps", "status": "unseen", "scope": None},
+                                {"name": "Graphs", "status": "unseen", "scope": None},
+                                {"name": "Sorting | merge", "status": "unseen", "scope": None}]
     assert out["topic"]["name"] == "Heaps" and out["route_line"] is None
     assert ok(home, "start", {"now": NOW})["remaining"] == out["remaining"]  # repeat start: same route
 
@@ -389,7 +394,7 @@ def test_route_from_past_papers_keeps_studied_rows(home, root):
     index(cdir, [("past-papers/2024.pdf", "past-papers")],
           [("Heaps", "past-papers/2024.pdf#page=1"), ("graphs", "past-papers/2024.pdf#page=2")])
     out = ok(home, "start", {"now": NOW})
-    assert out["remaining"] == [{"name": "Heaps", "status": "unseen"}]  # Graphs mastered, not duplicated
+    assert out["remaining"] == [{"name": "Heaps", "status": "unseen", "scope": None}]  # Graphs mastered, not duplicated
     assert out["topic"]["name"] == "Heaps"
     progress = ok(home, "progress", {"now": NOW})
     assert [t["name"] for t in progress["topics"]] == ["Graphs", "Heaps"]
@@ -399,7 +404,7 @@ def test_route_outline_is_kept(home, root):
     cdir = course(home, mastery=[("Graphs", "unseen", "", 0, 0)])
     index(cdir, [("outline/syllabus.pdf", "outline")] + SLIDES, SLIDE_TOPICS)
     out = ok(home, "start", {"now": NOW})
-    assert out["remaining"] == [{"name": "Graphs", "status": "unseen"}]
+    assert out["remaining"] == [{"name": "Graphs", "status": "unseen", "scope": None}]
 
 
 def test_route_all_mastered_fresh_is_complete(home, root):
@@ -1751,6 +1756,200 @@ def test_a_chosen_urgent_session_defers_a_due_debrief(home, root):
     assert ok(home, "start", {"now": NOW})["debrief"]["due"] is True
     out = ok(home, "start", {"now": NOW, "choice": "Urgent"})
     assert (out["debrief"]["due"], out["debrief"]["deferred"]) == (False, True)
+
+
+# --- Exam scope (#45) -----------------------------------------------------------------
+
+MIDTERM = ("CS201", "midterm", "2026-11-05")
+FINAL = ("CS201", "final", "2026-12-20 10:00")
+WORDS = "the midterm covers sessions 1-19"
+
+
+def save_scope(home, *, exam_name="midterm", exam_date="2026-11-05", words=WORDS, now=NOW, **lists) -> dict:
+    return ok(home, "scope", {"now": now, "term": TERM, "course": "CS201 Theory", "exam_name": exam_name,
+                              "exam_date": exam_date, "words": words, **lists})
+
+
+def test_scope_is_saved_with_the_exam_and_start_reports_it_in_later_sessions(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM, FINAL])
+    out = save_scope(home, **{"in": ["Graphs", "Heaps"], "out": ["Sorting"]})
+    assert out["line"] == "Scope of your midterm on 2026-11-05 saved: 2 in, 1 out."
+    assert out["changed"] is True
+    assert out["scope"] == {"words": WORDS, "in": ["Graphs", "Heaps"], "out": ["Sorting"], "unsure": []}
+    for now in (NOW, "2026-10-25T18:00:00+03:00"):  # survives across sessions, used unchanged
+        start = ok(home, "start", {"now": now})
+        assert start["exam_name"] == "midterm"
+        assert start["scope"] == {"words": WORDS, "in": ["Graphs", "Heaps"], "out": ["Sorting"], "unsure": [],
+                                  "new": []}
+
+
+ROUTE4 = [("Sorting", "gap", "2026-10-10", 1, 0), ("Heaps", "unseen", "", 0, 0),
+          ("Graphs", "shaky", "2026-10-10", 1, 0), ("Tries", "unseen", "", 0, 0)]
+
+
+def test_standard_route_puts_out_of_scope_topics_last_marked_and_removes_none(home, root):
+    # save.md points at an out-of-scope topic: the first in-scope topic is picked instead.
+    course(home, mastery=ROUTE4, save={"next_topic": "Sorting"})
+    profile(root, exams=[MIDTERM, FINAL])
+    save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["sorting"]})
+    out = ok(home, "start", {"now": NOW})
+    assert out["class"]["class"] == "Standard"
+    assert out["remaining"] == [{"name": "Heaps", "status": "unseen", "scope": "in"},
+                                {"name": "Graphs", "status": "shaky", "scope": "in"},
+                                {"name": "Tries", "status": "unseen", "scope": "not checked"},
+                                {"name": "Sorting", "status": "gap", "scope": "out"}]
+    assert out["topic"]["name"] == "Heaps"
+    assert out["scope"]["new"] == ["Tries"]
+
+
+def test_gauge_skips_unseen_topics_that_are_not_on_the_exam(home, root):
+    course(home, mastery=ROUTE4)
+    profile(root, exams=[MIDTERM, FINAL])
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps", "Tries"]}
+    save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["Tries"]})
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps"]}
+
+
+def test_standard_route_offers_out_of_scope_topics_once_nothing_else_is_left(home, root):
+    course(home, mastery=[("Heaps", "mastered", "2026-10-16", 0, 2), ("Sorting", "gap", "2026-10-10", 1, 0)],
+           save={"next_topic": "Sorting"})
+    profile(root, exams=[MIDTERM])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})
+    out = ok(home, "start", {"now": NOW})
+    assert out["remaining"] == [{"name": "Sorting", "status": "gap", "scope": "out"}]
+    assert out["topic"]["name"] == "Sorting"
+
+
+def test_without_a_scope_the_route_is_unchanged(home, root):
+    course(home, mastery=ROUTE4, save={"next_topic": "Sorting"})
+    profile(root, exams=[MIDTERM])
+    out = ok(home, "start", {"now": NOW})
+    assert [(r["name"], r["scope"]) for r in out["remaining"]] == [
+        ("Sorting", None), ("Heaps", None), ("Graphs", None), ("Tries", None)]
+    assert out["topic"]["name"] == "Sorting" and out["scope"] is None
+
+
+def test_scope_expires_with_its_exam_and_the_next_exams_scope_applies(home, root):
+    course(home, mastery=ROUTE4)
+    profile(root, exams=[MIDTERM, FINAL])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting", "Graphs"]})
+    after = "2026-11-06T09:00:00+02:00"  # the midterm (2026-11-05) has passed: start picks the final
+    out = ok(home, "start", {"now": after})
+    assert out["exam_name"] == "final" and out["scope"] is None
+    assert [r["scope"] for r in out["remaining"]] == [None] * 4
+    save_scope(home, exam_name="final", exam_date="2026-12-20", words="everything", now=after,
+               **{"in": ["Sorting", "Heaps", "Graphs", "Tries"]})
+    out = ok(home, "start", {"now": after})
+    assert out["scope"]["words"] == "everything" and out["scope"]["out"] == []
+    # The midterm's scope is still in scope.md, kept for its own exam.
+    assert ok(home, "start", {"now": NOW})["scope"]["words"] == WORDS
+
+
+FINGERPRINT = """# Fingerprint
+
+## Question types
+| type | frequency | marks |
+|---|---|---|
+| DFA construction (source: past-papers/mt1.pdf) | 2 of 2 papers | 15 |
+| PDA construction (source: past-papers/f1.pdf) (tentative) | 1 of 2 papers | 15 |
+| Heaps (source: past-papers/mt1.pdf) | 2 of 2 papers | 10 |
+"""
+
+
+def test_new_question_types_and_topics_found_after_confirmation_are_listed_once_as_new(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    (cdir / ".state" / "fingerprint.md").write_text(FINGERPRINT, encoding="utf-8")
+    profile(root, exams=[MIDTERM])
+    save_scope(home, **{"in": ["Heaps", "DFA construction"], "out": ["Sorting"]})
+    assert ok(home, "start", {"now": NOW})["scope"]["new"] == ["Graphs", "PDA construction"]
+    # The student answers: Graphs is on it, PDA unsure. Nothing is new any more.
+    save_scope(home, **{"in": ["Heaps", "DFA construction", "Graphs"], "out": ["Sorting"],
+                        "unsure": ["PDA construction"]})
+    scope = ok(home, "start", {"now": NOW})["scope"]
+    assert scope["new"] == [] and scope["unsure"] == ["PDA construction"]
+
+
+@pytest.mark.parametrize("cell, now, ask", [
+    ("2026-11-05", "2026-11-03T09:00:00+02:00", True),           # two days ahead
+    ("2026-11-05 12:30", "2026-11-05T08:00:00+02:00", True),     # a timed exam today
+    ("2026-11-05", "2026-11-02T09:00:00+02:00", False),          # three days ahead: not yet
+])
+def test_start_asks_for_the_scope_once_more_within_two_days(home, root, cell, now, ask):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "midterm", cell)])
+    assert ok(home, "start", {"now": now})["ask_exam_scope"] is ask
+
+
+def test_a_saved_scope_or_dont_know_stops_the_two_day_scope_question(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM])
+    near = "2026-11-04T09:00:00+02:00"
+    assert ok(home, "start", {"now": near})["ask_exam_scope"] is True
+    out = save_scope(home, words="don't know", now=near)  # no lists: scope unknown, asked
+    assert out["line"] == "Scope of your midterm on 2026-11-05: unknown, saved so it is not asked again."
+    after = ok(home, "start", {"now": near})
+    assert after["ask_exam_scope"] is False and after["scope"] is None  # unknown scope: nothing marked
+    assert [r["scope"] for r in after["remaining"]] == [None, None]
+
+
+def test_no_exam_never_asks_for_a_scope(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root)
+    out = ok(home, "start", {"now": NOW})
+    assert out["ask_exam_scope"] is False and out["scope"] is None
+
+
+def test_saving_the_same_scope_again_changes_nothing_and_another_exam_keeps_its_own(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM, FINAL])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})
+    save_scope(home, exam_name="Final", exam_date="2026-12-20", words="all of it", **{"in": ["Heaps", "Sorting"]})
+    path = cdir / ".state" / "scope.md"
+    before = snapshot(cdir / ".state")
+    again = save_scope(home, **{"in": [" Heaps "], "out": ["Sorting", "sorting"]})  # same lists, normalised
+    assert again["changed"] is False and snapshot(cdir / ".state") == before
+    assert again["scope"] == {"words": WORDS, "in": ["Heaps"], "out": ["Sorting"], "unsure": []}
+    edited = save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["Sorting"]})  # the student edits the list
+    assert edited["changed"] is True
+    text = path.read_text(encoding="utf-8")
+    assert text.count("## ") == 2 and "- in: Graphs" in text and "words: all of it" in text
+
+
+SCOPE_BASE = {"now": NOW, "term": TERM, "course": "CS201 Theory", "exam_name": "midterm", "exam_date": "2026-11-05",
+              "words": WORDS, "in": ["Heaps"]}
+
+
+@pytest.mark.parametrize("change, needle", [
+    ({"exam_date": "2026-11-06"}, "no ## Exam dates row of 'CS201' named 'midterm' on 2026-11-06"),
+    ({"exam_name": "final"}, "no ## Exam dates row of 'CS201' named 'final'"),
+    ({"exam_date": "Nov 5"}, "exam_date must be a date"),
+    ({"words": " "}, "words must be the student's words"),
+    ({"words": "x" * 201}, "words must be the student's words"),
+    ({"in": "Heaps"}, "in must be a list of names"),
+    ({"out": ["a\nb"]}, "out[1] must be a one-line name"),
+    ({"out": ["HEAPS"]}, "'Heaps' is in both in and out"),
+    ({"unsure": ["heaps"]}, "'Heaps' is in both in and unsure"),
+    ({"scope": []}, "unknown field 'scope'"),
+    ({"course": "Nope 1"}, "has no course folder"),
+])
+def test_scope_rejects_bad_input_and_writes_nothing(home, root, change, needle):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM])
+    before = snapshot(cdir)
+    fails(home, "scope", {**SCOPE_BASE, **change}, needle)
+    assert snapshot(cdir) == before
+
+
+def test_scope_refuses_a_symlinked_scope_file_and_reads_it_as_empty(home, root, tmp_path):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM])
+    target = tmp_path / "elsewhere.md"
+    target.write_text("## 2026-11-05 midterm\nwords: x\n- out: Heaps\n", encoding="utf-8")
+    (cdir / ".state" / "scope.md").symlink_to(target)
+    fails(home, "scope", SCOPE_BASE, "scope.md must not be a symlink")
+    assert ok(home, "start", {"now": NOW})["scope"] is None
+    assert target.read_text(encoding="utf-8").startswith("## 2026-11-05")
 
 
 # --- setup sampler -------------------------------------------------------------------

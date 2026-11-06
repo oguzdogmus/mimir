@@ -4,13 +4,13 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``plan.py`` (same folder). Run as::
 
-    python3 session.py <now|parse-date|start|check|close|gauge|debrief|progress|record|prefs|pref-event>  < input.json
+    python3 session.py <now|parse-date|start|check|close|gauge|debrief|progress|record|prefs|pref-event|scope>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
 ``line``. Only record (mastery.md), close and gauge (a session log), pref-event
-(``.state/preferences.json``) and start with ``lasting`` (``save.md``) write,
-atomically; other commands are read-only. Only ``now``
+(``.state/preferences.json``), scope (``scope.md``) and start with ``lasting``
+(``save.md``) write, atomically; other commands are read-only. Only ``now``
 reads the clock; every other subcommand takes "now" as an input (``now``, from
 ``session.py now``), so the same input and files always give the same output.
 
@@ -43,6 +43,13 @@ Files read (all inside the learning root, see ``workspace.py``)
   count that is not a whole number counts as 0; an ``evidence_date`` or
   ``last_check`` that is not a valid date is reported as null; ``evidence``
   and ``frustration_override`` are the cell text, trimmed.
+* ``<course>/.state/scope.md``: exam scopes, written only by ``scope``. One
+  section per exam, ``## YYYY-MM-DD <exam name>``, then ``words: <the
+  student's words>`` and one ``- in: <name>``, ``- out: <name>`` or ``-
+  unsure: <name>`` line per question type or topic. Other lines are ignored.
+* ``<course>/.state/fingerprint.md``: the ``## Question types`` names (the
+  type cell before ``(source:``, ``(tentative)`` or ``(prior term)``), for
+  ``start``'s ``scope.new``.
 * ``<course>/INDEX.md``: the ``## Registry`` roles and ``## Topics`` names
   (``ingest.py`` rules; a non-UTF-8 one exits 2) for the route.
 * ``<course>/.state/logs/*.md`` (name order): the first ``first_contact:``
@@ -102,12 +109,14 @@ start -- pick the course, the exam and the class for a new session.
           "2026-Fall", "course": "CS201 Theory", "course_dir": "...",
           "code": "CS201", "inferred": true, "exam": "2026-11-05",
           "exam_date": "2026-11-05", "exam_name": "final", "q0": false, "exam_problems": [],
-          "ask_exam_time": false, "ask_exam_ahead": false, "remaining": [{"name": "Heaps",
-          "status": "gap"}, {"name": "Graphs", "status": "unseen"}],
+          "ask_exam_time": false, "ask_exam_ahead": false, "ask_exam_scope": false,
+          "remaining": [{"name": "Heaps", "status": "gap", "scope": null},
+          {"name": "Graphs", "status": "unseen", "scope": null}],
           "class": {<plan.py class output>},
           "topic": {"name": "Graphs", "status": "unseen", "evidence_date":
           null, "stale": false, "attempt_first": false}, "route_line": null, "first_contact":
-          "2026-10-10T20:00:00+03:00", "gauge": {"done": false, "topics": ["Graphs"]},
+          "2026-10-10T20:00:00+03:00", "scope": null,
+          "gauge": {"done": false, "topics": ["Graphs"]},
           "line": "Standard delivery: exam in 19 days"}
     (``class`` here includes "decided_by": "exam date".)
     Course: the given one (``inferred`` false); else the latest ``save.md``
@@ -126,11 +135,22 @@ start -- pick the course, the exam and the class for a new session.
     [{"exam", "date"}] in file order. ``ask_exam_time``: the exam is date-only,
     not marked ``time unknown``, and at most TIME_ASK_DAYS days ahead (ask for
     its time once more). ``ask_exam_ahead``: the exam is date-only and today
-    (ask whether it is still ahead). Route: ``mastery.md`` rows in order; when the
+    (ask whether it is still ahead). ``scope``: null when ``scope.md`` has no
+    section for the picked exam (same ``exam_date``, same name ignoring case
+    and repeated spaces) or that section lists no name (scope unknown);
+    else {"words", "in", "out", "unsure", "new"}, ``new`` being the route
+    topics and fingerprint question types in none of the three lists (found
+    after the scope was confirmed), route first. Once the exam passes,
+    ``start`` picks another exam and that exam's scope (or none) applies.
+    ``ask_exam_scope``: the exam is at most TIME_ASK_DAYS days ahead and
+    ``scope.md`` has no section for it at all (a saved "don't know" counts).
+    Route: ``mastery.md`` rows in order; when the
     ``INDEX.md`` registry has no ``outline`` row, each ``## Topics`` name not
     yet listed (ignoring case and repeated spaces) follows as an unseen row,
-    in ``INDEX.md`` order. ``remaining`` = route rows not
-    ``mastered``. ``class``: ``plan.py class`` with ``now`` and the exam only (the
+    in ``INDEX.md`` order. With a ``scope``, rows named in ``out`` move to the
+    end (order kept, none removed). ``remaining`` = route rows not
+    ``mastered``, each with ``scope``: "in", "out", "not checked" (in neither
+    list) or null (no scope). ``class``: ``plan.py class`` with ``now`` and the exam only (the
     route's size never decides) plus ``decided_by``, the rule that decided,
     first match wins:
       "session choice" -- ``choice`` without ``lasting``: that class, line
@@ -150,8 +170,8 @@ start -- pick the course, the exam and the class for a new session.
       "exam date" -- otherwise: ``plan.py class`` unchanged.
     ``reason``, ``hours_to_exam`` and ``days_to_exam`` are always the exam
     date's. ``topic``:
-    ``save.md`` ``next_topic`` when it is remaining, else the first remaining
-    topic; with none remaining, the same pick among the stale mastered topics
+    ``save.md`` ``next_topic`` when it is remaining and not ``out`` (unless
+    every candidate is), else the first remaining topic; with none remaining, the same pick among the stale mastered topics
     (stale as in ``check``: the one-question recheck); else null. Its
     ``attempt_first`` is as in ``check``. ``route_line``: null when ``topic``
     is set; else "No topics on the route yet: drop the outline, slides or
@@ -331,6 +351,29 @@ pref-event -- apply one teaching-settings event and save the state.
     A state that would not change is not rewritten, so a
     rerun leaves the file byte-identical. An unknown event, axis, or a level
     from another axis exits 2 and writes nothing.
+
+scope -- save the confirmed scope of one exam.
+    in : {"now": "...", "term": "2026-Fall", "course": "CS201 Theory",
+          "exam_name": "midterm", "exam_date": "2026-11-05", "words": "the
+          midterm covers sessions 1-19", "in": ["DFA construction"], "out":
+          ["PDA construction"], "unsure": []}
+    out: {"course_dir": "...", "exam_name": "midterm", "exam_date":
+          "2026-11-05", "scope": {"words": "...", "in": [...], "out": [...],
+          "unsure": []}, "changed": true, "line": "Scope of your midterm on
+          2026-11-05 saved: 1 in, 1 out."}
+    ``exam_name`` and ``exam_date`` are ``start``'s for that exam: the
+    ``## Exam dates`` row of the course code with that name (case and repeated
+    spaces ignored; null for an unnamed row) whose calendar day is
+    ``exam_date``. ``words``: the student's words, one line, at most
+    MAX_WORDING characters. ``in``, ``out`` and ``unsure`` (each optional,
+    default []): one-line names of at most MAX_SCOPE_NAME characters, spaces
+    collapsed, repeats dropped; a name in two lists exits 2. The section of
+    that exam is replaced whole, else appended; other exams' sections are
+    kept. All three lists empty saves "scope unknown" (``start`` then gives
+    ``scope`` null and ``ask_exam_scope`` false; line "Scope of your <name> on
+    <date>: unknown, saved so it is not asked again."). A save that would not
+    change the file is not written (``changed`` false). No such exam row, a
+    symlinked ``scope.md``, or an unknown course exits 2 and writes nothing.
 
 Exit codes: invalid input (bad field, unknown course, no workspace) exits 2
 with one line on stderr (``session.py: <message>``) naming the field, and
@@ -569,12 +612,14 @@ def _gauge_done(course_dir: Path) -> str | None:
     return None
 
 
-def _gauge(course_dir: Path, rows: list[dict]) -> dict | None:
-    """``start``'s gauge: null with no topics; else done, and the unseen topics while not done."""
+def _gauge(course_dir: Path, rows: list[dict], scope: dict | None) -> dict | None:
+    """``start``'s gauge: null with no topics; else done, and while not done the unseen topics
+    that are not out of the next exam's scope."""
     if not rows:
         return None
     done = _gauge_done(course_dir) is not None
-    return {"done": done, "topics": [] if done else [r["name"] for r in rows if r["status"] == "unseen"]}
+    return {"done": done, "topics": [] if done else [r["name"] for r in rows if r["status"] == "unseen"
+                                                     and scope_mark(scope, r["name"]) != "out"]}
 
 
 def _valid_moment(text: str) -> bool:
@@ -674,6 +719,97 @@ def _exam(profile: str, code: str, now: datetime) -> dict:
                    ask_exam_time=dated and not asked and (value - today).days <= TIME_ASK_DAYS,
                    ask_exam_ahead=dated and value == today)
     return out
+
+
+# --- Exam scope ----------------------------------------------------------------------
+
+SCOPE_FILE = "scope.md"
+SCOPE_SIDES = ("in", "out", "unsure")
+SCOPE_HEAD = ("<!-- Mimir exam scope. Changed only by session.py scope; one section per exam. -->\n"
+              "# Exam scope\n")
+MAX_SCOPE_NAME = 120
+_SCOPE_SECTION = re.compile(r"## ([0-9]{4}-[0-9]{2}-[0-9]{2})(?: (.*))?")
+_SCOPE_ENTRY = re.compile(r"- (in|out|unsure): (.+)")
+
+
+def scopes(course_dir: Path) -> list[dict]:
+    """``scope.md`` sections in file order: {"exam_date", "exam_name", "words", "in", "out", "unsure"}."""
+    out: list[dict] = []
+    for line in _memory(course_dir, SCOPE_FILE).splitlines():
+        line = line.strip()
+        head = _SCOPE_SECTION.fullmatch(line)
+        if head:
+            out.append({"exam_date": head.group(1), "exam_name": " ".join((head.group(2) or "").split()),
+                        "words": "", "in": [], "out": [], "unsure": []})
+            continue
+        if not out:
+            continue
+        entry = _SCOPE_ENTRY.fullmatch(line)
+        if entry:
+            out[-1][entry.group(1)].append(" ".join(entry.group(2).split()))
+        elif line.startswith("words:"):
+            out[-1]["words"] = line[len("words:"):].strip()
+    return out
+
+
+def _scope_for(sections: list[dict], exam_date: str | None, exam_name: str | None) -> dict | None:
+    """The first section saved for that exam (same date, same name ignoring case and spaces)."""
+    if exam_date is None:
+        return None
+    return next((s for s in sections if s["exam_date"] == exam_date
+                 and _norm(s["exam_name"]) == _norm(exam_name or "")), None)
+
+
+def _scope_text(sections: list[dict]) -> str:
+    parts = [SCOPE_HEAD]
+    for sec in sections:
+        lines = [f"## {sec['exam_date']} {sec['exam_name']}".rstrip(), f"words: {sec['words']}"]
+        lines += [f"- {side}: {name}" for side in SCOPE_SIDES for name in sec[side]]
+        parts.append("\n".join(lines) + "\n")
+    return "\n".join(parts)
+
+
+_FP_TYPES = ("Question types", ("type", "frequency", "marks"))
+_FP_MARKERS = re.compile(r"\s*(?:\(source:.*|\(tentative\).*|\(prior term\).*)$")
+
+
+def question_types(course_dir: Path) -> list[str]:
+    """``fingerprint.md`` question type names, without their source and markers."""
+    names = []
+    for cells in _section_rows(_memory(course_dir, "fingerprint.md"), _FP_TYPES):
+        name = " ".join(_FP_MARKERS.sub("", cells[0]).split())
+        if name and not name.startswith("<"):
+            names.append(name)
+    return names
+
+
+def scope_view(course_dir: Path, rows: list[dict], exam: dict, today: date) -> tuple[dict | None, bool]:
+    """``start``'s ``scope`` and ``ask_exam_scope``. ``scope``: the saved lists of the picked exam
+    plus ``new``, the route topics and question types in none of them; None when no list is saved
+    for it (scope unknown). ``ask_exam_scope``: nothing at all is saved for the exam (not even
+    "don't know") and it is at most TIME_ASK_DAYS days ahead."""
+    saved = _scope_for(scopes(course_dir), exam["exam_date"], exam["exam_name"])
+    ask = (saved is None and exam["exam_date"] is not None
+           and (date.fromisoformat(exam["exam_date"]) - today).days <= TIME_ASK_DAYS)
+    if saved is None or not any(saved[side] for side in SCOPE_SIDES):
+        return None, ask
+    known = {_norm(n) for side in SCOPE_SIDES for n in saved[side]}
+    new: list[str] = []
+    for name in [r["name"] for r in rows] + question_types(course_dir):
+        if _norm(name) not in known:
+            known.add(_norm(name))
+            new.append(name)
+    return {"words": saved["words"], **{side: saved[side] for side in SCOPE_SIDES}, "new": new}, False
+
+
+def scope_mark(scope: dict | None, name: str) -> str | None:
+    """A route topic's mark: "in", "out" or "not checked"; None without a scope."""
+    if scope is None:
+        return None
+    for side in ("in", "out"):
+        if _norm(name) in {_norm(n) for n in scope[side]}:
+            return side
+    return "not checked"
 
 
 # --- Debrief ------------------------------------------------------------------------
@@ -919,13 +1055,17 @@ def _start(data: dict, choice: str | None = None,
     if chosen is None:
         return {"root": str(root), "courses": courses, "term": None, "course": None, "course_dir": None,
                 "code": None, "inferred": None, "exam": None, "exam_date": None, "exam_name": None, "q0": None,
-                "exam_problems": None, "ask_exam_time": None, "ask_exam_ahead": None,
+                "exam_problems": None, "ask_exam_time": None, "ask_exam_ahead": None, "ask_exam_scope": None,
                 "remaining": [], "class": None, "topic": None, "route_line": None,
-                "first_contact": None, "gauge": None, "debrief": None, "line": NO_COURSE_LINE}, None
+                "first_contact": None, "scope": None, "gauge": None, "debrief": None,
+                "line": NO_COURSE_LINE}, None
     code = chosen["course"].split()[0]
     today = now.date()
     exam = _exam(profile, code, now)
     rows = route(course_dir)
+    scope, ask_scope = scope_view(course_dir, rows, exam, today)
+    # The next exam's scope orders the route: topics not on it go last; none is removed.
+    rows = sorted(rows, key=lambda r: scope_mark(scope, r["name"]) == "out")
     remaining = [r for r in rows if r["status"] != "mastered"]
     save = _memory(course_dir, "save.md")
     if lasting:
@@ -936,8 +1076,10 @@ def _start(data: dict, choice: str | None = None,
     next_topic = _norm(_key(save, "next_topic"))
     # Nothing unmastered left: a stale mastered topic gets the one-question recheck.
     candidates = remaining or [r for r in rows if topic_state(r, r["name"], today)["stale"]]
-    pick = next((r for r in candidates if next_topic and _norm(r["name"]) == next_topic),
-                candidates[0] if candidates else None)
+    first = candidates[0] if candidates else None
+    pick = next((r for r in candidates if next_topic and _norm(r["name"]) == next_topic
+                 and (scope_mark(scope, r["name"]) != "out" or scope_mark(scope, first["name"]) == "out")),
+                first)
     debrief, window = debrief_state(profile, save, code, now, klass["class"])
     topic = None
     if pick is not None:
@@ -946,10 +1088,85 @@ def _start(data: dict, choice: str | None = None,
     route_line = None if pick is not None else ROUTE_DONE_LINE if rows else NO_ROUTE_LINE
     return {"root": str(root), "courses": courses, "term": chosen["term"], "course": chosen["course"],
             "course_dir": str(course_dir), "code": code, "inferred": inferred, **exam,
-            "remaining": [{"name": r["name"], "status": r["status"]} for r in remaining],
+            "ask_exam_scope": ask_scope,
+            "remaining": [{"name": r["name"], "status": r["status"], "scope": scope_mark(scope, r["name"])}
+                          for r in remaining],
             "class": klass, "topic": topic, "route_line": route_line,
-            "first_contact": _first_contact(course_dir), "gauge": _gauge(course_dir, rows),
+            "first_contact": _first_contact(course_dir), "scope": scope,
+            "gauge": _gauge(course_dir, rows, scope),
             "debrief": debrief, "line": klass["line"]}, window
+
+
+def _scope_names(data: dict, side: str) -> list[str]:
+    names = data.get(side, [])
+    if not isinstance(names, list):
+        raise InputError(f"{side} must be a list of names")
+    out: list[str] = []
+    for n, name in enumerate(names, 1):
+        if not isinstance(name, str) or not name.strip() or _has_control(name) or len(name) > MAX_SCOPE_NAME:
+            raise InputError(f"{side}[{n}] must be a one-line name of at most {MAX_SCOPE_NAME} characters")
+        name = " ".join(name.split())
+        if _norm(name) not in {_norm(o) for o in out}:
+            out.append(name)
+    return out
+
+
+def cmd_scope(data: dict) -> dict:
+    """Save the confirmed scope of one exam in the course's ``scope.md``."""
+    _check_keys(data, {"now", "term", "course", "exam_name", "exam_date", "words", *SCOPE_SIDES})
+    now = _moment(data, "now")
+    term, course = parse_term(data), parse_segment(data, "course")
+    exam_date = data.get("exam_date")
+    if not isinstance(exam_date, str) or _valid_date(exam_date) is None:
+        raise InputError("exam_date must be a date YYYY-MM-DD (start's exam_date)")
+    exam_name = data.get("exam_name")
+    if exam_name is not None and (not isinstance(exam_name, str) or _has_control(exam_name)):
+        raise InputError("exam_name must be a one-line exam name or null (start's exam_name)")
+    exam_name = " ".join((exam_name or "").split())
+    words = data.get("words")
+    if not isinstance(words, str) or not words.strip() or _has_control(words) or len(words) > MAX_WORDING:
+        raise InputError(f"words must be the student's words, one line of at most {MAX_WORDING} characters")
+    lists = {side: _scope_names(data, side) for side in SCOPE_SIDES}
+    for a, b in (("in", "out"), ("in", "unsure"), ("out", "unsure")):
+        both = {_norm(n) for n in lists[a]} & {_norm(n) for n in lists[b]}
+        if both:
+            name = next(n for n in lists[a] if _norm(n) in both)
+            raise InputError(f"{_short(name)} is in both {a} and {b}")
+    root = ingest._workspace_root()
+    course_dir = workspace.course_folder(root, term, course)
+    if not (course_dir / "INDEX.md").is_file():
+        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
+    code = course.split()[0]
+    profile = _text(root / ".state" / "profile.md")
+    if not any(c.strip().casefold() == code.casefold() and _norm(e) == _norm(exam_name)
+               and isinstance(v := exam_value(w, now.tzinfo), (date, datetime))
+               and _exam_day(v, now.tzinfo).isoformat() == exam_date
+               for c, e, w in _section_rows(profile, _EXAM_TABLE)):
+        raise InputError(f"no ## Exam dates row of {_short(code)} named {_short(exam_name or '(none)')} "
+                         f"on {exam_date} in profile.md")
+    path = course_dir / ".state" / SCOPE_FILE
+    if path.is_symlink():
+        raise InputError(f"{SCOPE_FILE} must not be a symlink")
+    sections = scopes(course_dir)
+    entry = {"exam_date": exam_date, "exam_name": exam_name, "words": " ".join(words.split()), **lists}
+    old = _scope_for(sections, exam_date, exam_name)
+    if old is None:
+        sections.append(entry)
+    else:
+        sections[sections.index(old)] = entry
+    text = _scope_text(sections)
+    changed = _text(path) != text
+    if changed:
+        ingest._write_atomic(path, text)
+    label = f"your {exam_name or 'exam'} on {exam_date}"
+    if any(lists.values()):
+        counts = f"{len(lists['in'])} in, {len(lists['out'])} out"
+        counts += f", {len(lists['unsure'])} unsure" if lists["unsure"] else ""
+        line = f"Scope of {label} saved: {counts}."
+    else:
+        line = f"Scope of {label}: unknown, saved so it is not asked again."
+    return {"course_dir": str(course_dir), "exam_name": exam_name or None, "exam_date": exam_date,
+            "scope": {"words": entry["words"], **lists}, "changed": changed, "line": line}
 
 
 def cmd_debrief(data: dict) -> dict:
@@ -1507,14 +1724,16 @@ COMMANDS = {
     "gauge": (cmd_gauge, "set the course's knowledge-gauge-done marker in the session log, once"),
     "debrief": (cmd_debrief, "post-exam debrief state, cram bill, verifier disagreements and next-course flag"),
     "progress": (cmd_progress, "every mastery row with its evidence, counts and staleness, as a table"),
+    "scope": (cmd_scope, "save the confirmed scope of one exam: question types and topics in and out"),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
                              ("Mimir session runner. Subcommands: now, parse-date, start, check, close, gauge, debrief, "
-                              "progress, record, prefs, pref-event. Reads one JSON object on stdin and prints one JSON "
-                              "object on stdout. Only record, close, gauge, pref-event and start with lasting write."),
+                              "progress, record, prefs, pref-event, scope. Reads one JSON object on stdin and prints one "
+                              "JSON object on stdout. Only record, close, gauge, pref-event, scope and start with lasting "
+                              "write."),
                              COMMANDS, argv)
 
 
