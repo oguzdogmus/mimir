@@ -110,7 +110,7 @@ def test_calm(home, root):
     assert out["topic"] == {"name": "Sorting", "status": "unseen", "evidence_date": None, "stale": False,
                             "attempt_first": False}
     assert out["remaining"] == [{"name": "Graphs", "status": "gap"}, {"name": "Sorting", "status": "unseen"}]
-    assert set(out["class"]) == {"class", "reason", "hours_to_exam", "days_to_exam", "line"}
+    assert set(out["class"]) == {"class", "reason", "hours_to_exam", "days_to_exam", "line", "decided_by"}
     assert (out["exam"], out["exam_name"], out["q0"], out["code"]) == ("2026-11-05", "final", False, "CS201")
     assert out["inferred"] is True and out["first_contact"] is None
     assert (out["exam_problems"], out["ask_exam_time"], out["ask_exam_ahead"]) == ([], False, False)
@@ -1500,6 +1500,10 @@ def test_explicit_request_moves_any_distance_and_keeps_latest_wording(home, root
     ({"event": "explicit", "axis": "depth", "level": "why", "wording": "w" * 201}, "wording"),
     ({"event": "explicit", "axis": "depth", "level": "why", "wording": "x", "course": "CS201"}, "course"),
     ({"event": "legacy-import", "axis": "depth"}, "axis"),
+    ({"event": "sampler", "axis": "depth", "level": "try-first"}, "level for depth"),
+    ({"event": "sampler", "axis": "pace", "level": "why"}, "axis must be"),
+    ({"event": "sampler", "axis": "depth", "level": "why", "wording": "x"}, "wording"),
+    ({"event": "sampler-skip", "axis": "depth"}, "axis"),
     ({"event": "frustrated"}, "event must be"),
     ({}, "event must be"),
 ])
@@ -1516,6 +1520,7 @@ def test_prefs_reads_nothing_extra(home, root):
 
 
 @pytest.mark.parametrize("content", ["not json", '{"version": 1}', '{"version": 2, "axes": {}}',
+                                     json.dumps({"version": 1, "axes": DEFAULT_AXES, "sampler_skipped": False}),
                                      json.dumps({"version": 1, "axes": {**{a: dict(v) for a, v in
                                                  DEFAULT_AXES.items()}, "depth": {"level": "deep",
                                                  "provenance": "default", "wording": None}}}),
@@ -1624,3 +1629,237 @@ def test_gauge_answers_record_unassisted_and_leave_teaching_settings_alone(home,
     assert ok(home, "prefs", {})["saved"] is False
     sorting = next(t for t in ok(home, "progress", {"now": NOW})["topics"] if t["name"] == "Sorting")
     assert (sorting["status"], sorting["unassisted"], sorting["assisted"]) == ("shaky", 1, 0)
+
+
+# --- start: the student's delivery choice (issue #36) ------------------------------
+
+def test_default_class_is_decided_by_the_exam_date(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Urgent", "exam date")
+    assert out["line"] == "Urgent delivery: exam in 30 hours"
+
+
+@pytest.mark.parametrize("cell,choice,line", [
+    ("2026-10-19T00:00:00+03:00", "Standard", "Standard delivery: you asked; exam in 30 hours"),
+    ("2026-11-05", "Urgent", "Urgent delivery: you asked; exam in 19 days"),
+])
+def test_session_choice_overrides_the_exam_date_both_ways(home, root, cell, choice, line):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", cell)])
+    before = snapshot(root)
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00", "choice": choice})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == (choice, "session choice")
+    assert out["line"] == out["class"]["line"] == line
+    assert snapshot(root) == before  # a session choice is not saved
+    later = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00"})  # reassessed next session
+    assert later["class"]["decided_by"] == "exam date" and later["class"]["class"] != choice
+
+
+def test_lasting_choice_is_saved_for_the_exam_and_used_next_session(home, root):
+    cdir = course(home, mastery=TWO_LEFT, save={"next_topic": "Sorting"})
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
+    now = "2026-10-17T18:00:00+03:00"
+    out = ok(home, "start", {"now": now, "choice": "Standard", "lasting": True})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Standard", "lasting choice")
+    assert out["line"] == "Standard delivery: you asked, until your final; exam in 30 hours"
+    save = (cdir / ".state" / "save.md").read_text(encoding="utf-8")
+    assert "delivery_choice: Standard 2026-10-19 final\n" in save and "next_topic: Sorting\n" in save
+    later = ok(home, "start", {"now": "2026-10-18T09:00:00+03:00"})
+    assert (later["class"]["class"], later["class"]["decided_by"]) == ("Standard", "lasting choice")
+    assert later["line"] == "Standard delivery: you asked, until your final; exam in 15 hours"
+    again = ok(home, "start", {"now": now, "choice": "Standard", "lasting": True})  # a rerun changes nothing
+    assert (cdir / ".state" / "save.md").read_text(encoding="utf-8") == save and again["line"] == out["line"]
+
+
+def test_session_choice_beats_a_lasting_choice_for_one_session(home, root):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": "Standard 2026-10-19 final"})
+    profile(root, exams=[("CS201", "final", "2026-10-19T00:00:00+03:00")])
+    out = ok(home, "start", {"now": "2026-10-17T18:00:00+03:00", "choice": "Urgent"})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Urgent", "session choice")
+
+
+@pytest.mark.parametrize("now", [
+    "2026-10-19T00:30:00+03:00",  # the timed midterm has just passed
+    "2026-10-19T12:00:00+03:00",
+])
+def test_lasting_choice_expires_when_its_exam_passes(home, root, now):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": "Standard 2026-10-19 midterm"})
+    profile(root, exams=[("CS201", "midterm", "2026-10-19T00:00:00+03:00"),
+                         ("CS201", "final", "2026-10-20T09:00:00+03:00")])
+    out = ok(home, "start", {"now": now})
+    assert out["exam_name"] == "final"
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Urgent", "exam date")
+
+
+def test_lasting_choice_on_a_date_only_exam_holds_through_its_day(home, root):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": "standard 2026-10-17 final"})
+    profile(root, exams=[("CS201", "Final", "2026-10-17")])
+    out = ok(home, "start", {"now": NOW})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Standard", "lasting choice")
+    assert out["line"] == "Standard delivery: you asked, until your Final; exam today, time unknown"
+    gone = ok(home, "start", {"now": "2026-10-18T09:00:00+03:00"})
+    assert gone["class"]["decided_by"] == "exam date"
+
+
+@pytest.mark.parametrize("cell", ["Urgent 2026-10-19 midterm", "Urgent 2026-11-05", "maybe", "<none>"])
+def test_a_lasting_choice_for_another_exam_or_unreadable_is_ignored(home, root, cell):
+    course(home, mastery=TWO_LEFT, save={"delivery_choice": cell})
+    profile(root, exams=[("CS201", "final", "2026-11-05")])
+    out = ok(home, "start", {"now": NOW})
+    assert (out["class"]["class"], out["class"]["decided_by"]) == ("Standard", "exam date")
+
+
+def test_a_new_lasting_choice_replaces_the_saved_one(home, root):
+    cdir = course(home, mastery=TWO_LEFT, save={"delivery_choice": "Standard 2026-10-01 quiz", "status": "on-track"})
+    profile(root, exams=[("CS201", "final", "2026-11-05")])
+    ok(home, "start", {"now": NOW, "choice": "Urgent", "lasting": True})
+    save = (cdir / ".state" / "save.md").read_text(encoding="utf-8")
+    assert save == "# Save\n\ndelivery_choice: Urgent 2026-11-05 final\nstatus: on-track\n"
+
+
+@pytest.mark.parametrize("payload,needle", [
+    ({"choice": "Normal"}, "choice must be Standard or Urgent"),
+    ({"choice": "standard"}, "choice must be Standard or Urgent"),
+    ({"lasting": True}, "true needs a choice"),
+    ({"choice": "Urgent", "lasting": "yes"}, "lasting must be true or false"),
+])
+def test_bad_choice_input_exits_2(home, root, payload, needle):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-11-05")])
+    fails(home, "start", {"now": NOW, **payload}, needle)
+
+
+def test_lasting_choice_needs_an_upcoming_exam(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "unknown")])
+    before = snapshot(root)
+    fails(home, "start", {"now": NOW, "choice": "Urgent", "lasting": True}, "lasting needs an upcoming exam")
+    assert snapshot(root) == before
+
+
+def test_debrief_rejects_a_choice(home, root):
+    course(home, mastery=TWO_LEFT)
+    fails(home, "debrief", {"now": NOW, "choice": "Urgent"}, "choice")
+
+
+def test_a_chosen_urgent_session_defers_a_due_debrief(home, root):
+    course(home, mastery=TWO_LEFT, save={"pending_debrief": "2026-10-10 midterm"})
+    profile(root, exams=[("CS201", "midterm", "2026-10-10"), ("CS201", "final", "2026-11-05")])
+    assert ok(home, "start", {"now": NOW})["debrief"]["due"] is True
+    out = ok(home, "start", {"now": NOW, "choice": "Urgent"})
+    assert (out["debrief"]["due"], out["debrief"]["deferred"]) == (False, True)
+
+
+# --- setup sampler -------------------------------------------------------------------
+
+def _setup_done(root: Path, date: str = "2026-10-01") -> None:
+    path = root / ".state" / "profile.md"
+    path.write_text(path.read_text(encoding="utf-8").replace("level:\n", f"level:\nsetup_done: {date}\n"),
+                    encoding="utf-8")
+
+
+def test_sampler_is_open_during_setup_with_every_axis_remaining(home, root):
+    profile(root)
+    before = snapshot(home)
+    out = ok(home, "prefs", {})
+    assert out["sampler"] == {"open": True, "started": False, "remaining": ["support", "frequency", "depth"]}
+    assert snapshot(home) == before
+
+
+def test_sampler_is_closed_for_users_who_finished_setup(home, root):
+    profile(root)
+    _setup_done(root)
+    assert ok(home, "prefs", {})["sampler"] == {"open": False, "started": False, "remaining": []}
+
+
+def test_sampler_choice_fills_a_default_axis_and_resumes_with_the_rest(home, root):
+    profile(root)
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "example-first"})
+    assert out["changed"] is True and out["line"] == "Noted for now: support example-first."
+    assert out["axes"] == {**DEFAULT_AXES, "support": {"level": "example-first", "provenance": "sampler",
+                                                       "wording": None}}
+    # an interrupted setup resumes the remaining demonstrations from the saved state
+    assert ok(home, "prefs", {})["sampler"] == {"open": True, "started": True, "remaining": ["frequency", "depth"]}
+
+
+def _saved_axis(root: Path, axis: str, entry: dict) -> None:
+    state = root / ".state" / "preferences.json"
+    state.write_text(json.dumps({"version": 1, "axes": {**DEFAULT_AXES, axis: entry}}, indent=2) + "\n",
+                     encoding="utf-8")
+
+
+@pytest.mark.parametrize("setup", ["explicit", "learned", "legacy", "sampler"])
+def test_sampler_never_overwrites_a_value_that_is_not_default(home, root, setup):
+    if setup == "legacy":
+        _legacy_profile(root, "fewer questions (2026-10-01)")
+        ok(home, "pref-event", {"event": "legacy-import"})
+    else:
+        profile(root)
+        if setup == "explicit":
+            ok(home, "pref-event", {"event": "explicit", "axis": "frequency", "level": "every step",
+                                    "wording": "ask me at every step"})
+        elif setup == "learned":
+            _saved_axis(root, "frequency", {"level": "every step", "provenance": "learned", "wording": None})
+        else:
+            ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "every step"})
+    kept = ok(home, "prefs", {})["axes"]["frequency"]
+    assert ok(home, "prefs", {})["sampler"]["remaining"] == ["support", "depth"]
+    before = snapshot(home)
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "key decisions"})
+    assert out["changed"] is False and out["axes"]["frequency"] == kept
+    assert out["line"] == f"Kept: guiding-question frequency stays {kept['level']} ({setup})."
+    assert snapshot(home) == before  # nothing rewritten
+
+
+def test_unsaved_legacy_value_is_saved_but_never_overwritten_by_the_sampler(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "frequency", "level": "every step"})
+    assert out["axes"] == LEGACY_AXES and out["saved"] is True
+    assert json.loads((root / ".state" / "preferences.json").read_text(encoding="utf-8"))["axes"] == LEGACY_AXES
+
+
+@pytest.mark.parametrize("payload", [{"event": "sampler", "axis": "support", "level": "try-first"},
+                                     {"event": "sampler-skip"}])
+def test_sampler_is_refused_after_setup(home, root, payload):
+    profile(root)
+    _setup_done(root)
+    before = snapshot(home)
+    fails(home, "pref-event", payload, "the sampler runs only during setup")
+    assert snapshot(home) == before
+
+
+def test_sampler_skip_keeps_completed_choices_and_ends_the_sampler(home, root):
+    profile(root)
+    ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "try-first"})
+    out = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert out["changed"] is True
+    assert out["line"] == "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
+    assert out["axes"] == {**DEFAULT_AXES, "support": {"level": "try-first", "provenance": "sampler",
+                                                       "wording": None}}
+    assert out["sampler"] == {"open": False, "started": True, "remaining": []}  # never offered again
+    before = snapshot(home)
+    again = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert again["changed"] is False and again["line"] == "Sampler already skipped."
+    late = ok(home, "pref-event", {"event": "sampler", "axis": "depth", "level": "what-if"})
+    assert late["changed"] is False and late["axes"]["depth"] == DEFAULT_AXES["depth"]
+    assert late["line"] == "The sampler was skipped; settings unchanged."
+    assert snapshot(home) == before
+
+
+def test_sampler_skip_before_any_choice_saves_the_defaults(home, root):
+    profile(root)
+    out = ok(home, "pref-event", {"event": "sampler-skip"})
+    assert out["axes"] == DEFAULT_AXES and out["saved"] is True
+    assert ok(home, "prefs", {})["sampler"] == {"open": False, "started": False, "remaining": []}
+
+
+def test_last_sampler_choice_ends_with_a_tentative_summary(home, root):
+    _legacy_profile(root, "fewer questions (2026-10-01)")  # frequency is legacy: the sampler skips it
+    ok(home, "pref-event", {"event": "sampler", "axis": "depth", "level": "what-if"})
+    out = ok(home, "pref-event", {"event": "sampler", "axis": "support", "level": "example-first"})
+    assert out["line"] == ("Tentative starting settings: support example-first, guiding-question frequency "
+                           "checks only, guiding-question depth what-if. They keep adapting as you study.")
+    assert out["sampler"] == {"open": False, "started": True, "remaining": []}
+    assert out["axes"]["frequency"] == LEGACY_AXES["frequency"]

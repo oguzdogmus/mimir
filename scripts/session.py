@@ -8,8 +8,9 @@ Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
-``line``. Only record (mastery.md), close and gauge (a session log), and pref-event
-(``.state/preferences.json``) write, atomically; other commands are read-only. Only ``now``
+``line``. Only record (mastery.md), close and gauge (a session log), pref-event
+(``.state/preferences.json``) and start with ``lasting`` (``save.md``) write,
+atomically; other commands are read-only. Only ``now``
 reads the clock; every other subcommand takes "now" as an input (``now``, from
 ``session.py now``), so the same input and files always give the same output.
 
@@ -30,8 +31,10 @@ Files read (all inside the learning root, see ``workspace.py``)
   by ``pref-event``. Before it exists, ``dial_preference:`` in the profile
   (set unless empty, ``none`` or a ``<...>`` placeholder) is the legacy value.
 * ``<course>/.state/save.md``: ``last_session:`` (``YYYY-MM-DD HH:MM`` or
-  ``YYYY-MM-DD``), ``next_topic:`` and ``pending_debrief:`` (``YYYY-MM-DD
-  <exam name>``; ``no``, empty or anything else means none pending).
+  ``YYYY-MM-DD``), ``next_topic:``, ``pending_debrief:`` (``YYYY-MM-DD
+  <exam name>``; ``no``, empty or anything else means none pending) and
+  ``delivery_choice:`` (``Standard|Urgent YYYY-MM-DD <exam name>``, the
+  lasting choice ``start`` saves; anything else means none).
 * ``<course>/.state/mastery.md``: the table ``| topic | status | evidence |
   evidence_date | last_check | assisted | unassisted | frustration_override |``.
   Columns are found by header name (topic, status, evidence, evidence_date,
@@ -90,7 +93,10 @@ start -- pick the course, the exam and the class for a new session.
     in : {"now": "2026-10-17T09:00:00+03:00"}
          optional "course" (a course folder name, e.g. "CS201 Theory") and
          "term" (YYYY-Term). A term alone limits the pick to that term; a
-         course name found in several terms needs its term.
+         course name found in several terms needs its term. Optional
+         "choice" ("Standard" or "Urgent"): the student's choice of class,
+         for this session only; with "lasting": true, for every session
+         until the picked exam passes.
     out: {"root": "/home/u/learning", "courses": [{"term": "2026-Fall",
           "course": "CS201 Theory", "course_dir": "..."}], "term":
           "2026-Fall", "course": "CS201 Theory", "course_dir": "...",
@@ -103,6 +109,7 @@ start -- pick the course, the exam and the class for a new session.
           null, "stale": false, "attempt_first": false}, "route_line": null, "first_contact":
           "2026-10-10T20:00:00+03:00", "gauge": {"done": false, "topics": ["Graphs"]},
           "line": "Standard delivery: exam in 19 days"}
+    (``class`` here includes "decided_by": "exam date".)
     Course: the given one (``inferred`` false); else the latest ``save.md``
     ``last_session:`` (ties: first by course name); else the first ``##
     Active courses`` row whose folder exists; else the last course in
@@ -123,8 +130,26 @@ start -- pick the course, the exam and the class for a new session.
     ``INDEX.md`` registry has no ``outline`` row, each ``## Topics`` name not
     yet listed (ignoring case and repeated spaces) follows as an unseen row,
     in ``INDEX.md`` order. ``remaining`` = route rows not
-    ``mastered``. ``class``: ``plan.py class`` with ``now`` and the exam only (exam
-    proximity alone decides; the route's size never does). ``topic``:
+    ``mastered``. ``class``: ``plan.py class`` with ``now`` and the exam only (the
+    route's size never decides) plus ``decided_by``, the rule that decided,
+    first match wins:
+      "session choice" -- ``choice`` without ``lasting``: that class, line
+          "<choice> delivery: you asked; <plan.py line after 'delivery: '>",
+          e.g. "Standard delivery: you asked; exam in 30 hours". Nothing is saved.
+      "lasting choice" -- ``choice`` with ``lasting``, or a saved
+          ``delivery_choice:`` whose date is ``exam_date`` and whose name is
+          ``exam_name`` (case and repeated spaces ignored): that class, line
+          "<class> delivery: you asked, until your <exam_name, else exam>;
+          <plan.py tail>". With ``lasting``, ``save.md`` gets the line
+          ``delivery_choice: <choice> <exam_date> <exam_name>``, replacing the
+          first ``delivery_choice:`` line, else after the last ``key:`` line
+          above the first ``##`` heading; an equal line is not rewritten.
+          Once that exam passes, ``start`` picks another exam (or none), so the
+          saved choice stops applying. ``lasting`` with exam null, or a
+          symlinked ``save.md``, exits 2 and writes nothing.
+      "exam date" -- otherwise: ``plan.py class`` unchanged.
+    ``reason``, ``hours_to_exam`` and ``days_to_exam`` are always the exam
+    date's. ``topic``:
     ``save.md`` ``next_topic`` when it is remaining, else the first remaining
     topic; with none remaining, the same pick among the stale mastered topics
     (stale as in ``check``: the one-question recheck); else null. Its
@@ -143,7 +168,7 @@ start -- pick the course, the exam and the class for a new session.
     before today: the target exam is the latest ``## Exam dates`` row of
     ``code`` dated after P and before today (a later passed exam supersedes;
     debriefs never stack), else P (named by the pending value, else by a row
-    dated P); ``deferred`` = the class is Urgent, ``due`` = not deferred.
+    dated P); ``deferred`` = the class (as decided above) is Urgent, ``due`` = not deferred.
     A workspace with no course folder gives
     ``course`` null, every course field null, and the line "No course yet:
     run mimir-setup, then mimir-ingest."
@@ -261,8 +286,9 @@ prefs -- the global teaching settings. Read-only.
     in : {}
     out: {"axes": {"support": {"level": "method-first", "provenance":
           "default", "wording": null}, "frequency": {...}, "depth": {...}},
-          "saved": false, "line": "Teaching settings: support method-first
-          (default), ..."}
+          "saved": false, "sampler": {"open": true, "started": false,
+          "remaining": ["support", "frequency", "depth"]}, "line": "Teaching
+          settings: support method-first (default), ..."}
     Axes and levels, more guided to more independent: support example-first,
     method-first, try-first; frequency checks only, key decisions, every
     step; depth next step, why, what-if. Provenance is default, sampler,
@@ -272,16 +298,28 @@ prefs -- the global teaching settings. Read-only.
     that a set profile ``dial_preference:`` reads as frequency checks only with
     provenance legacy (``## Rung hints`` are ignored). A damaged or symlinked
     ``preferences.json`` exits 2.
+    ``sampler`` is the setup sampler: ``remaining`` lists the axes still at
+    default, in order, while setup is not done (no ``setup_done:`` date in the
+    profile) and the sampler was not skipped, else []; ``open`` = remaining is
+    non-empty; ``started`` = some axis has provenance sampler.
 
 pref-event -- apply one teaching-settings event and save the state.
     in : {"event": "explicit", "axis": "frequency", "level": "checks only",
           "wording": "ask fewer questions"}
-         or {"event": "legacy-import"}
+         or {"event": "sampler", "axis": "support", "level": "example-first"}
+         or {"event": "sampler-skip"} or {"event": "legacy-import"}
     out: as ``prefs`` plus "changed", with ``saved`` true; line e.g.
          "Saved for every course: guiding-question frequency is now checks only."
     ``explicit``: the student's lasting request sets that axis to that level
     (any distance), provenance explicit, wording kept with spaces collapsed;
-    other axes are untouched. ``legacy-import``: saves the state ``prefs``
+    other axes are untouched. ``sampler``: one setup-sampler choice; it
+    fills the axis only while that axis is at default (provenance sampler),
+    never overwriting a sampler, learned, explicit or legacy value ("Kept:
+    ..."), and after a skip changes nothing. The choice that leaves no axis
+    remaining says the tentative summary of all three levels.
+    ``sampler-skip``: ends the sampler for good; completed choices stay and
+    unanswered axes keep their defaults. Both sampler events exit 2 once
+    setup is done. ``legacy-import``: saves the state ``prefs``
     shows (the legacy value included) when nothing is saved yet; otherwise
     changes nothing. A state that would not change is not rewritten, so a
     rerun leaves the file byte-identical. An unknown event, axis, or a level
@@ -774,7 +812,12 @@ def _cram(course_dir: Path, logs, first_contact: str | None, target: date,
 # --- Subcommands ----------------------------------------------------------------------
 
 def cmd_start(data: dict) -> dict:
-    return _start(data)[0]
+    choice, lasting = data.get("choice"), data.get("lasting", False)
+    if choice is not None and choice not in plan.TRIAGE_CLASSES:
+        raise InputError("choice must be Standard or Urgent")
+    if not isinstance(lasting, bool) or (lasting and choice is None):
+        raise InputError("lasting must be true or false, and true needs a choice")
+    return _start({k: v for k, v in data.items() if k not in ("choice", "lasting")}, choice, lasting)[0]
 
 
 def _course_pick(data: dict) -> tuple[datetime, Path, str, list[dict], dict | None, bool | None,
@@ -809,7 +852,61 @@ def _course_pick(data: dict) -> tuple[datetime, Path, str, list[dict], dict | No
     return now, root, profile, courses, chosen, inferred, course_dir
 
 
-def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
+_CHOICE = re.compile(r"(Standard|Urgent)\s+([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\s+(.*))?", re.IGNORECASE)
+
+
+def _lasting_choice(save: str, exam: dict) -> str | None:
+    """The saved ``delivery_choice:`` class when it names the exam ``start`` picked, else None:
+    once that exam passes, ``start`` picks another exam (or none) and the choice stops applying."""
+    m = _CHOICE.fullmatch(_key(save, "delivery_choice"))
+    if not m or exam["exam_date"] is None or m.group(2) != exam["exam_date"]:
+        return None
+    if _norm(m.group(3) or "") != _norm(exam["exam_name"] or ""):
+        return None
+    return m.group(1).capitalize()
+
+
+def _choice_line(choice: str, exam: dict) -> str:
+    name = " ".join((exam["exam_name"] or "").split())
+    return f"delivery_choice: {choice} {exam['exam_date']} {name}".rstrip()
+
+
+def _save_choice(course_dir: Path, line: str) -> None:
+    """Write the ``delivery_choice:`` line into ``save.md``: replace the first one, else add it
+    after the last key line above the first ``##`` heading (else at the end)."""
+    path = course_dir / ".state" / "save.md"
+    if path.is_symlink():
+        raise InputError("save.md must not be a symlink")
+    lines = _text(path).splitlines()
+    at = next((i for i, row in enumerate(lines) if re.fullmatch(r"delivery_choice:.*", row.strip())), None)
+    if at is not None:
+        if lines[at] == line:
+            return
+        lines[at] = line
+    else:
+        head = next((i for i, row in enumerate(lines) if row.startswith("## ")), len(lines))
+        keys = [i for i in range(head) if re.fullmatch(r"[a-z_]+:.*", lines[i])]
+        lines.insert(keys[-1] + 1 if keys else head, line)
+    ingest._write_atomic(path, "\n".join(lines) + "\n")
+
+
+def _class(now: str, exam: dict, choice: str | None, lasting: bool, save: str) -> dict:
+    """``start``'s class: the student's choice for this session, else a saved lasting
+    choice for this exam, else ``plan.py class`` for the exam."""
+    klass = _plan(plan.delivery_class, {"now": now, "exam": exam["exam"]})
+    tail = klass["line"].split(": ", 1)[1]  # "exam in 30 hours"
+    if choice is not None and not lasting:
+        return {**klass, "class": choice, "decided_by": "session choice",
+                "line": f"{choice} delivery: you asked; {tail}"}
+    saved = choice if lasting else _lasting_choice(save, exam)
+    if saved is None:
+        return {**klass, "decided_by": "exam date"}
+    return {**klass, "class": saved, "decided_by": "lasting choice",
+            "line": f"{saved} delivery: you asked, until your {exam['exam_name'] or 'exam'}; {tail}"}
+
+
+def _start(data: dict, choice: str | None = None,
+           lasting: bool = False) -> tuple[dict, tuple[date, date | None] | None]:
     """``start``'s output and the due debrief window (see ``debrief_state``)."""
     now, root, profile, courses, chosen, inferred, course_dir = _course_pick(data)
     if chosen is None:
@@ -823,8 +920,12 @@ def _start(data: dict) -> tuple[dict, tuple[date, date | None] | None]:
     exam = _exam(profile, code, now)
     rows = route(course_dir)
     remaining = [r for r in rows if r["status"] != "mastered"]
-    klass = _plan(plan.delivery_class, {"now": data["now"], "exam": exam["exam"]})
     save = _memory(course_dir, "save.md")
+    if lasting:
+        if exam["exam"] is None:
+            raise InputError("lasting needs an upcoming exam; without one a choice lasts this session only")
+        _save_choice(course_dir, _choice_line(choice, exam))
+    klass = _class(data["now"], exam, choice, lasting, save)
     next_topic = _norm(_key(save, "next_topic"))
     # Nothing unmastered left: a stale mastered topic gets the one-question recheck.
     candidates = remaining or [r for r in rows if topic_state(r, r["name"], today)["stale"]]
@@ -1278,6 +1379,8 @@ def _prefs_state(root: Path) -> tuple[dict, bool]:
     if not isinstance(state, dict) or state.get("version") != PREFS_VERSION or not isinstance(state.get("axes"), dict) \
             or set(state["axes"]) != set(AXES):
         raise damaged
+    if state.get("sampler_skipped", True) is not True:  # optional; present only once the sampler was skipped
+        raise damaged
     for axis, entry in state["axes"].items():
         if not isinstance(entry, dict) or set(entry) != {"level", "provenance", "wording"} \
                 or entry["level"] not in AXES[axis] or entry["provenance"] not in PROVENANCES \
@@ -1292,37 +1395,69 @@ def _set(value: str) -> bool:
     return bool(value) and value.casefold() != "none" and not (value.startswith("<") and value.endswith(">"))
 
 
-def _prefs_out(state: dict, saved: bool) -> dict:
+def _sampler(state: dict, root: Path) -> dict:
+    """The setup sampler: open only before setup is done and until skipped; it fills default axes only."""
+    axes = state["axes"]
+    open_ = workspace.read_setup_done(root) is None and not state.get("sampler_skipped", False)
+    remaining = [a for a in AXES if axes[a]["provenance"] == "default"] if open_ else []
+    return {"open": bool(remaining), "started": any(axes[a]["provenance"] == "sampler" for a in AXES),
+            "remaining": remaining}
+
+
+def _prefs_out(state: dict, saved: bool, root: Path) -> dict:
     axes = state["axes"]
     parts = ", ".join(f"{AXIS_NAMES[a]} {axes[a]['level']} ({axes[a]['provenance']})" for a in AXES)
-    return {"axes": axes, "saved": saved, "line": f"Teaching settings: {parts}."}
+    return {"axes": axes, "saved": saved, "sampler": _sampler(state, root), "line": f"Teaching settings: {parts}."}
 
 
 def cmd_prefs(data: dict) -> dict:
-    """The global teaching settings; read-only."""
+    """The global teaching settings and the setup sampler's state; read-only."""
     _check_keys(data, set())
-    return _prefs_out(*_prefs_state(ingest._workspace_root()))
+    root = ingest._workspace_root()
+    return _prefs_out(*_prefs_state(root), root)
 
 
 def cmd_pref_event(data: dict) -> dict:
     """Apply one teaching-settings event and save the state atomically (unchanged state writes nothing)."""
     event = data.get("event")
-    if event == "legacy-import":
+    if event in ("legacy-import", "sampler-skip"):
         _check_keys(data, {"event"})
     elif event == "explicit":
         _check_keys(data, {"event", "axis", "level", "wording"})
+    elif event == "sampler":
+        _check_keys(data, {"event", "axis", "level"})
     else:
-        raise InputError("event must be explicit or legacy-import")
-    root = ingest._workspace_root()
-    state, saved = _prefs_state(root)
-    before = json.dumps(state, sort_keys=True)
-    line = None
-    if event == "explicit":
-        axis, level, wording = data.get("axis"), data.get("level"), data.get("wording")
+        raise InputError("event must be explicit, sampler, sampler-skip or legacy-import")
+    axis, level = data.get("axis"), data.get("level")
+    if event in ("explicit", "sampler"):
         if axis not in AXES:
             raise InputError(f"axis must be one of {', '.join(AXES)}")
         if level not in AXES[axis]:
             raise InputError(f"level for {axis} must be one of {', '.join(AXES[axis])}")
+    root = ingest._workspace_root()
+    if event.startswith("sampler") and workspace.read_setup_done(root) is not None:
+        raise InputError("the sampler runs only during setup")
+    state, saved = _prefs_state(root)
+    before = json.dumps(state, sort_keys=True)
+    line = None
+    if event == "sampler-skip":
+        line = "Sampler already skipped." if state.get("sampler_skipped") else \
+            "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
+        state["sampler_skipped"] = True
+    if event == "sampler":
+        current = state["axes"][axis]
+        if state.get("sampler_skipped"):
+            line = "The sampler was skipped; settings unchanged."
+        elif current["provenance"] == "default":  # never overwrites a sampler, learned, explicit or legacy value
+            state["axes"][axis] = {"level": level, "provenance": "sampler", "wording": None}
+            line = f"Noted for now: {AXIS_NAMES[axis]} {level}."
+            if not _sampler(state, root)["remaining"]:
+                levels = ", ".join(f"{AXIS_NAMES[a]} {state['axes'][a]['level']}" for a in AXES)
+                line = f"Tentative starting settings: {levels}. They keep adapting as you study."
+        else:
+            line = f"Kept: {AXIS_NAMES[axis]} stays {current['level']} ({current['provenance']})."
+    if event == "explicit":
+        wording = data.get("wording")
         if not isinstance(wording, str) or not wording.strip() or _has_control(wording) \
                 or len(wording) > MAX_WORDING:
             raise InputError(f"wording must be the student's request, one line of at most {MAX_WORDING} characters")
@@ -1331,7 +1466,7 @@ def cmd_pref_event(data: dict) -> dict:
     changed = not saved or json.dumps(state, sort_keys=True) != before
     if changed:
         ingest._write_atomic(_prefs_path(root), json.dumps(state, indent=2) + "\n")
-    out = _prefs_out(state, True)
+    out = _prefs_out(state, True, root)
     if line is None:  # legacy-import: saved now only when nothing was saved before
         line = ("Teaching settings already saved." if not changed else
                 "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
@@ -1342,7 +1477,7 @@ def cmd_pref_event(data: dict) -> dict:
 
 COMMANDS = {
     "prefs": (cmd_prefs, "the global teaching settings: level and provenance per axis"),
-    "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, legacy import)"),
+    "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, setup sampler, legacy import)"),
     "record": (cmd_record, "record mastery evidence and frustration overrides"),
     "now": (cmd_now, "the local time: ISO timestamp, evidence date, log name, last_session stamp and term"),
     "parse-date": (cmd_parse_date, "the student's exam date-and-time phrase as an exam value, or a refusal"),
@@ -1359,7 +1494,7 @@ def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("session.py",
                              ("Mimir session runner. Subcommands: now, parse-date, start, check, close, gauge, debrief, "
                               "progress, record, prefs, pref-event. Reads one JSON object on stdin and prints one JSON "
-                              "object on stdout. Only record, close, gauge and pref-event write."),
+                              "object on stdout. Only record, close, gauge, pref-event and start with lasting write."),
                              COMMANDS, argv)
 
 

@@ -359,3 +359,58 @@ def test_standard_session_runs_the_gauge_once_before_any_topic():
     assert episode.index("**Knowledge gauge**") < episode.index("Topic `T` is")
     recording = _read("skills/mimir-core-rules/references/recording.md")
     assert "gauge" in recording and "unassisted" in recording
+
+
+# The student may choose the delivery class: for this session, or lastingly for
+# one exam (issue #36). The old "the student never picks a mode" rule is gone.
+def test_student_chooses_standard_or_urgent_through_session_start():
+    for path in MARKDOWN + [ROOT_DIR / "README.md"]:
+        text = path.read_text(encoding="utf-8")
+        assert "never picks a mode" not in text and "only mode input" not in text, path
+    core = _read("skills/mimir-core-rules/SKILL.md")
+    assert '"choice"' in core and '"lasting": true' in core
+    assert "study normally" in core and "cram" in core and "until that exam passes" in core
+    session = _read("skills/mimir-study/references/session.md")
+    assert '"choice"' in session and '"lasting": true' in session
+    assert "<class.decided_by>" in session  # the log records which rule decided
+    assert "choose" in _read("skills/mimir-study/SKILL.md")
+    assert "delivery_choice:" in _read("assets/templates/save.md")
+    for rel in ("skills/mimir-study/references/session.md", "skills/mimir-study/references/urgent.md"):
+        assert "pending_debrief and the `delivery_choice:` line" in _read(rel), rel  # the close keeps it
+
+
+# The setup sampler: offered once during setup with a skip, run before setup is
+# marked done, one everyday demonstration per axis, saved only through session.py.
+SETUP = "skills/mimir-setup/SKILL.md"
+SAMPLER = "skills/mimir-setup/references/sampler.md"
+
+
+def test_setup_offers_the_sampler_once_with_a_skip_before_setup_is_done():
+    text = _read(SETUP)
+    assert "references/sampler.md" in text and 'session.py" prefs' in text
+    assert '"event": "sampler-skip"' in text and "skip" in text and "default" in text
+    assert text.index("references/sampler.md") < text.index("`setup_done:` set to")  # events refused after it
+    assert "`started`" in text and "`remaining`" in text  # an interrupted setup resumes, not re-offers
+
+
+def test_only_setup_runs_sampler_events():
+    for path in MARKDOWN:
+        rel = str(path.relative_to(ROOT_DIR))
+        text = path.read_text(encoding="utf-8")
+        if rel not in (SETUP, SAMPLER):
+            assert '"event": "sampler' not in text, rel
+
+
+def test_each_sampler_demonstration_isolates_one_axis():
+    text = _read(SAMPLER)
+    assert '"event": "sampler"' in text and "knowledge gauge" in text
+    assert '"Which suits you: A, B or C?" and wait' in text  # one active question per demonstration
+    sections = re.split(r"^## ", text, flags=re.M)[1:]
+    assert [s.splitlines()[0] for s in sections] == ["support", "frequency", "depth"]
+    for section, levels in zip(sections, (LEVELS[0:3], LEVELS[3:6], LEVELS[6:9])):
+        options = re.findall(r"^\*\*([ABC])\*\* \(`([^`]+)`\)", section, flags=re.M)
+        assert options == list(zip("ABC", levels)), section.splitlines()[0]
+    # frequency differs only in when questions come: every option discloses the same and ends on one fresh check
+    frequency = sections[1]
+    endings = re.findall(r"Your turn: [^\n]*", frequency)
+    assert len(endings) == 3 and len(set(endings)) == 1
