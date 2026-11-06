@@ -117,7 +117,7 @@ def test_calm(home, root):
     assert out["exam_date"] == "2026-11-05"
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
                         "exam_date", "exam_name", "q0", "exam_problems", "ask_exam_time", "ask_exam_ahead", "remaining",
-                        "class", "topic", "route_line", "first_contact", "debrief", "line"}
+                        "class", "topic", "route_line", "first_contact", "gauge", "debrief", "line"}
 
 
 def test_near_exam_is_urgent_floor(home, root):
@@ -1538,3 +1538,89 @@ def test_symlinked_preference_state_is_refused(home, root, tmp_path):
     (root / ".state" / "preferences.json").symlink_to(target)
     fails(home, "prefs", {}, "symlink")
     fails(home, "pref-event", {"event": "legacy-import"}, "symlink")
+
+
+# --- knowledge gauge (issue #39) -----------------------------------------------------
+
+GAUGE_LOG = "2026-10-17-0900"
+
+
+def gauge_args(cdir: Path, now: str = NOW, log_name: str = GAUGE_LOG) -> dict:
+    return {"now": now, "term": TERM, "course": cdir.name, "log": log_name}
+
+
+def test_start_gauge_covers_only_unseen_topics_until_done(home, root):
+    """The Standard gauge is due once per course and skips topics with any evidence."""
+    course(home, mastery=TWO_LEFT + [("Trees", "shaky", "2026-10-11", 1, 0)])
+    out = ok(home, "start", {"now": NOW})
+    assert out["gauge"] == {"done": False, "topics": ["Sorting"]}
+
+
+def test_start_gauge_is_null_for_a_course_without_topics(home, root):
+    """No topics: no gauge, never from the course name, and the marker stays unset."""
+    cdir = course(home)
+    assert ok(home, "start", {"now": NOW})["gauge"] is None
+    index(cdir, SLIDES)  # files indexed, still no topics
+    assert ok(home, "start", {"now": NOW})["gauge"] is None
+    index(cdir, SLIDES, SLIDE_TOPICS[:2])  # topics arrive: the gauge is due at this session
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps", "Graphs"]}
+
+
+def test_gauge_sets_the_marker_once_per_course(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    log(cdir, GAUGE_LOG, session_log(NOW))
+    path = cdir / ".state/logs" / f"{GAUGE_LOG}.md"
+    out = ok(home, "gauge", gauge_args(cdir))
+    assert (out["gauge_done"], out["already_done"]) == (NOW, False)
+    assert out["log"] == str(path)
+    assert out["line"] == "Knowledge gauge done for CS201 Theory: it will not run again."
+    assert path.read_text(encoding="utf-8") == session_log(NOW) + f"gauge_done: {NOW}\n"
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": True, "topics": []}
+    # A later session, even in another log, finds the marker and writes nothing.
+    later = "2026-10-20T09:00:00+03:00"
+    log(cdir, "2026-10-20-0900", session_log(later))
+    before = snapshot(home)
+    again = ok(home, "gauge", gauge_args(cdir, later, "2026-10-20-0900"))
+    assert snapshot(home) == before
+    assert (again["gauge_done"], again["already_done"]) == (NOW, True)
+    assert again["line"] == "Knowledge gauge already done for CS201 Theory."
+
+
+def test_existing_course_without_marker_gets_the_gauge_once(home, root):
+    """Courses from before the gauge (first_contact already logged) are still due once."""
+    cdir = course(home, mastery=TWO_LEFT)
+    log(cdir, "2026-10-01-0900", session_log("2026-10-01T09:00:00+03:00", "2026-10-01T10:00:00+03:00",
+                                             "first_contact: 2026-10-01T09:00:00+03:00\ngauge_done: soon\n"))
+    assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Sorting"]}
+
+
+def test_gauge_refusals_write_nothing(home, root):
+    cdir = course(home)  # no topics yet: no gauge, the marker stays unset
+    log(cdir, GAUGE_LOG, session_log(NOW))
+    before = snapshot(home)
+    fails(home, "gauge", gauge_args(cdir), "no topics yet")
+    assert snapshot(home) == before
+    assert ok(home, "start", {"now": NOW})["gauge"] is None
+    index(cdir, SLIDES, SLIDE_TOPICS[:1])
+    before = snapshot(home)
+    fails(home, "gauge", gauge_args(cdir, log_name="2026-10-17-0901"), "not found")
+    fails(home, "gauge", gauge_args(cdir, log_name="../../profile"), "log must be")
+    fails(home, "gauge", {**gauge_args(cdir), "course": "NOPE1 X"}, "course")
+    fails(home, "gauge", {**gauge_args(cdir), "x": 1}, "unknown field 'x'")
+    fails(home, "gauge", {k: v for k, v in gauge_args(cdir).items() if k != "now"}, "now is required")
+    assert snapshot(home) == before
+
+
+def test_gauge_answers_record_unassisted_and_leave_teaching_settings_alone(home, root):
+    """One right gauge answer never marks a topic mastered, and the gauge is no preference evidence."""
+    cdir = course(home, mastery=TWO_LEFT)
+    log(cdir, GAUGE_LOG, session_log(NOW))
+    answer = dict(term=TERM, course="CS201 Theory", topic="Sorting", item="gauge:sorting:1",
+                  gate={"decision": "show", "counts_for_mastery": True},
+                  outcome="unassisted", real_past_paper=False, session=GAUGE_LOG, date="2026-10-17")
+    assert ok(home, "record", answer)["status"] == "shaky"
+    ok(home, "gauge", gauge_args(cdir))
+    assert not (root / ".state" / session.PREFS_FILE).exists()
+    assert ok(home, "prefs", {})["saved"] is False
+    sorting = next(t for t in ok(home, "progress", {"now": NOW})["topics"] if t["name"] == "Sorting")
+    assert (sorting["status"], sorting["unassisted"], sorting["assisted"]) == ("shaky", 1, 0)
