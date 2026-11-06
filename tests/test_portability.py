@@ -307,6 +307,23 @@ def test_study_asks_exam_time_within_two_days_and_whether_today_is_still_ahead()
     assert "within two days" in core and "still ahead" in core  # allowed admin questions
 
 
+def test_past_questions_checks_an_exam_today_and_passes_the_class_choice():
+    exam_today = "Is your <name> today still ahead?"
+    holders = [str(p.relative_to(ROOT_DIR)) for p in MARKDOWN if exam_today in p.read_text(encoding="utf-8")]
+    assert holders == ["skills/mimir-core-rules/SKILL.md"], holders  # defined once, reused
+    past = _read("skills/mimir-past-questions/SKILL.md")
+    assert "`ask_exam_ahead`" in past and "Exam today" in past and "Mode and dates" in past
+    assert past.index("Exam today") < past.index("5. Triage")  # before any drilling
+    assert "<class.decided_by>, <class.reason>" in past  # the same class line as study logs
+
+
+def test_urgent_past_questions_closes_once():
+    past = _read("skills/mimir-past-questions/SKILL.md")
+    assert "§4 then step 8" not in past
+    assert "step 8 does not run" in past
+    assert past.split("\n8. ", 1)[1].startswith("Standard only")
+
+
 BARE_DATE = re.compile(r"`date` of [^.]*parse-date|its `date` is usable")
 
 
@@ -403,6 +420,24 @@ def test_exam_intake_and_the_two_day_check_ask_for_the_scope_with_the_time():
     assert "covers" in ingest and "Exam scope" in ingest  # an outline's stated coverage is proposed
 
 
+def test_setup_asks_the_scope_with_each_exam_and_the_first_session_confirms_it():
+    setup = _read(SETUP)
+    intake = setup.split("3. Ask everything", 1)[1].split("\n4. ", 1)[0]
+    assert "date and time and what it covers" in intake  # asked together when the exam is added
+    assert '"code"' in setup and "session.py\" scope" in setup  # noted by course code, no folder yet
+    session = _read("skills/mimir-study/references/session.md")
+    checks = session.split("Exam checks", 1)[1].split("\n5. ", 1)[0]
+    assert "`scope_words`" in checks and "confirm step" in checks
+    lazy = urgent_section("## 1. Lazy setup")
+    assert "no scope question in a lazy setup" in lazy  # lazy setup still leaves it out on purpose
+
+
+def test_plan_says_the_scripts_remaining_line_verbatim():
+    plan = _read("skills/mimir-plan/SKILL.md")
+    assert "`remaining_line`" in plan and "verbatim" in plan.split("`remaining_line`", 1)[1].split("\n", 1)[0]
+    assert "(<status>)" not in plan  # the list with its scope marks comes from session.py, not composed here
+
+
 def test_triage_and_the_standard_route_use_the_saved_scope():
     urgent = _read("skills/mimir-study/references/urgent.md")
     assert '"scope"' in urgent and "`start`'s `scope`" in urgent  # passed to plan.py triage
@@ -487,6 +522,15 @@ def test_only_eligible_standard_sessions_are_counted_for_probes():
             assert '"event": "session"' not in path.read_text(encoding="utf-8"), path
 
 
+def test_a_paused_trial_is_not_applied_outside_a_counted_session():
+    text = TEACHING.read_text(encoding="utf-8")
+    inputs = text.split("## 0. Inputs", 1)[1].split("\n## ", 1)[0]
+    assert "`trial_paused`" in inputs and "saved level" in inputs
+    session = STUDY_SESSION.read_text(encoding="utf-8")
+    episode = session.split("## 4. Episode", 1)[1].split("### Questions", 1)[0]
+    assert "`trial_paused`" in episode and "saved level" in episode
+
+
 def test_the_fewer_questions_offer_is_asked_once_by_the_script():
     text = TEACHING.read_text(encoding="utf-8")
     assert text.count('"Want fewer questions from now on?"') == 1
@@ -505,6 +549,10 @@ def test_whats_new_line_is_said_once_at_session_start_and_setup_marks_it_seen():
     assert start.index("`whats_new`") < start.index('{"event": "whats-new-seen"}')  # said, then marked seen
     setup = _read(SETUP)
     assert setup.index('{"event": "whats-new-seen"}') < setup.index("`setup_done:` set to")
+    # Only a new user is marked seen at setup; a user with earlier sessions still hears the line.
+    assert "`whats_new` null" in setup
+    # Every first session marks it seen, said or not, so a new lazy-setup user never hears it later.
+    assert "either way" in start[start.index("`whats_new`"):start.index('{"event": "whats-new-seen"}')]
     for path in MARKDOWN:
         rel = str(path.relative_to(ROOT_DIR))
         text = path.read_text(encoding="utf-8")

@@ -118,7 +118,7 @@ def test_calm(home, root):
     assert out["exam_date"] == "2026-11-05"
     assert set(out) == {"root", "courses", "term", "course", "course_dir", "code", "inferred", "exam",
                         "exam_date", "exam_name", "q0", "exam_problems", "ask_exam_time", "ask_exam_ahead",
-                        "ask_exam_scope", "remaining",
+                        "ask_exam_scope", "scope_words", "remaining", "remaining_line",
                         "class", "topic", "route_line", "first_contact", "scope", "gauge", "debrief",
                         "preference_session", "line"}
     assert out["scope"] is None and out["ask_exam_scope"] is False
@@ -1812,6 +1812,24 @@ def test_gauge_skips_unseen_topics_that_are_not_on_the_exam(home, root):
     assert ok(home, "start", {"now": NOW})["gauge"] == {"done": False, "topics": ["Heaps"]}
 
 
+def test_remaining_line_lists_whats_left_with_the_next_exams_scope_marks(home, root):
+    course(home, mastery=ROUTE4)
+    profile(root, exams=[MIDTERM, FINAL])
+    assert ok(home, "start", {"now": NOW})["remaining_line"] == (
+        "Left on your route:\n- Sorting (gap)\n- Heaps (unseen)\n- Graphs (shaky)\n- Tries (unseen)")
+    save_scope(home, **{"in": ["Heaps", "Graphs"], "out": ["sorting"]})
+    assert ok(home, "start", {"now": NOW})["remaining_line"] == (
+        "Left on your route:\n- Heaps (unseen)\n- Graphs (shaky)\n- Tries (unseen, not checked)\n"
+        "- Sorting (gap, not on your next exam)")
+
+
+def test_remaining_line_is_null_when_nothing_is_left(home, root):
+    course(home, mastery=[("Heaps", "mastered", "2026-10-10", 0, 2)])
+    profile(root)
+    out = ok(home, "start", {"now": NOW})
+    assert out["remaining"] == [] and out["remaining_line"] is None
+
+
 def test_standard_route_offers_out_of_scope_topics_once_nothing_else_is_left(home, root):
     course(home, mastery=[("Heaps", "mastered", "2026-10-16", 0, 2), ("Sorting", "gap", "2026-10-10", 1, 0)],
            save={"next_topic": "Sorting"})
@@ -1915,6 +1933,73 @@ def test_saving_the_same_scope_again_changes_nothing_and_another_exam_keeps_its_
     assert edited["changed"] is True
     text = path.read_text(encoding="utf-8")
     assert text.count("## ") == 2 and "- in: Graphs" in text and "words: all of it" in text
+
+
+def test_a_saved_scope_follows_its_exam_when_the_date_or_time_changes(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM, FINAL])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})
+    profile(root, exams=[("CS201", "midterm", "2026-11-07 14:00"), FINAL])  # the midterm moved, same name
+    out = ok(home, "start", {"now": NOW})
+    assert (out["exam_date"], out["exam_name"]) == ("2026-11-07", "midterm")
+    assert out["scope"]["words"] == WORDS and out["scope"]["out"] == ["Sorting"]
+    near = ok(home, "start", {"now": "2026-11-06T09:00:00+02:00"})
+    assert near["ask_exam_scope"] is False  # it was answered for this exam: not asked again
+    # Saving it again under the new date moves the section instead of adding a second one.
+    save_scope(home, exam_date="2026-11-07", **{"in": ["Heaps", "Graphs"], "out": ["Sorting"]})
+    text = (cdir / ".state" / "scope.md").read_text(encoding="utf-8")
+    assert text.count("## ") == 1 and "## 2026-11-07 midterm" in text
+
+
+def test_a_passed_exams_scope_does_not_carry_over_to_a_later_exam_of_the_same_name(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[MIDTERM])
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})
+    profile(root, exams=[MIDTERM, ("CS201", "midterm", "2026-12-01")])  # a second midterm; the first stays
+    out = ok(home, "start", {"now": "2026-11-10T09:00:00+02:00"})
+    assert out["exam_date"] == "2026-12-01" and out["scope"] is None
+
+
+SETUP_SCOPE = {"now": NOW, "code": "CS201", "exam_name": "midterm", "exam_date": "2026-11-05", "words": WORDS}
+
+
+def test_a_scope_given_at_setup_is_noted_by_course_code_and_confirmed_at_the_first_session(home, root):
+    profile(root, exams=[MIDTERM])  # setup: the exam row is written, no course folder exists yet
+    noted = ok(home, "scope", SETUP_SCOPE)
+    assert noted["line"] == ("Scope of your midterm on 2026-11-05 noted: you confirm it at your first "
+                             "study session, once the course files are in.")
+    assert noted["course_dir"] is None and noted["changed"] is True
+    assert noted["scope"] == {"words": WORDS, "in": [], "out": [], "unsure": []}
+    assert ok(home, "scope", SETUP_SCOPE)["changed"] is False
+    course(home, mastery=TWO_LEFT)  # ingest made the course
+    near = "2026-11-04T09:00:00+02:00"
+    for now in (NOW, near):
+        out = ok(home, "start", {"now": now})
+        assert out["scope_words"] == WORDS and out["scope"] is None
+        assert out["ask_exam_scope"] is False  # the words are confirmed, not asked again
+    save_scope(home, **{"in": ["Heaps"], "out": ["Sorting"]})  # the confirm step at the first session
+    out = ok(home, "start", {"now": near})
+    assert out["scope_words"] is None and out["scope"]["out"] == ["Sorting"]
+
+
+def test_scope_words_are_only_for_the_matching_course_and_exam(home, root):
+    profile(root, exams=[MIDTERM, FINAL, ("MA101", "midterm", "2026-11-05")])
+    ok(home, "scope", {**SETUP_SCOPE, "code": "MA101"})
+    course(home, mastery=TWO_LEFT)
+    assert ok(home, "start", {"now": NOW})["scope_words"] is None
+
+
+@pytest.mark.parametrize("change, needle", [
+    ({"in": ["Heaps"]}, "a scope noted by code holds words only"),
+    ({"term": TERM, "course": "CS201 Theory"}, "give code, or term and course"),
+    ({"code": "CS 201"}, "code must be"),
+    ({"exam_name": "final"}, "no ## Exam dates row of 'CS201' named 'final'"),
+])
+def test_a_scope_noted_by_code_rejects_bad_input_and_writes_nothing(home, root, change, needle):
+    profile(root, exams=[MIDTERM])
+    before = snapshot(root)
+    fails(home, "scope", {**SETUP_SCOPE, **change}, needle)
+    assert snapshot(root) == before
 
 
 SCOPE_BASE = {"now": NOW, "term": TERM, "course": "CS201 Theory", "exam_name": "midterm", "exam_date": "2026-11-05",
@@ -2083,7 +2168,23 @@ def test_start_says_whether_the_session_may_give_preference_evidence(home, root,
     assert ok(home, "start", payload)["preference_session"] is expected
 
 
-DAY1 = "2026-10-17T09:00:00+03:00"
+@pytest.mark.parametrize("exams,expected", [
+    ([("CS201", "final", "2026-11-04")], False),                 # date-only, 2 days on: part of that day is within 48 h
+    ([("CS201", "final", "2026-11-05")], True),                  # date-only, 3 days on: none of it is
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-03")], False),  # another course's exam counts
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-04T20:00:00+02:00")], False),  # 47 hours away
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-04T22:00:00+02:00")], True),   # 49 hours away
+    ([("CS201", "final", "2026-11-05"), ("MA101", "quiz", "2026-11-02T20:00:00+02:00")], True),   # already over
+])
+def test_no_preference_session_within_48_hours_of_any_exam(home, root, exams, expected):
+    course(home, mastery=TWO_LEFT)
+    course(home, "MA101 Calculus", mastery=TWO_LEFT)
+    profile(root, exams=exams)
+    out = ok(home, "start", {"now": "2026-11-02T21:00:00+02:00", "course": "CS201 Theory", "choice": "Standard"})
+    assert out["class"]["class"] == "Standard" and out["preference_session"] is expected
+
+
+DAY1 ="2026-10-17T09:00:00+03:00"
 DAY1_EVENING = "2026-10-17T19:00:00+03:00"
 DAY2 = "2026-10-18T09:00:00+03:00"
 DAY3 = "2026-10-19T09:00:00+03:00"
@@ -2214,6 +2315,22 @@ def test_sessions_near_an_exam_give_no_evidence_run_no_probe_and_do_not_advance_
     assert "frequency" not in after["probe_axes"]  # the near-exam session did not count as the skipped one
 
 
+def test_a_running_trial_is_paused_outside_the_counted_session(home, root):
+    course(home, mastery=TWO_LEFT)
+    profile(root, exams=[("CS201", "final", "2026-10-21T09:00:00+03:00")])
+    assert ok(home, "prefs", {})["trial_paused"] is False  # no trial at all
+    pref(home, "session", DAY1)
+    started = pref(home, "trial-start", DAY1, axis="depth")
+    assert started["trial"]["to"] == "what-if" and started["trial_paused"] is False  # applies in this session
+    near = "2026-10-19T18:00:00+03:00"  # Standard by choice, 39 hours before the exam: no session event
+    assert ok(home, "start", {"now": near, "choice": "Standard"})["preference_session"] is False
+    paused = ok(home, "prefs", {})
+    assert paused["trial"]["to"] == "what-if" and paused["trial_paused"] is True  # teach at the saved level
+    assert paused["axes"]["depth"] == DEFAULT_AXES["depth"]
+    resumed = pref(home, "session", "2026-10-22T09:00:00+03:00")
+    assert resumed["trial"]["to"] == "what-if" and resumed["trial_paused"] is False
+
+
 def test_explicit_values_are_never_probed_and_an_explicit_request_ends_a_trial_on_its_axis(home, root):
     profile(root)
     pref(home, "explicit", axis="support", level="example-first", wording="always show an example first")
@@ -2333,6 +2450,28 @@ def test_whats_new_line_is_shown_once_and_never_again(home, root):
     again = ok(home, "pref-event", {"event": "whats-new-seen"})
     assert again["changed"] is False and again["whats_new"] is None
     assert snapshot(home) == before  # a rerun rewrites nothing
+
+
+def test_a_user_with_only_a_lazy_setup_counts_as_existing(home, root):
+    cdir = course(home, mastery=TWO_LEFT)
+    profile(root)  # no setup_done: the earlier sessions came from a lazy setup
+    (cdir / ".state" / "logs").mkdir(exist_ok=True)
+    (cdir / ".state" / "logs" / "2026-10-01-0900.md").write_text("## Session\nstarted: 2026-10-01T09:00:00+03:00\n",
+                                                                  encoding="utf-8")
+    assert ok(home, "prefs", {})["whats_new"] == WHATS_NEW
+    _setup_done(root, "2026-10-17")  # running setup later does not hide it either
+    assert ok(home, "prefs", {})["whats_new"] == WHATS_NEW
+
+
+def test_a_new_lazy_user_is_marked_seen_at_the_first_session_and_never_sees_it(home, root):
+    cdir = course(home, mastery=TWO_LEFT)  # just filed by the lazy setup: no session log yet
+    profile(root)
+    assert ok(home, "prefs", {})["whats_new"] is None
+    ok(home, "pref-event", {"event": "whats-new-seen"})  # every first session marks it seen
+    (cdir / ".state" / "logs").mkdir(exist_ok=True)
+    (cdir / ".state" / "logs" / "2026-10-17-0900.md").write_text("started: 2026-10-17T09:00:00+03:00\n",
+                                                                  encoding="utf-8")
+    assert ok(home, "prefs", {})["whats_new"] is None
 
 
 def test_new_users_never_see_the_whats_new_line(home, root):

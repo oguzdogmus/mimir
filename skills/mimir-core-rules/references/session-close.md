@@ -2,6 +2,8 @@
 
 Used by study, quiz and past-question sessions, only when the student asks to end the session (Ending a session in core rules), including after zero items. Use file read/write/edit tools for memory changes.
 
+A skill that rewrites save.md before this close keeps its last_session, pending_debrief and `delivery_choice:` lines as the file has them now: step 2 sets the first two, and only `session.py start` writes `delivery_choice:`.
+
 1. Run `session.py now` with `{}`, then `session.py close` with `{"now": "<its now>", "term": "<term>", "course": "<course>", "log": "<log name>", "started": "<S>"}`. It appends `ended: <now>` to this session's `started: <S>` block once and reports the session length (`minutes`); when the block already has its `ended:` stamp it writes nothing and returns that stamp (`already_closed` true). Never write an `ended:` line yourself. Use its `last_session` for save.md.
 2. Read save.md. Edit only last_session and pending_debrief, preserving its other fields and template. Set pending_debrief to <start.exam_date> <start.exam_name, else exam> only when it is empty or no and start.exam is set; preserve an existing pending exam. A repeated close after both writes is a no-op.
 3. Read the current log. Preserve every existing first_contact line. If start.first_contact was null and this session log has none, add first_contact: <S> once. Append any gate disagreements not already logged under ## Verifier disagreements, verbatim.

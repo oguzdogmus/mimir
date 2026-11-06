@@ -27,6 +27,8 @@ Files read (all inside the learning root, see ``workspace.py``)
   optionally followed by ``Z`` or a ``+HH:MM``/``-HH:MM`` offset (no offset:
   ``now``'s offset). Case and extra spaces are ignored. Any other cell of the
   course is unreadable and reported in ``exam_problems``, never skipped silently.
+  ``setup_done:`` (a date once full setup finished) for ``prefs``' sampler
+  and ``whats_new`` and the sampler events of ``pref-event``.
 * ``.state/preferences.json``: the global teaching settings, written only
   by ``pref-event``. Before it exists, ``dial_preference:`` in the profile
   (set unless empty, ``none`` or a ``<...>`` placeholder) is the legacy value.
@@ -47,18 +49,22 @@ Files read (all inside the learning root, see ``workspace.py``)
   section per exam, ``## YYYY-MM-DD <exam name>``, then ``words: <the
   student's words>`` and one ``- in: <name>``, ``- out: <name>`` or ``-
   unsure: <name>`` line per question type or topic. Other lines are ignored.
+* ``.state/scope.md`` (in the learning root): exam scopes noted at setup,
+  before the course had a folder, written only by ``scope`` with ``code``.
+  Sections as in the course ``scope.md``, plus a ``code: <CODE>`` line;
+  only ``words`` is kept (no lists).
 * ``<course>/.state/fingerprint.md``: the ``## Question types`` names (the
   type cell before ``(source:``, ``(tentative)`` or ``(prior term)``), for
   ``start``'s ``scope.new``.
 * ``<course>/INDEX.md``: the ``## Registry`` roles and ``## Topics`` names
   (``ingest.py`` rules; a non-UTF-8 one exits 2) for the route.
 * ``<course>/.state/logs/*.md`` (name order): the first ``first_contact:``
-  line whose value is a date or datetime (``plan.py`` rules); for ``debrief``
-  and the first ``gauge_done:`` line whose value is a date or datetime (the
-  gauge-done marker); for ``debrief``
-  also ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
+  line and the first ``gauge_done:`` line (the gauge-done marker) whose
+  value is a date or datetime (``plan.py`` rules); for ``debrief`` also
+  ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
   disagreements``, and ``next_course_offer:`` lines in every course of the
-  term. Symlinked, unreadable or non-UTF-8 logs are skipped.
+  term; for ``prefs``' ``whats_new``, whether any course has a log at all.
+  Symlinked, unreadable or non-UTF-8 logs are skipped.
 * A ``save.md`` or ``mastery.md`` that is itself a symlink reads as empty.
   Unreadable or non-UTF-8 files of courses other than the chosen one, and
   unreadable logs, are skipped. A course whose term, course or ``.state``
@@ -110,14 +116,16 @@ start -- pick the course, the exam and the class for a new session.
           "code": "CS201", "inferred": true, "exam": "2026-11-05",
           "exam_date": "2026-11-05", "exam_name": "final", "q0": false, "exam_problems": [],
           "ask_exam_time": false, "ask_exam_ahead": false, "ask_exam_scope": false,
+          "scope_words": null,
           "remaining": [{"name": "Heaps", "status": "gap", "scope": null},
           {"name": "Graphs", "status": "unseen", "scope": null}],
+          "remaining_line": "Left on your route:\\n- Heaps (gap)\\n- Graphs (unseen)",
           "class": {<plan.py class output>},
           "topic": {"name": "Graphs", "status": "unseen", "evidence_date":
           null, "stale": false, "attempt_first": false}, "route_line": null, "first_contact":
           "2026-10-10T20:00:00+03:00", "scope": null,
-          "gauge": {"done": false, "topics": ["Graphs"]},
-          "line": "Standard delivery: exam in 19 days"}
+          "gauge": {"done": false, "topics": ["Graphs"]}, "debrief": null,
+          "preference_session": true, "line": "Standard delivery: exam in 19 days"}
     (``class`` here includes "decided_by": "exam date".)
     Course: the given one (``inferred`` false); else the latest ``save.md``
     ``last_session:`` (ties: first by course name); else the first ``##
@@ -136,21 +144,34 @@ start -- pick the course, the exam and the class for a new session.
     not marked ``time unknown``, and at most TIME_ASK_DAYS days ahead (ask for
     its time once more). ``ask_exam_ahead``: the exam is date-only and today
     (ask whether it is still ahead). ``scope``: null when ``scope.md`` has no
-    section for the picked exam (same ``exam_date``, same name ignoring case
-    and repeated spaces) or that section lists no name (scope unknown);
-    else {"words", "in", "out", "unsure", "new"}, ``new`` being the route
+    section for the picked exam or that section lists no name (scope
+    unknown). A section is the exam's when it has the same ``exam_date`` and
+    the same name (case and repeated spaces ignored); else, when the exam's
+    date or time changed, the first section with the same name whose date no
+    ``## Exam dates`` row of ``code`` has under that name any more (the scope
+    follows its exam; a passed exam whose row stays keeps its own). Otherwise
+    ``scope`` is {"words", "in", "out", "unsure", "new"}, ``new`` being the route
     topics and fingerprint question types in none of the three lists (found
     after the scope was confirmed), route first. Once the exam passes,
     ``start`` picks another exam and that exam's scope (or none) applies.
-    ``ask_exam_scope``: the exam is at most TIME_ASK_DAYS days ahead and
-    ``scope.md`` has no section for it at all (a saved "don't know" counts).
+    ``scope_words``: when the course ``scope.md`` has no section for the
+    picked exam, the ``words`` noted at setup for it (root ``scope.md``,
+    a section of ``code`` found the same way), else null: the session
+    resolves them through the confirm step instead of asking.
+    ``ask_exam_scope``: the exam is at most TIME_ASK_DAYS days ahead, the
+    course ``scope.md`` has no section for it at all (a saved "don't know"
+    counts) and no scope was noted for it at setup.
     Route: ``mastery.md`` rows in order; when the
     ``INDEX.md`` registry has no ``outline`` row, each ``## Topics`` name not
     yet listed (ignoring case and repeated spaces) follows as an unseen row,
     in ``INDEX.md`` order. With a ``scope``, rows named in ``out`` move to the
     end (order kept, none removed). ``remaining`` = route rows not
     ``mastered``, each with ``scope``: "in", "out", "not checked" (in neither
-    list) or null (no scope). ``class``: ``plan.py class`` with ``now`` and the exam only (the
+    list) or null (no scope). ``remaining_line``: null when ``remaining`` is
+    empty, else "Left on your route:" and one line per entry, in order,
+    "- <name> (<status>)", adding ", not on your next exam" for ``out`` and
+    ", not checked" for "not checked" (e.g. "- Sorting (gap, not on your
+    next exam)"), joined by newlines. ``class``: ``plan.py class`` with ``now`` and the exam only (the
     route's size never decides) plus ``decided_by``, the rule that decided,
     first match wins:
       "session choice" -- ``choice`` without ``lasting``: that class, line
@@ -180,7 +201,8 @@ start -- pick the course, the exam and the class for a new session.
     `mimir-quiz` to keep it fresh?". ``gauge`` (the knowledge gauge): null when the
     route is empty (no gauge; never gauge from the course name); else ``done``
     (the course has a gauge-done marker, set by ``gauge``) and ``topics``, the
-    route's ``unseen`` topic names in route order ([] when done).
+    route's ``unseen`` topic names in route order, without those whose
+    ``scope`` is ``out`` ([] when done).
     ``line`` is the class line. ``debrief``: null when ``pending_debrief:``
     holds no valid date P; else {"exam", "exam_name", "due", "deferred"}.
     P today or later: P with the pending name, due and deferred false (a
@@ -189,11 +211,12 @@ start -- pick the course, the exam and the class for a new session.
     ``code`` dated after P and before today (a later passed exam supersedes;
     debriefs never stack), else P (named by the pending value, else by a row
     dated P); ``deferred`` = the class (as decided above) is Urgent, ``due`` = not deferred.
-    ``preference_session``: true when the class is Standard and the exam date
-    alone would not make it Urgent (``reason`` calm or unknown), so the
-    session may give teaching-preference evidence and run a probe; false for
-    Urgent and for Standard within 48 hours of the exam (a date-only exam
-    today or tomorrow counts as within 48 hours).
+    ``preference_session``: true when the class is Standard and no upcoming
+    ``## Exam dates`` row of any course is within NEAR_EXAM_HOURS hours of
+    ``now``, so the session may give teaching-settings evidence and run a
+    probe trial; false for Urgent and for Standard near any exam. A date-only
+    exam counts as near when its day is at most NEAR_EXAM_HOURS // 24 days
+    after today (some moment of that day is within 48 hours).
     A workspace with no course folder gives
     ``course`` null, every course field null, and the line "No course yet:
     run mimir-setup, then mimir-ingest."
@@ -313,7 +336,7 @@ prefs -- the global teaching settings. Read-only.
           "default", "wording": null}, "frequency": {...}, "depth": {...}},
           "saved": false, "sampler": {"open": true, "started": false,
           "remaining": ["support", "frequency", "depth"]}, "trial": null,
-          "probe_axes": [], "whats_new": null, "line": "Teaching settings:
+          "trial_paused": false, "probe_axes": [], "whats_new": null, "line": "Teaching settings:
           support method-first (default), ..."}
     Axes and levels, more guided to more independent: support example-first,
     method-first, try-first; frequency checks only, key decisions, every
@@ -331,12 +354,19 @@ prefs -- the global teaching settings. Read-only.
     ``trial`` is the one active probe trial across all courses, null when
     none: {"axis", "from" (the saved level), "to" (one level toward more
     independent), "evidence" (the sessions that gave positive evidence)}.
+    ``trial_paused``: a trial is running but this output does not belong to
+    this session's counted session, so the trial is not applied (teach at the
+    saved level): always for ``prefs`` with a trial (the ``session`` event's
+    output replaces it in a counted session), and for a ``pref-event`` event
+    that names no session; false with no trial.
     ``probe_axes``: the axes a trial may start on now, in order, else [];
     see the session and trial-start events.
     ``whats_new``: the one-time line "New: sessions run until you say 'end
-    session'. You can also ask to cram or to study normally." while setup is
-    done and the seen marker is unset (users set up before the update), else
-    null. Setup sets the marker for new users, so they never get it.
+    session'. You can also ask to cram or to study normally." while the seen
+    marker is unset and the student used Mimir before (setup is done, or a
+    course has a readable ``.state/logs/*.md`` session log, e.g. from a lazy
+    setup), else null. A new user has neither when setup or the first study
+    session sets the marker, so they never get it.
 
 pref-event -- apply one teaching-settings event and save the state.
     in : {"event": "explicit", "axis": "frequency", "level": "checks only",
@@ -348,7 +378,8 @@ pref-event -- apply one teaching-settings event and save the state.
          or {"event": "positive" | "neutral" | "pushback" | "frustration",
              "session": "<S>"} or {"event": "reopen", "axis": "frequency"}
          or {"event": "whats-new-seen"}
-    out: as ``prefs`` plus "changed", with ``saved`` true; line e.g.
+    out: as ``prefs`` plus "changed" (and "offer" for ``frustration``), with
+         ``saved`` true; line e.g.
          "Saved for every course: guiding-question frequency is now checks only."
     ``explicit``: the student's lasting request sets that axis to that level
     (any distance), provenance explicit, wording kept with spaces collapsed;
@@ -361,7 +392,8 @@ pref-event -- apply one teaching-settings event and save the state.
     unanswered axes keep their defaults. Both sampler events exit 2 once
     setup is done. ``legacy-import``: saves the state ``prefs``
     shows (the legacy value included) when nothing is saved yet; otherwise
-    changes nothing. ``whats-new-seen``: sets the global seen marker, so
+    changes nothing. No skill sends it (any first write saves the legacy
+    value anyway); it is kept for migration tests and manual use. ``whats-new-seen``: sets the global seen marker, so
     ``whats_new`` is null from then on; allowed before and after setup.
     A state that would not change is not rewritten, so a
     rerun leaves the file byte-identical. An unknown event, axis, or a level
@@ -410,6 +442,14 @@ scope -- save the confirmed scope of one exam.
           "2026-11-05", "scope": {"words": "...", "in": [...], "out": [...],
           "unsure": []}, "changed": true, "line": "Scope of your midterm on
           2026-11-05 saved: 1 in, 1 out."}
+    At setup, before the course has a folder: {"now", "code" (the course
+    code, one word, instead of ``term`` and ``course``), "exam_name",
+    "exam_date", "words"} notes the student's words in the root
+    ``.state/scope.md`` (``in``, ``out`` and ``unsure`` must be empty;
+    ``course_dir`` null; line "Scope of your <name> on <date> noted: you
+    confirm it at your first study session, once the course files are in.").
+    ``start`` reports them as ``scope_words`` until the course has a section
+    for that exam. Giving ``code`` with ``term`` or ``course`` exits 2.
     ``exam_name`` and ``exam_date`` are ``start``'s for that exam: the
     ``## Exam dates`` row of the course code with that name (case and repeated
     spaces ignored; null for an unnamed row) whose calendar day is
@@ -417,8 +457,9 @@ scope -- save the confirmed scope of one exam.
     MAX_WORDING characters. ``in``, ``out`` and ``unsure`` (each optional,
     default []): one-line names of at most MAX_SCOPE_NAME characters, spaces
     collapsed, repeats dropped; a name in two lists exits 2. The section of
-    that exam is replaced whole, else appended; other exams' sections are
-    kept. All three lists empty saves "scope unknown" (``start`` then gives
+    that exam (found as in ``start``, so a section saved before the exam
+    moved is moved to the new date) is replaced whole, else appended; other
+    exams' sections are kept. All three lists empty saves "scope unknown" (``start`` then gives
     ``scope`` null and ``ask_exam_scope`` false; line "Scope of your <name> on
     <date>: unknown, saved so it is not asked again."). A save that would not
     change the file is not written (``changed`` false). No such exam row, a
@@ -445,6 +486,7 @@ from workspace import InputError, _check_keys, _has_control, _short, parse_segme
 
 STALE_DAYS = 14
 ATTEMPT_FIRST_ASSISTED = 3
+MAX_WORDING = 200  # the student's own words kept verbatim: an explicit request's wording, an exam scope's words
 
 NO_ROUTE_LINE = ("No topics on the route yet: drop the outline, slides or past papers into `_inbox/` "
                  "and run mimir-ingest.")
@@ -521,8 +563,7 @@ def _section_rows(text: str, section) -> list[list[str]]:
             for l in lines[first:end]]
 
 
-def _norm(name: str) -> str:
-    return " ".join(name.split()).casefold()
+_norm = plan.name_key  # names compare ignoring case and repeated spaces
 
 
 def mastery(course_dir: Path) -> list[dict]:
@@ -642,23 +683,24 @@ def _logs(course_dir: Path):
             continue
 
 
-def _first_contact(course_dir: Path) -> str | None:
+def _first_log_moment(course_dir: Path, key: str) -> str | None:
+    """The value of the first ``key:`` line, across the course's logs in name order, that holds a
+    date or datetime; None when there is none."""
     for _, text in _logs(course_dir):
         for line in text.splitlines():
-            m = re.fullmatch(r"first_contact:(.*)", line.strip())
-            if m and _valid_moment(m.group(1).strip()):
+            m = re.fullmatch(rf"{key}:(.*)", line.strip())
+            if m and _valid_moment(m.group(1).strip(), key):
                 return m.group(1).strip()
     return None
+
+
+def _first_contact(course_dir: Path) -> str | None:
+    return _first_log_moment(course_dir, "first_contact")
 
 
 def _gauge_done(course_dir: Path) -> str | None:
     """The course's gauge-done marker: the first ``gauge_done:`` log line holding a date or datetime."""
-    for _, text in _logs(course_dir):
-        for line in text.splitlines():
-            m = re.fullmatch(r"gauge_done:(.*)", line.strip())
-            if m and _valid_moment(m.group(1).strip()):
-                return m.group(1).strip()
-    return None
+    return _first_log_moment(course_dir, "gauge_done")
 
 
 def _gauge(course_dir: Path, rows: list[dict], scope: dict | None) -> dict | None:
@@ -671,12 +713,12 @@ def _gauge(course_dir: Path, rows: list[dict], scope: dict | None) -> dict | Non
                                                      and scope_mark(scope, r["name"]) != "out"]}
 
 
-def _valid_moment(text: str) -> bool:
-    """True for a date or datetime under plan.py's parse rules."""
+def _valid_moment(text: str, field: str) -> bool:
+    """True for a date or datetime under plan.py's parse rules (``field`` names it in plan's errors)."""
     if not text:
         return False
     try:
-        plan.parse_moment(text, "first_contact")
+        plan.parse_moment(text, field)
     except plan.InputError:
         return False
     return True
@@ -695,6 +737,19 @@ def _pick(courses: list[dict], profile: str) -> dict:
         if hit:
             return hit
     return max(courses, key=lambda c: (workspace.term_key(c["term"]), c["course"]))
+
+
+def course_code(course: str) -> str:
+    """A course's code: the first word of its folder name."""
+    return course.split()[0]
+
+
+def _indexed_course(root: Path, term: str, course: str) -> Path:
+    """The folder of a named course; exits 2 unless it exists with an ``INDEX.md``."""
+    course_dir = workspace.course_folder(root, term, course)
+    if not (course_dir / "INDEX.md").is_file():
+        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
+    return course_dir
 
 
 def _usable(root: Path, course: dict) -> bool:
@@ -776,6 +831,9 @@ SCOPE_FILE = "scope.md"
 SCOPE_SIDES = ("in", "out", "unsure")
 SCOPE_HEAD = ("<!-- Mimir exam scope. Changed only by session.py scope; one section per exam. -->\n"
               "# Exam scope\n")
+NOTED_HEAD = ("<!-- Mimir exam scopes noted at setup, before the course had a folder. Changed only by "
+              "session.py scope. -->\n# Noted exam scope\n")
+_CODE = re.compile(r"[^\s|]{1,40}")
 MAX_SCOPE_NAME = 120
 _SCOPE_SECTION = re.compile(r"## ([0-9]{4}-[0-9]{2}-[0-9]{2})(?: (.*))?")
 _SCOPE_ENTRY = re.compile(r"- (in|out|unsure): (.+)")
@@ -789,7 +847,7 @@ def scopes(course_dir: Path) -> list[dict]:
         head = _SCOPE_SECTION.fullmatch(line)
         if head:
             out.append({"exam_date": head.group(1), "exam_name": " ".join((head.group(2) or "").split()),
-                        "words": "", "in": [], "out": [], "unsure": []})
+                        "code": "", "words": "", "in": [], "out": [], "unsure": []})
             continue
         if not out:
             continue
@@ -798,21 +856,31 @@ def scopes(course_dir: Path) -> list[dict]:
             out[-1][entry.group(1)].append(" ".join(entry.group(2).split()))
         elif line.startswith("words:"):
             out[-1]["words"] = line[len("words:"):].strip()
+        elif line.startswith("code:"):
+            out[-1]["code"] = line[len("code:"):].strip()
     return out
 
 
-def _scope_for(sections: list[dict], exam_date: str | None, exam_name: str | None) -> dict | None:
-    """The first section saved for that exam (same date, same name ignoring case and spaces)."""
+def _scope_for(sections: list[dict], exam_date: str | None, exam_name: str | None,
+               exams: list[tuple[date, str]]) -> dict | None:
+    """The section saved for that exam: the first with the same date and name (case and spaces
+    ignored); else, when the exam moved, the first with the same name whose date no row in
+    ``exams`` (the course code's dated rows) has under that name any more."""
     if exam_date is None:
         return None
-    return next((s for s in sections if s["exam_date"] == exam_date
-                 and _norm(s["exam_name"]) == _norm(exam_name or "")), None)
+    name = _norm(exam_name or "")
+    same = [s for s in sections if _norm(s["exam_name"]) == name]
+    rows = {day.isoformat() for day, exam in exams if _norm(exam) == name}
+    return (next((s for s in same if s["exam_date"] == exam_date), None)
+            or next((s for s in same if s["exam_date"] not in rows), None))
 
 
-def _scope_text(sections: list[dict]) -> str:
-    parts = [SCOPE_HEAD]
+def _scope_text(sections: list[dict], head: str = SCOPE_HEAD) -> str:
+    parts = [head]
     for sec in sections:
-        lines = [f"## {sec['exam_date']} {sec['exam_name']}".rstrip(), f"words: {sec['words']}"]
+        lines = [f"## {sec['exam_date']} {sec['exam_name']}".rstrip()]
+        lines += [f"code: {sec['code']}"] if sec.get("code") else []
+        lines += [f"words: {sec['words']}"]
         lines += [f"- {side}: {name}" for side in SCOPE_SIDES for name in sec[side]]
         parts.append("\n".join(lines) + "\n")
     return "\n".join(parts)
@@ -832,33 +900,36 @@ def question_types(course_dir: Path) -> list[str]:
     return names
 
 
-def scope_view(course_dir: Path, rows: list[dict], exam: dict, today: date) -> tuple[dict | None, bool]:
-    """``start``'s ``scope`` and ``ask_exam_scope``. ``scope``: the saved lists of the picked exam
-    plus ``new``, the route topics and question types in none of them; None when no list is saved
-    for it (scope unknown). ``ask_exam_scope``: nothing at all is saved for the exam (not even
-    "don't know") and it is at most TIME_ASK_DAYS days ahead."""
-    saved = _scope_for(scopes(course_dir), exam["exam_date"], exam["exam_name"])
-    ask = (saved is None and exam["exam_date"] is not None
+def _noted_scope(root: Path, code: str, exam: dict, exams: list[tuple[date, str]]) -> dict | None:
+    """The scope noted at setup for the course code's exam, from ``<root>/.state/scope.md``."""
+    sections = [s for s in scopes(root) if s["code"].casefold() == code.casefold()]
+    return _scope_for(sections, exam["exam_date"], exam["exam_name"], exams)
+
+
+def scope_view(root: Path, course_dir: Path, code: str, rows: list[dict], exam: dict,
+               exams: list[tuple[date, str]], today: date) -> tuple[dict | None, bool, str | None]:
+    """``start``'s ``scope``, ``ask_exam_scope`` and ``scope_words``. ``scope``: the saved lists of
+    the picked exam plus ``new``, the route topics and question types in none of them; None when no
+    list is saved for it (scope unknown). ``scope_words``: with nothing saved in the course, the
+    words noted at setup for the exam, else None. ``ask_exam_scope``: nothing at all is saved or
+    noted for the exam (not even "don't know") and it is at most TIME_ASK_DAYS days ahead."""
+    saved = _scope_for(scopes(course_dir), exam["exam_date"], exam["exam_name"], exams)
+    noted = _noted_scope(root, code, exam, exams) if saved is None else None
+    words = noted["words"] if noted else None
+    ask = (saved is None and noted is None and exam["exam_date"] is not None
            and (date.fromisoformat(exam["exam_date"]) - today).days <= TIME_ASK_DAYS)
     if saved is None or not any(saved[side] for side in SCOPE_SIDES):
-        return None, ask
+        return None, ask, words
     known = {_norm(n) for side in SCOPE_SIDES for n in saved[side]}
     new: list[str] = []
     for name in [r["name"] for r in rows] + question_types(course_dir):
         if _norm(name) not in known:
             known.add(_norm(name))
             new.append(name)
-    return {"words": saved["words"], **{side: saved[side] for side in SCOPE_SIDES}, "new": new}, False
+    return {"words": saved["words"], **{side: saved[side] for side in SCOPE_SIDES}, "new": new}, False, None
 
 
-def scope_mark(scope: dict | None, name: str) -> str | None:
-    """A route topic's mark: "in", "out" or "not checked"; None without a scope."""
-    if scope is None:
-        return None
-    for side in ("in", "out"):
-        if _norm(name) in {_norm(n) for n in scope[side]}:
-            return side
-    return "not checked"
+scope_mark = plan.scope_mark  # a route topic's mark: "in", "out", "not checked", or None without a scope
 
 
 # --- Debrief ------------------------------------------------------------------------
@@ -1097,9 +1168,41 @@ def _class(now: str, exam: dict, choice: str | None, lasting: bool, save: str) -
             "line": f"{saved} delivery: you asked, until your {exam['exam_name'] or 'exam'}; {tail}"}
 
 
-def _preference_session(klass: dict) -> bool:
-    """Standard, and not within 48 hours of the exam (the exam date alone would not make it Urgent)."""
-    return klass["class"] == "Standard" and klass["reason"] in ("calm", "unknown")
+NEAR_EXAM_HOURS = 48  # Standard sessions this close to any exam give no preference evidence and run no probe
+
+
+def _near_exam(profile: str, now: datetime) -> bool:
+    """True when any course's upcoming exam is within NEAR_EXAM_HOURS of ``now``. A date-only exam
+    counts when its day is at most NEAR_EXAM_HOURS // 24 days after today: some moment of it is."""
+    for _, _, when in _section_rows(profile, _EXAM_TABLE):
+        value = exam_value(when, now.tzinfo)
+        if not isinstance(value, date):  # unknown or unreadable
+            continue
+        if plan.is_date_only(value):
+            if 0 <= (value - now.date()).days <= NEAR_EXAM_HOURS // 24:
+                return True
+        elif timedelta(0) < value - now <= timedelta(hours=NEAR_EXAM_HOURS):
+            return True
+    return False
+
+
+_ROUTE_MARKS = {"out": "not on your next exam", "not checked": "not checked"}
+
+
+def _remaining_line(remaining: list[dict]) -> str | None:
+    """What is left on the route, one line per topic with its status and scope mark; None when empty."""
+    if not remaining:
+        return None
+    rows = ["Left on your route:"]
+    for r in remaining:
+        mark = _ROUTE_MARKS.get(r["scope"])
+        rows.append(f"- {r['name']} ({r['status']}{', ' + mark if mark else ''})")
+    return "\n".join(rows)
+
+
+def _preference_session(klass: dict, profile: str, now: datetime) -> bool:
+    """Standard, and not within 48 hours of any exam in the profile."""
+    return klass["class"] == "Standard" and not _near_exam(profile, now)
 
 
 def _start(data: dict, choice: str | None = None,
@@ -1110,14 +1213,16 @@ def _start(data: dict, choice: str | None = None,
         return {"root": str(root), "courses": courses, "term": None, "course": None, "course_dir": None,
                 "code": None, "inferred": None, "exam": None, "exam_date": None, "exam_name": None, "q0": None,
                 "exam_problems": None, "ask_exam_time": None, "ask_exam_ahead": None, "ask_exam_scope": None,
-                "remaining": [], "class": None, "topic": None, "route_line": None,
+                "scope_words": None,
+                "remaining": [], "remaining_line": None, "class": None, "topic": None, "route_line": None,
                 "first_contact": None, "scope": None, "gauge": None, "debrief": None, "preference_session": None,
                 "line": NO_COURSE_LINE}, None
-    code = chosen["course"].split()[0]
+    code = course_code(chosen["course"])
     today = now.date()
     exam = _exam(profile, code, now)
     rows = route(course_dir)
-    scope, ask_scope = scope_view(course_dir, rows, exam, today)
+    scope, ask_scope, scope_words = scope_view(root, course_dir, code, rows, exam,
+                                               _code_exams(profile, code, now.tzinfo), today)
     # The next exam's scope orders the route: topics not on it go last; none is removed.
     rows = sorted(rows, key=lambda r: scope_mark(scope, r["name"]) == "out")
     remaining = [r for r in rows if r["status"] != "mastered"]
@@ -1140,15 +1245,15 @@ def _start(data: dict, choice: str | None = None,
         state = topic_state(pick, pick["name"], today)
         topic = {k: state[k] for k in ("name", "status", "evidence_date", "stale", "attempt_first")}
     route_line = None if pick is not None else ROUTE_DONE_LINE if rows else NO_ROUTE_LINE
+    left = [{"name": r["name"], "status": r["status"], "scope": scope_mark(scope, r["name"])} for r in remaining]
     return {"root": str(root), "courses": courses, "term": chosen["term"], "course": chosen["course"],
             "course_dir": str(course_dir), "code": code, "inferred": inferred, **exam,
-            "ask_exam_scope": ask_scope,
-            "remaining": [{"name": r["name"], "status": r["status"], "scope": scope_mark(scope, r["name"])}
-                          for r in remaining],
+            "ask_exam_scope": ask_scope, "scope_words": scope_words,
+            "remaining": left, "remaining_line": _remaining_line(left),
             "class": klass, "topic": topic, "route_line": route_line,
             "first_contact": _first_contact(course_dir), "scope": scope,
             "gauge": _gauge(course_dir, rows, scope),
-            "debrief": debrief, "preference_session": _preference_session(klass), "line": klass["line"]}, window
+            "debrief": debrief, "preference_session": _preference_session(klass, profile, now), "line": klass["line"]}, window
 
 
 def _scope_names(data: dict, side: str) -> list[str]:
@@ -1166,10 +1271,20 @@ def _scope_names(data: dict, side: str) -> list[str]:
 
 
 def cmd_scope(data: dict) -> dict:
-    """Save the confirmed scope of one exam in the course's ``scope.md``."""
-    _check_keys(data, {"now", "term", "course", "exam_name", "exam_date", "words", *SCOPE_SIDES})
+    """Save the confirmed scope of one exam in the course's ``scope.md``, or, given a course
+    ``code`` instead of ``term`` and ``course`` (setup, before the course has a folder), note the
+    student's words in ``<root>/.state/scope.md`` for the first study session to confirm."""
+    _check_keys(data, {"now", "term", "course", "code", "exam_name", "exam_date", "words", *SCOPE_SIDES})
     now = _moment(data, "now")
-    term, course = parse_term(data), parse_segment(data, "course")
+    noted = "code" in data
+    if noted and ("term" in data or "course" in data):
+        raise InputError("give code, or term and course, not both")
+    if noted:
+        code = data["code"]
+        if not isinstance(code, str) or not _CODE.fullmatch(code):
+            raise InputError("code must be a course code: one word of at most 40 characters")
+    else:
+        term, course = parse_term(data), parse_segment(data, "course")
     exam_date = data.get("exam_date")
     if not isinstance(exam_date, str) or _valid_date(exam_date) is None:
         raise InputError("exam_date must be a date YYYY-MM-DD (start's exam_date)")
@@ -1186,40 +1301,45 @@ def cmd_scope(data: dict) -> dict:
         if both:
             name = next(n for n in lists[a] if _norm(n) in both)
             raise InputError(f"{_short(name)} is in both {a} and {b}")
+    if noted and any(lists.values()):
+        raise InputError("a scope noted by code holds words only: its lists are confirmed once the course "
+                         "has a folder")
     root = ingest._workspace_root()
-    course_dir = workspace.course_folder(root, term, course)
-    if not (course_dir / "INDEX.md").is_file():
-        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
-    code = course.split()[0]
-    profile = _text(root / ".state" / "profile.md")
-    if not any(c.strip().casefold() == code.casefold() and _norm(e) == _norm(exam_name)
-               and isinstance(v := exam_value(w, now.tzinfo), (date, datetime))
-               and _exam_day(v, now.tzinfo).isoformat() == exam_date
-               for c, e, w in _section_rows(profile, _EXAM_TABLE)):
+    if noted:
+        course_dir, folder = None, root
+    else:
+        course_dir = folder = _indexed_course(root, term, course)
+        code = course_code(course)
+    exams = _code_exams(_text(root / ".state" / "profile.md"), code, now.tzinfo)
+    if not any(day.isoformat() == exam_date and _norm(name) == _norm(exam_name) for day, name in exams):
         raise InputError(f"no ## Exam dates row of {_short(code)} named {_short(exam_name or '(none)')} "
                          f"on {exam_date} in profile.md")
-    path = course_dir / ".state" / SCOPE_FILE
+    path = folder / ".state" / SCOPE_FILE
     if path.is_symlink():
         raise InputError(f"{SCOPE_FILE} must not be a symlink")
-    sections = scopes(course_dir)
-    entry = {"exam_date": exam_date, "exam_name": exam_name, "words": " ".join(words.split()), **lists}
-    old = _scope_for(sections, exam_date, exam_name)
+    sections = scopes(folder)
+    entry = {"exam_date": exam_date, "exam_name": exam_name, "code": code if noted else "",
+             "words": " ".join(words.split()), **lists}
+    mine = [s for s in sections if s["code"].casefold() == code.casefold()] if noted else sections
+    old = _scope_for(mine, exam_date, exam_name, exams)
     if old is None:
         sections.append(entry)
     else:
         sections[sections.index(old)] = entry
-    text = _scope_text(sections)
+    text = _scope_text(sections, NOTED_HEAD if noted else SCOPE_HEAD)
     changed = _text(path) != text
     if changed:
         ingest._write_atomic(path, text)
     label = f"your {exam_name or 'exam'} on {exam_date}"
-    if any(lists.values()):
+    if noted:
+        line = f"Scope of {label} noted: you confirm it at your first study session, once the course files are in."
+    elif any(lists.values()):
         counts = f"{len(lists['in'])} in, {len(lists['out'])} out"
         counts += f", {len(lists['unsure'])} unsure" if lists["unsure"] else ""
         line = f"Scope of {label} saved: {counts}."
     else:
         line = f"Scope of {label}: unknown, saved so it is not asked again."
-    return {"course_dir": str(course_dir), "exam_name": exam_name or None, "exam_date": exam_date,
+    return {"course_dir": str(course_dir) if course_dir else None, "exam_name": exam_name or None, "exam_date": exam_date,
             "scope": {"words": entry["words"], **lists}, "changed": changed, "line": line}
 
 
@@ -1271,7 +1391,7 @@ def cmd_progress(data: dict) -> dict:
     counts = {s: sum(1 for t in topics if t["status"] == s) for s in STATUSES}
     out = {"courses": courses, "term": chosen["term"], "course": chosen["course"],
            "course_dir": str(course_dir),
-           "code": chosen["course"].split()[0], "inferred": inferred, "topics": topics, "counts": counts}
+           "code": course_code(chosen["course"]), "inferred": inferred, "topics": topics, "counts": counts}
     if not topics:
         return {**out, "table": None, "line": NO_ROUTE_LINE}
     rows = [_PROGRESS_HEAD] + [
@@ -1300,10 +1420,7 @@ def cmd_check(data: dict) -> dict:
     for n, name in enumerate(names, 1):
         if not isinstance(name, str) or not name.strip() or _has_control(name):
             raise InputError(f"topics[{n}] must be a one-line topic name")
-    root = ingest._workspace_root()
-    course_dir = workspace.course_folder(root, term, course)
-    if not (course_dir / "INDEX.md").is_file():
-        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
+    course_dir = _indexed_course(ingest._workspace_root(), term, course)
     rows = {_norm(r["name"]): r for r in mastery(course_dir)}
     today = now.date()
     out = [topic_state(rows.get(_norm(name)), " ".join(name.split()), today) for name in names]
@@ -1320,9 +1437,7 @@ def _session_log(data: dict) -> tuple[Path, Path]:
     name = data.get("log")
     if not isinstance(name, str) or not _CLOSE_LOG.fullmatch(name):
         raise InputError("log must be a log name from `session.py now` (YYYY-MM-DD-HHMM)")
-    course_dir = workspace.course_folder(ingest._workspace_root(), term, course)
-    if not (course_dir / "INDEX.md").is_file():
-        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
+    course_dir = _indexed_course(ingest._workspace_root(), term, course)
     path = course_dir / ".state" / "logs" / f"{name}.md"
     if path.is_symlink() or not path.is_file():
         raise InputError(f"log {name} not found in {_short(course)}")
@@ -1626,7 +1741,6 @@ AXIS_NAMES = {"support": "support", "frequency": "guiding-question frequency", "
 PROVENANCES = ("default", "sampler", "learned", "explicit", "legacy")
 PREFS_FILE = "preferences.json"
 PREFS_VERSION = 1
-MAX_WORDING = 200
 # Probe trials (docs/teaching-preferences-design.md, Probes; the numbers are tunable heuristics).
 ADOPT_SESSIONS = 2          # positive evidence in this many sessions, on different calendar days, adopts a trial
 MAX_REJECTIONS = 3          # the third rejection of a transition stops it; before that, skip as many sessions
@@ -1782,15 +1896,27 @@ def _probe_block(state: dict, axis: str) -> str | None:
     return None
 
 
+def _used_before(root: Path) -> bool:
+    """Evidence the student used Mimir before: setup is done, or some course has a session log."""
+    if workspace.read_setup_done(root) is not None:
+        return True
+    return any(next(_logs(Path(c["course_dir"])), None) is not None
+               for c in ingest._courses(root) if _usable(root, c))
+
+
 def _whats_new(state: dict, root: Path) -> str | None:
-    """The one-time line for users whose setup was done before the update; the seen marker stops it."""
-    return WHATS_NEW if workspace.read_setup_done(root) is not None and not state.get("whats_new_seen") else None
+    """The one-time line for existing users; the seen marker stops it. New users get the marker at
+    setup or at their first session, before any evidence of use exists."""
+    return WHATS_NEW if not state.get("whats_new_seen") and _used_before(root) else None
 
 
-def _prefs_out(state: dict, saved: bool, root: Path) -> dict:
+def _prefs_out(state: dict, saved: bool, root: Path, in_session: bool = False) -> dict:
+    """The settings as ``prefs`` reports them. ``in_session``: the output belongs to this session's
+    counted session (an event naming it), the only place a running trial applies."""
     axes = state["axes"]
     parts = ", ".join(f"{AXIS_NAMES[a]} {axes[a]['level']} ({axes[a]['provenance']})" for a in AXES)
     return {"axes": axes, "saved": saved, "sampler": _sampler(state, root), "trial": state["trial"],
+            "trial_paused": state["trial"] is not None and not in_session,
             "probe_axes": [a for a in AXES if _probe_block(state, a) is None], "whats_new": _whats_new(state, root),
             "line": f"Teaching settings: {parts}."}
 
@@ -1811,11 +1937,17 @@ def _axis_level(data: dict, *, level: bool) -> tuple[str, str | None]:
     return axis, data.get("level")
 
 
-def _this_session(state: dict, data: dict) -> str:
-    """The counted session the event belongs to; any other session gives no evidence."""
-    moment, current = _session_moment(data.get("session")), state["sessions"]["current"]
+def _session_arg(data: dict) -> datetime:
+    """The event's ``session``: this session's ``started:`` datetime, with its offset."""
+    moment = _session_moment(data.get("session"))
     if moment is None:
         raise InputError("session must be this session's `session.py now` datetime (its started: line)")
+    return moment
+
+
+def _this_session(state: dict, data: dict) -> str:
+    """The counted session the event belongs to; any other session gives no evidence."""
+    moment, current = _session_arg(data), state["sessions"]["current"]
     if current is None or moment != _session_moment(current):
         raise InputError(NO_SESSION)
     return current
@@ -1828,10 +1960,10 @@ def _active_trial(state: dict, data: dict) -> dict:
     return state["trial"]
 
 
-def _ev_session(state: dict, data: dict) -> str:
-    moment, sessions = _session_moment(data.get("session")), state["sessions"]
-    if moment is None:
-        raise InputError("session must be this session's `session.py now` datetime (its started: line)")
+# Event handlers: (state, data, root=..., saved=...) -> line; each changes ``state`` in place.
+
+def _ev_session(state: dict, data: dict, **_) -> str:
+    moment, sessions = _session_arg(data), state["sessions"]
     if sessions["current"] is not None:
         last = _session_moment(sessions["current"])
         if moment == last:
@@ -1845,7 +1977,7 @@ def _ev_session(state: dict, data: dict) -> str:
     return f"Standard session {sessions['count']} counted for teaching settings."
 
 
-def _ev_trial_start(state: dict, data: dict) -> str:
+def _ev_trial_start(state: dict, data: dict, **_) -> str:
     current = _this_session(state, data)
     axis, _ = _axis_level(data, level=False)
     block = _probe_block(state, axis)
@@ -1857,7 +1989,7 @@ def _ev_trial_start(state: dict, data: dict) -> str:
     return f"Trial started: {AXIS_NAMES[axis]} {state['trial']['to']} instead of {frm}."
 
 
-def _ev_positive(state: dict, data: dict) -> str:
+def _ev_positive(state: dict, data: dict, **_) -> str:
     trial = _active_trial(state, data)
     current = state["sessions"]["current"]
     if current in trial["evidence"]:
@@ -1873,12 +2005,12 @@ def _ev_positive(state: dict, data: dict) -> str:
     return f"Saved for every course: {AXIS_NAMES[axis]} is now {trial['to']}."
 
 
-def _ev_neutral(state: dict, data: dict) -> str:
+def _ev_neutral(state: dict, data: dict, **_) -> str:
     _active_trial(state, data)
     return "Neutral: nothing counted; the trial continues."
 
 
-def _ev_pushback(state: dict, data: dict) -> str:
+def _ev_pushback(state: dict, data: dict, **_) -> str:
     trial = _active_trial(state, data)
     key = _transition(trial["axis"], trial["from"])
     rec = state["transitions"].setdefault(key, {"rejections": 0, "next": 0})
@@ -1891,7 +2023,7 @@ def _ev_pushback(state: dict, data: dict) -> str:
     return f"{back} It may be tried again from eligible session {rec['next']}."
 
 
-def _ev_reopen(state: dict, data: dict) -> str:
+def _ev_reopen(state: dict, data: dict, **_) -> str:
     axis, _ = _axis_level(data, level=False)
     entry = state["axes"][axis]
     if entry["provenance"] == "explicit":
@@ -1903,7 +2035,7 @@ def _ev_reopen(state: dict, data: dict) -> str:
     return f"Reopened: Mimir may try {AXIS_NAMES[axis]} {_next_level(axis, entry['level'])} again."
 
 
-def _ev_frustration(state: dict, data: dict) -> str:
+def _ev_frustration(state: dict, data: dict, **_) -> str:
     current = _this_session(state, data)
     seen = state["frustration"]
     if seen["last"] == current:
@@ -1915,21 +2047,21 @@ def _ev_frustration(state: dict, data: dict) -> str:
     return "Noted; no offer."
 
 
-def _ev_whats_new_seen(state: dict, data: dict) -> str:
+def _ev_whats_new_seen(state: dict, data: dict, **_) -> str:
     line = "What's new already seen." if state["whats_new_seen"] else "What's new seen: it will not repeat."
     state["whats_new_seen"] = True
     return line
 
 
-def _ev_sampler_skip(state: dict, data: dict) -> str:
+def _ev_sampler_skip(state: dict, data: dict, **_) -> str:
     line = "Sampler already skipped." if state["sampler_skipped"] else \
         "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
     state["sampler_skipped"] = True
     return line
 
 
-def _ev_sampler(state: dict, data: dict, root: Path) -> str:
-    axis, level = _axis_level(data, level=True)
+def _ev_sampler(state: dict, data: dict, *, root: Path, **_) -> str:
+    axis, level = data["axis"], data["level"]  # checked by cmd_pref_event
     current = state["axes"][axis]
     if state["sampler_skipped"]:
         return "The sampler was skipped; settings unchanged."
@@ -1942,8 +2074,8 @@ def _ev_sampler(state: dict, data: dict, root: Path) -> str:
     return f"Tentative starting settings: {levels}. They keep adapting as you study."
 
 
-def _ev_explicit(state: dict, data: dict) -> str:
-    axis, level = _axis_level(data, level=True)
+def _ev_explicit(state: dict, data: dict, **_) -> str:
+    axis, level = data["axis"], data["level"]  # checked by cmd_pref_event
     wording = data.get("wording")
     if not isinstance(wording, str) or not wording.strip() or _has_control(wording) or len(wording) > MAX_WORDING:
         raise InputError(f"wording must be the student's request, one line of at most {MAX_WORDING} characters")
@@ -1953,33 +2085,40 @@ def _ev_explicit(state: dict, data: dict) -> str:
     return f"Saved for every course: {AXIS_NAMES[axis]} is now {level}."
 
 
+def _ev_legacy_import(state: dict, data: dict, *, saved: bool, **_) -> str:
+    """Saves the state ``prefs`` shows (the legacy value included) when nothing is saved yet."""
+    if saved:
+        return "Teaching settings already saved."
+    if state["axes"]["frequency"]["provenance"] == "legacy":
+        return "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
+    return "Teaching settings saved with the defaults."
+
+
+EVENT_HANDLERS = {"legacy-import": _ev_legacy_import, "sampler-skip": _ev_sampler_skip,
+                  "whats-new-seen": _ev_whats_new_seen, "explicit": _ev_explicit, "sampler": _ev_sampler,
+                  "session": _ev_session, "trial-start": _ev_trial_start, "positive": _ev_positive,
+                  "neutral": _ev_neutral, "pushback": _ev_pushback, "reopen": _ev_reopen,
+                  "frustration": _ev_frustration}
+
+
 def cmd_pref_event(data: dict) -> dict:
     """Apply one teaching-settings event and save the state atomically (unchanged state writes nothing)."""
     event = data.get("event")
     if event not in EVENT_FIELDS:
         raise InputError(f"event must be one of {', '.join(EVENT_FIELDS)}")
     _check_keys(data, {"event"} | EVENT_FIELDS[event])
-    if event in ("explicit", "sampler"):
+    if event in ("explicit", "sampler"):  # checked before any file is read
         _axis_level(data, level=True)
     root = ingest._workspace_root()
     if event.startswith("sampler") and workspace.read_setup_done(root) is not None:
         raise InputError("the sampler runs only during setup")
     state, saved = _prefs_state(root)
     before = json.dumps(state, sort_keys=True)
-    handlers = {"whats-new-seen": _ev_whats_new_seen, "sampler-skip": _ev_sampler_skip, "explicit": _ev_explicit,
-                "session": _ev_session, "trial-start": _ev_trial_start, "positive": _ev_positive, "neutral": _ev_neutral,
-                "pushback": _ev_pushback, "reopen": _ev_reopen, "frustration": _ev_frustration}
-    line = _ev_sampler(state, data, root) if event == "sampler" else \
-        handlers[event](state, data) if event in handlers else None
+    line = EVENT_HANDLERS[event](state, data, root=root, saved=saved)
     changed = not saved or json.dumps(state, sort_keys=True) != before
     if changed:
         ingest._write_atomic(_prefs_path(root), json.dumps(_compact(state), indent=2) + "\n")
-    out = _prefs_out(state, True, root)
-    if line is None:  # legacy-import: saved now only when nothing was saved before
-        line = ("Teaching settings already saved." if not changed else
-                "Your earlier \"fewer questions\" choice is now guiding-question frequency checks only."
-                if state["axes"]["frequency"]["provenance"] == "legacy" else
-                "Teaching settings saved with the defaults.")
+    out = _prefs_out(state, True, root, in_session="session" in EVENT_FIELDS[event])
     if event == "frustration":
         out["offer"] = line == FEWER_QUESTIONS_OFFER
     return {**out, "changed": changed, "line": line}
