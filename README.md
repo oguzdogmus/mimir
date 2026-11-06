@@ -7,7 +7,7 @@ Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude
 ## What it does
 
 - **Starts from wherever you are.** Type "exam tomorrow, help" and attach a photo of a past paper. Mimir starts drilling right away, with no setup.
-- **Sets the pace from the exam date.** Far from the exam, Mimir teaches (Standard). Close to it, it drills question types ranked by marks and by how often they appeared in past papers (Urgent), shown as a table with nothing cut. It picks the mode and tells you why. Sessions run until you say "end session".
+- **Sets the pace from the exam date.** Far from the exam, Mimir teaches (Standard). Close to it, it drills question types ranked by marks and by how often they appeared in past papers (Urgent), shown as a table with nothing cut, and teaches each type with a short recipe before testing it. It picks the mode and tells you why. Sessions run until you say "end session".
 - **Follows your professor.** Mimir reads the outline, slides and past papers, learns how the professor writes questions, and labels every question with where it came from. Answer keys are checked before you see them.
 - **Teaches in your language.** Your course and exams can be in one language and the explanations in another. You choose both during setup.
 - **Remembers you.** It keeps dated evidence of what you solved alone and with help, and picks up where you left off.
@@ -133,7 +133,7 @@ If that app doesn't expand slash commands either, run `mimir-setup` and `mimir-i
 Priorities come from hands-on testing and may change. There are no promised dates. Until 1.0, expect changes to how sessions run and to the folder layout. What shipped in 0.3.4 is in the [changelog](CHANGELOG.md).
 
 - **Next: trust every session.** Answer keys checked on every agent ([#23](https://github.com/oguzdogmus/mimir/issues/23), [#2](https://github.com/oguzdogmus/mimir/issues/2)), smoother installs ([#3](https://github.com/oguzdogmus/mimir/issues/3), [#4](https://github.com/oguzdogmus/mimir/issues/4)), and live checks on macOS, Windows and WSL ([`RELEASE.md`](RELEASE.md)).
-- **Planned: make learning feel clearer.** Better-looking pages and diagrams, cleaner question and answer formatting in chat (especially the Claude mobile and desktop apps), and a short lesson before the first worked example in Urgent sessions.
+- **Planned: make learning feel clearer.** Better-looking pages and diagrams, cleaner question and answer formatting in chat (especially the Claude mobile and desktop apps).
 - **Exploring: bring the whole course.** Real textbook support (today ingest files a textbook, but sessions never read it), chapters linked to course topics, and safe migrations when the folder layout changes.
 
 ## Development
