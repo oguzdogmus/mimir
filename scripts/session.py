@@ -287,8 +287,8 @@ prefs -- the global teaching settings. Read-only.
     out: {"axes": {"support": {"level": "method-first", "provenance":
           "default", "wording": null}, "frequency": {...}, "depth": {...}},
           "saved": false, "sampler": {"open": true, "started": false,
-          "remaining": ["support", "frequency", "depth"]}, "line": "Teaching
-          settings: support method-first (default), ..."}
+          "remaining": ["support", "frequency", "depth"]}, "whats_new": null,
+          "line": "Teaching settings: support method-first (default), ..."}
     Axes and levels, more guided to more independent: support example-first,
     method-first, try-first; frequency checks only, key decisions, every
     step; depth next step, why, what-if. Provenance is default, sampler,
@@ -302,12 +302,17 @@ prefs -- the global teaching settings. Read-only.
     default, in order, while setup is not done (no ``setup_done:`` date in the
     profile) and the sampler was not skipped, else []; ``open`` = remaining is
     non-empty; ``started`` = some axis has provenance sampler.
+    ``whats_new``: the one-time line "New: sessions run until you say 'end
+    session'. You can also ask to cram or to study normally." while setup is
+    done and the seen marker is unset (users set up before the update), else
+    null. Setup sets the marker for new users, so they never get it.
 
 pref-event -- apply one teaching-settings event and save the state.
     in : {"event": "explicit", "axis": "frequency", "level": "checks only",
           "wording": "ask fewer questions"}
          or {"event": "sampler", "axis": "support", "level": "example-first"}
          or {"event": "sampler-skip"} or {"event": "legacy-import"}
+         or {"event": "whats-new-seen"}
     out: as ``prefs`` plus "changed", with ``saved`` true; line e.g.
          "Saved for every course: guiding-question frequency is now checks only."
     ``explicit``: the student's lasting request sets that axis to that level
@@ -321,7 +326,9 @@ pref-event -- apply one teaching-settings event and save the state.
     unanswered axes keep their defaults. Both sampler events exit 2 once
     setup is done. ``legacy-import``: saves the state ``prefs``
     shows (the legacy value included) when nothing is saved yet; otherwise
-    changes nothing. A state that would not change is not rewritten, so a
+    changes nothing. ``whats-new-seen``: sets the global seen marker, so
+    ``whats_new`` is null from then on; allowed before and after setup.
+    A state that would not change is not rewritten, so a
     rerun leaves the file byte-identical. An unknown event, axis, or a level
     from another axis exits 2 and writes nothing.
 
@@ -1349,6 +1356,7 @@ PROVENANCES = ("default", "sampler", "learned", "explicit", "legacy")
 PREFS_FILE = "preferences.json"
 PREFS_VERSION = 1
 MAX_WORDING = 200
+WHATS_NEW = "New: sessions run until you say 'end session'. You can also ask to cram or to study normally."
 
 
 def _default_axes() -> dict:
@@ -1381,6 +1389,8 @@ def _prefs_state(root: Path) -> tuple[dict, bool]:
         raise damaged
     if state.get("sampler_skipped", True) is not True:  # optional; present only once the sampler was skipped
         raise damaged
+    if state.get("whats_new_seen", True) is not True:  # optional; present only once the what's-new line was seen
+        raise damaged
     for axis, entry in state["axes"].items():
         if not isinstance(entry, dict) or set(entry) != {"level", "provenance", "wording"} \
                 or entry["level"] not in AXES[axis] or entry["provenance"] not in PROVENANCES \
@@ -1404,10 +1414,16 @@ def _sampler(state: dict, root: Path) -> dict:
             "remaining": remaining}
 
 
+def _whats_new(state: dict, root: Path) -> str | None:
+    """The one-time line for users whose setup was done before the update; the seen marker stops it."""
+    return WHATS_NEW if workspace.read_setup_done(root) is not None and not state.get("whats_new_seen") else None
+
+
 def _prefs_out(state: dict, saved: bool, root: Path) -> dict:
     axes = state["axes"]
     parts = ", ".join(f"{AXIS_NAMES[a]} {axes[a]['level']} ({axes[a]['provenance']})" for a in AXES)
-    return {"axes": axes, "saved": saved, "sampler": _sampler(state, root), "line": f"Teaching settings: {parts}."}
+    return {"axes": axes, "saved": saved, "sampler": _sampler(state, root), "whats_new": _whats_new(state, root),
+            "line": f"Teaching settings: {parts}."}
 
 
 def cmd_prefs(data: dict) -> dict:
@@ -1420,14 +1436,14 @@ def cmd_prefs(data: dict) -> dict:
 def cmd_pref_event(data: dict) -> dict:
     """Apply one teaching-settings event and save the state atomically (unchanged state writes nothing)."""
     event = data.get("event")
-    if event in ("legacy-import", "sampler-skip"):
+    if event in ("legacy-import", "sampler-skip", "whats-new-seen"):
         _check_keys(data, {"event"})
     elif event == "explicit":
         _check_keys(data, {"event", "axis", "level", "wording"})
     elif event == "sampler":
         _check_keys(data, {"event", "axis", "level"})
     else:
-        raise InputError("event must be explicit, sampler, sampler-skip or legacy-import")
+        raise InputError("event must be explicit, sampler, sampler-skip, legacy-import or whats-new-seen")
     axis, level = data.get("axis"), data.get("level")
     if event in ("explicit", "sampler"):
         if axis not in AXES:
@@ -1440,6 +1456,9 @@ def cmd_pref_event(data: dict) -> dict:
     state, saved = _prefs_state(root)
     before = json.dumps(state, sort_keys=True)
     line = None
+    if event == "whats-new-seen":
+        line = "What's new already seen." if state.get("whats_new_seen") else "What's new seen: it will not repeat."
+        state["whats_new_seen"] = True
     if event == "sampler-skip":
         line = "Sampler already skipped." if state.get("sampler_skipped") else \
             "Sampler skipped. Unanswered settings stay at the defaults and adapt as you study."
@@ -1477,7 +1496,8 @@ def cmd_pref_event(data: dict) -> dict:
 
 COMMANDS = {
     "prefs": (cmd_prefs, "the global teaching settings: level and provenance per axis"),
-    "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, setup sampler, legacy import)"),
+    "pref-event": (cmd_pref_event, "apply one teaching-settings event (explicit request, setup sampler, legacy import, "
+                                   "what's new seen)"),
     "record": (cmd_record, "record mastery evidence and frustration overrides"),
     "now": (cmd_now, "the local time: ISO timestamp, evidence date, log name, last_session stamp and term"),
     "parse-date": (cmd_parse_date, "the student's exam date-and-time phrase as an exam value, or a refusal"),
