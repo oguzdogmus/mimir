@@ -128,7 +128,7 @@ If that app doesn't expand slash commands either, run `mimir-setup` and `mimir-i
 
 ## Roadmap
 
-[![Mimir roadmap: shipped foundations, next reliability improvements, planned learning experience improvements, and future textbook support and migrations](assets/roadmap/mimir-roadmap-readme.png)](assets/roadmap/mimir-roadmap-readme.png)
+[![Mimir roadmap: shipped student-led study, adaptive teaching, and exam times and scope; next session reliability; planned clearer learning visuals and formatting; exploring textbook support, chapter connections, and safe migrations](assets/roadmap/mimir-roadmap-readme.png)](assets/roadmap/mimir-roadmap-readme.png)
 
 Priorities come from hands-on testing and may change. There are no promised dates. Until 1.0, expect changes to how sessions run and to the folder layout. What shipped in 0.4.0 is in the [changelog](CHANGELOG.md).
 
