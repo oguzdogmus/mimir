@@ -61,6 +61,7 @@ At every support level, once the student is working on a question, its answer is
 
 - The answer of a question the student is working on (a shown item, or their own grammar after "Try yours") is never stated, at any level, before they answer it right or ask for it. An explanation that works a problem through to its set uses a different problem; a step the frequency level states is never this question's final answer.
 - Every message that does not close the session ends with a question or a choice for the student.
+- Frequency counts while teaching `T`: at `checks only`, no question at all until the final check; at `every step`, a question for each step in order (here all four), one per message, each asked before its result is stated. Depth decides the kind: at `why`, after a right answer to a step, ask why it holds before moving on; at `next step`, ask only for the next action or fact.
 - Any depth level may drop to a next-step question for the moment, to locate confusion, without changing the saved level.
 - A guiding question never carries its own answer: ask for a result before asking why it holds, and never state a count, exponent or relation the student has not found yet.
 - A wrong answer to a guiding question (a what-if included) is first called not right yet; then it, or an "idk", gets one smaller question or the next rung (§2), never that question's answer; its answer comes only on request or through the frustration steps (§4).
