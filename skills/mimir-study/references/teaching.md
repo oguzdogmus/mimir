@@ -56,10 +56,15 @@ At every support level, once the student is working on a question, its answer is
 | Level | Does | Must not |
 |---|---|---|
 | next step | Asks for the next action or fact: "Apply the rule again: S ⇒ aSc ⇒ ?" | Ask for a reason or a changed case. |
-| why | Asks for the reason behind the step: "Why must the number of a's always equal the number of c's?" | Settle for a bare next-step answer, or change the problem. |
-| what-if | Asks about a changed case: "If the rule were S → aScc, what would the set become?" Asked only after the student has the main answer. | Ask a what-if before the student has solved the original question. |
+| why | Once the student has found the step's result, asks for the reason behind it: "You said each step adds one a and one c. Why does that keep their numbers equal?" | Settle for a bare next-step answer, change the problem, or put a result the student has not found into the question. |
+| what-if | Asks about a changed case: "If the rule were S → aScc, what would the set become?" Asked only after the student has the main answer. | Ask a what-if before the student has solved the original question, or give the changed case's answer after a wrong try or "idk". |
 
+- The answer of a question the student is working on (a shown item, or their own grammar after "Try yours") is never stated, at any level, before they answer it right or ask for it. An explanation that works a problem through to its set uses a different problem; a step the frequency level states is never this question's final answer.
+- Every message that does not close the session ends with a question or a choice for the student.
+- Frequency counts while teaching `T`: at `checks only`, no question at all until the final check; at `every step`, a question for each step in order (here all four), one per message, each asked before its result is stated. Depth decides the kind: at `why`, after a right answer to a step, ask why it holds before moving on; at `next step`, ask only for the next action or fact.
 - Any depth level may drop to a next-step question for the moment, to locate confusion, without changing the saved level.
+- A guiding question never carries its own answer: ask for a result before asking why it holds, and never state a count, exponent or relation the student has not found yet.
+- A wrong answer to a guiding question (a what-if included) is first called not right yet; then it, or an "idk", gets one smaller question or the next rung (§2), never that question's answer; its answer comes only on request or through the frustration steps (§4).
 - A right answer to a guiding question means the step landed; a wrong answer means it did not (§2). At `checks only`, a step fails to land only when the student says so.
 - Guiding questions are dialogue, not items: no answer key, no gate, no provenance label, nothing recorded in `mastery.md` or under `## Results`.
 - Wrong answers, even many, never change a setting. Simplify the current teaching instead (§2, §4).
@@ -101,9 +106,10 @@ The practice after teaching: ONE underlying problem on `T` in `DISGUISE_VARIANTS
 
 1. Build 2 variants from the fingerprint's `## Disguise types` (fallback when it has none: renamed symbols, reworded text, reversed direction), in the professor's notation and phrasing. A `(tentative)` disguise type is used with "from a photo/scan, may be off" once.
 2. Each variant is an item `{"topic": "<T>", "origin": "practice"}` with its own key and hint. Gate both as ONE batch (`verified-items.md`).
-3. Show both shown items, labelled per core rules' Provenance labels. Frequency `key decisions` or `every step`: ask one guiding question, "What do these two have in common underneath?", then confirm or correct the shared structure in the professor's notation. Frequency `checks only`: state the shared structure yourself instead of asking.
+3. Show both shown items, labelled per core rules' Provenance labels. Frequency `key decisions` or `every step`: ask one guiding question, "What do these two have in common underneath?", then confirm or correct the shared structure in words. Frequency `checks only`: state the shared structure yourself instead of asking. Either way the shared structure names the kind of rule and what to look at (what each step adds, what the base case adds), never a general formula, exponents, counts or a set that answers either variant: the variants are now items, so their answers come only as Retries allow.
 4. The student solves each variant, one at a time. Record each answer per Recording (and §4 step 3 after an override).
-5. When the gate leaves fewer than 2 items to show, skip step 3; a single remaining item is asked as a plain practice item. When it leaves none, say each dropped line, record nothing, skip the drill and go on (`session.md` §4 step 4).
+5. When the drill's last variant is answered, say in the same message that the drill on `T` is done and lead on: the next topic (`session.md` §4 step 4) or, with none left, the End-of-set hand-off choices.
+6. When the gate leaves fewer than 2 items to show, skip step 3; a single remaining item is asked as a plain practice item. When it leaves none, say each dropped line, record nothing, skip the drill and go on (`session.md` §4 step 4).
 
 ## 7. Lasting requests
 

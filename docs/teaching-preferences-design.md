@@ -67,8 +67,8 @@ Depth is the kind of question asked at a moment chosen by the frequency level. E
 | Level | Does | Must not |
 |---|---|---|
 | next step | Asks for the next action or fact: "Apply the rule again: S ⇒ aSc ⇒ ?" | Ask for a reason or a changed case. |
-| why | Asks for the reason behind the step: "Why must the number of a's always equal the number of c's?" | Settle for a bare next-step answer, or change the problem. |
-| what-if | Asks about a changed case: "If the rule were S → aScc, what would the set become?" Asked only after the student has the main answer. | Ask a what-if before the student has solved the original question. |
+| why | Once the student has found the step's result, asks for the reason behind it: "You said each step adds one a and one c. Why does that keep their numbers equal?" | Settle for a bare next-step answer, change the problem, or put a result the student has not found into the question. |
+| what-if | Asks about a changed case: "If the rule were S → aScc, what would the set become?" Asked only after the student has the main answer. | Ask a what-if before the student has solved the original question, or give the changed case's answer after a wrong try or "idk". |
 
 Any depth level may drop to a next-step question for the moment, to locate confusion, without changing the saved level.
 

@@ -1,6 +1,6 @@
 # Mimir: A head start, literally
 
-**Version 0.3.4** · early release, features and file layout may still change ([roadmap](#roadmap), [changelog](CHANGELOG.md))
+**Version 0.4.0** · early release, features and file layout may still change ([roadmap](#roadmap), [changelog](CHANGELOG.md))
 
 Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude.com/claude-code), [Codex](https://developers.openai.com/codex) and [Antigravity](https://antigravity.google). It teaches you course material in your professor's style and remembers what you know across sessions.
 
@@ -130,7 +130,7 @@ If that app doesn't expand slash commands either, run `mimir-setup` and `mimir-i
 
 [![Mimir roadmap: shipped foundations, next reliability improvements, planned learning experience improvements, and future textbook support and migrations](assets/roadmap/mimir-roadmap-readme.png)](assets/roadmap/mimir-roadmap-readme.png)
 
-Priorities come from hands-on testing and may change. There are no promised dates. Until 1.0, expect changes to how sessions run and to the folder layout. What shipped in 0.3.4 is in the [changelog](CHANGELOG.md).
+Priorities come from hands-on testing and may change. There are no promised dates. Until 1.0, expect changes to how sessions run and to the folder layout. What shipped in 0.4.0 is in the [changelog](CHANGELOG.md).
 
 - **Next: trust every session.** Answer keys checked on every agent ([#23](https://github.com/oguzdogmus/mimir/issues/23), [#2](https://github.com/oguzdogmus/mimir/issues/2)), smoother installs ([#3](https://github.com/oguzdogmus/mimir/issues/3), [#4](https://github.com/oguzdogmus/mimir/issues/4)), and live checks on macOS, Windows and WSL ([`RELEASE.md`](RELEASE.md)).
 - **Planned: make learning feel clearer.** Better-looking pages and diagrams, cleaner question and answer formatting in chat (especially the Claude mobile and desktop apps).
