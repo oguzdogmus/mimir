@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.0
+
+Study sessions are now led by the student: they run until the student says "end session", the student can choose how a session runs, and Mimir learns how each student likes to be taught. Tracked in [#30](https://github.com/oguzdogmus/mimir/issues/30); design in [the design doc](docs/teaching-preferences-design.md).
+
+### Major changes
+
+- **Sessions end only when the student says so.** No timer and no sign-off of Mimir's own: a finished set, topic or route leads straight into the next one or into choices, in the same message. "end session" closes once and records the session's length. [#32](https://github.com/oguzdogmus/mimir/issues/32)
+- **Teaching settings.** Three saved settings shape Standard teaching in every course: support (example first, method first, try first), how often guiding questions come (checks only, key decisions, every step) and what they ask (next step, why, what-if). A lasting request ("always explain first") sets one; an optional sampler during setup picks starting levels; small probe trials move one step toward more independent teaching only after positive evidence on two different days, and pause near an exam. [#40](https://github.com/oguzdogmus/mimir/issues/40), [#41](https://github.com/oguzdogmus/mimir/issues/41), [#42](https://github.com/oguzdogmus/mimir/issues/42)
+- **Choose how to study.** "Let's cram" or "study normally" picks Urgent or Standard for one session, or for every session until the coming exam. [#36](https://github.com/oguzdogmus/mimir/issues/36)
+- **Real exam times.** The exam's date and time are saved and used (no more counting down to midnight); Urgent starts 48 hours before the actual time. [#34](https://github.com/oguzdogmus/mimir/issues/34)
+- **Exam scope.** What an exam covers ("the midterm covers sessions 1–19") is confirmed once and saved with that exam; topics outside it are listed last and marked, never removed. [#45](https://github.com/oguzdogmus/mimir/issues/45)
+- **Knowledge gauge.** A short check of what the student already knows runs once per course in Standard and is offered in Urgent. [#39](https://github.com/oguzdogmus/mimir/issues/39)
+- **Unlimited retries.** A wrong answer or "idk" gets guidance, never the answer; the answer comes when the student asks for it. Question labels are lighter. [#37](https://github.com/oguzdogmus/mimir/issues/37)
+- **Urgent drilling.** Triage is a ranked table with nothing cut; each question type starts with its short recipe, and three misses offer to continue or move on. [#35](https://github.com/oguzdogmus/mimir/issues/35), [#38](https://github.com/oguzdogmus/mimir/issues/38)
+
+### Removed
+
+- Learning-time forecasts and the rule that made a long route trigger Urgent. Only exam proximity, or the student's choice, decides the delivery class. [#33](https://github.com/oguzdogmus/mimir/issues/33)
+
+### Fixes and maintenance
+
+- Existing users see a one-time line about what changed. [#43](https://github.com/oguzdogmus/mimir/issues/43)
+- Question-type triage moved from instructions into `session.py triage`, with the same ranking. [#62](https://github.com/oguzdogmus/mimir/pull/62)
+- Review findings fixed across the branch: script refactors without behavior change, docstrings in sync, glossary on the shipped vocabulary. [#61](https://github.com/oguzdogmus/mimir/pull/61)
+
+### Validation and remaining limits
+
+- **1,356 automated tests** pass.
+- Live acceptance runs of all nine teaching levels on Claude Code (Sonnet 5.5) and Codex (gpt-6.1-sol), with a scripted student: [results](docs/acceptance-44.md), [protocol](tests/acceptance/README.md). Claude Code passed 7 of 9 levels. On Codex every level met its teaching rules except two, but every run opened with Codex's own "I'll use Mimir's study skill" before the class line. On both hosts every run closed exactly once on "end session" and used an independent answer check. Remaining gaps are listed in the results. [#44](https://github.com/oguzdogmus/mimir/issues/44)
+- [#23](https://github.com/oguzdogmus/mimir/issues/23) stays open; one Claude Code run showed a question before its independent check returned.
+- Native browser-opening checks for macOS, Windows and WSL remain pending in [RELEASE.md](RELEASE.md).
+
+### Updating
+
+Update or reinstall Mimir through your agent's plugin manager. Saved progress carries over. An existing preference for fewer questions becomes the "checks only" setting; everything else starts at the defaults.
+
 ## 0.3.4
 
 This release delivers the nine audit-remediation slices tracked in [#5](https://github.com/oguzdogmus/mimir/issues/5).
