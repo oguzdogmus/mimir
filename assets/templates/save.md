@@ -9,6 +9,7 @@ last_class: <Standard | Urgent>
 last_session: <YYYY-MM-DD HH:MM>
 status: <on-track | at-risk>
 pending_debrief: <no | YYYY-MM-DD exam name>
+delivery_choice: <none | Standard or Urgent YYYY-MM-DD exam name, written only by session.py start>
 
 ## Previously on
 - <bullet, about 60 seconds of recap in total>

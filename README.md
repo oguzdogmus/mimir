@@ -1,13 +1,13 @@
 # Mimir: A head start, literally
 
-**Version 0.3.4** · early release, features and file layout may still change ([roadmap](#roadmap), [changelog](CHANGELOG.md))
+**Version 0.4.0** · early release, features and file layout may still change ([roadmap](#roadmap), [changelog](CHANGELOG.md))
 
 Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude.com/claude-code), [Codex](https://developers.openai.com/codex) and [Antigravity](https://antigravity.google). It teaches you course material in your professor's style and remembers what you know across sessions.
 
 ## What it does
 
 - **Starts from wherever you are.** Type "exam tomorrow, help" and attach a photo of a past paper. Mimir starts drilling right away, with no setup.
-- **Sets the pace from the exam date.** Far from the exam, sessions are short teaching episodes (Standard). Close to it, Mimir drills the question types worth the most points per hour (Urgent). It picks the mode and tells you why.
+- **Sets the pace from the exam date.** Far from the exam, Mimir teaches (Standard). Close to it, it drills question types ranked by marks and by how often they appeared in past papers (Urgent), shown as a table with nothing cut, and teaches each type with a short recipe before testing it. Tell it what an exam covers ("the midterm covers sessions 1–19") and, once you confirm the list, it drills only those types and lists the rest last. It picks the mode and tells you why. Sessions run until you say "end session".
 - **Follows your professor.** Mimir reads the outline, slides and past papers, learns how the professor writes questions, and labels every question with where it came from. Answer keys are checked before you see them.
 - **Teaches in your language.** Your course and exams can be in one language and the explanations in another. You choose both during setup.
 - **Remembers you.** It keeps dated evidence of what you solved alone and with help, and picks up where you left off.
@@ -66,9 +66,9 @@ Each command is a skill. Type it like this:
 | `mimir-setup` | One-time setup: your learning folder, languages and any exam dates you know. |
 | `mimir-ingest` | File everything in your `_inbox/` into course folders. |
 | `mimir-study` | Study for an exam. Start here: "exam Friday, help" works, even with just a photo of a past paper. |
-| `mimir-past-questions` | Drill a course's real past-paper questions, highest points per hour first. |
+| `mimir-past-questions` | Drill a course's real past-paper questions, most marks and most often asked first. |
 | `mimir-quiz` | Get quizzed at exam level in your professor's style, with checked answer keys. |
-| `mimir-plan` | See how your plan grows with each day you wait to start. |
+| `mimir-plan` | See what is left to study before your exam. |
 | `mimir-forecast` | A ranked guess at the topics of your next exam, with the evidence. |
 | `mimir-progress` | What Mimir believes you know in a course, with dated evidence. |
 | `mimir-debrief` | After an exam: what was on it, and what that changes. |
@@ -86,7 +86,7 @@ Each command is a skill. Type it like this:
     └── CS201 Theory/
         ├── INDEX.md         file list and topic map
         ├── outline/  slides/  past-papers/  notes/
-        └── .state/          mastery, professor style, forecast, session logs, generated pages
+        └── .state/          mastery, professor style, exam scope, forecast, session logs, generated pages
 ```
 
 - **Supported files:** PDF; images (jpg, png, heic, webp, gif, tiff, bmp); text (md, txt, tex); documents (docx, pptx, odt, odp). Anything else is skipped and left in `_inbox/`.
@@ -130,10 +130,10 @@ If that app doesn't expand slash commands either, run `mimir-setup` and `mimir-i
 
 [![Mimir roadmap: shipped foundations, next reliability improvements, planned learning experience improvements, and future textbook support and migrations](assets/roadmap/mimir-roadmap-readme.png)](assets/roadmap/mimir-roadmap-readme.png)
 
-Priorities come from hands-on testing and may change. There are no promised dates. Until 1.0, expect changes to how sessions run and to the folder layout. What shipped in 0.3.4 is in the [changelog](CHANGELOG.md).
+Priorities come from hands-on testing and may change. There are no promised dates. Until 1.0, expect changes to how sessions run and to the folder layout. What shipped in 0.4.0 is in the [changelog](CHANGELOG.md).
 
 - **Next: trust every session.** Answer keys checked on every agent ([#23](https://github.com/oguzdogmus/mimir/issues/23), [#2](https://github.com/oguzdogmus/mimir/issues/2)), smoother installs ([#3](https://github.com/oguzdogmus/mimir/issues/3), [#4](https://github.com/oguzdogmus/mimir/issues/4)), and live checks on macOS, Windows and WSL ([`RELEASE.md`](RELEASE.md)).
-- **Planned: make learning feel clearer.** Better-looking pages and diagrams, cleaner question and answer formatting in chat (especially the Claude mobile and desktop apps), and a short lesson before the first worked example in Urgent sessions.
+- **Planned: make learning feel clearer.** Better-looking pages and diagrams, cleaner question and answer formatting in chat (especially the Claude mobile and desktop apps).
 - **Exploring: bring the whole course.** Real textbook support (today ingest files a textbook, but sessions never read it), chapters linked to course topics, and safe migrations when the folder layout changes.
 
 ## Development

@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mimir: the new teaching system</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1d1f; --muted: #5f6368; --line: #e2e2de;
+    --accent: #3d5afe; --accent-soft: #e8ecff; --good: #1b873f; --good-soft: #e3f4e8;
+    --warn: #b35c00; --warn-soft: #fdf0e1; --bad: #c62828; --bad-soft: #fde8e8;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416; --panel: #1d1d21; --ink: #ececef; --muted: #a0a0a8; --line: #303036;
+      --accent: #8c9eff; --accent-soft: #252a45; --good: #5fd38a; --good-soft: #17301f;
+      --warn: #ffb15c; --warn-soft: #3a2a17; --bad: #ff7b7b; --bad-soft: #3a1c1c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { padding: 2rem 1.25rem 1rem; max-width: 980px; margin: 0 auto; }
+  header h1 { margin: 0 0 .25rem; font-size: 1.8rem; }
+  header p { margin: 0; color: var(--muted); }
+  nav { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+  nav .tabs { max-width: 980px; margin: 0 auto; display: flex; gap: .25rem; overflow-x: auto; padding: .5rem 1.25rem; }
+  nav button { flex: none; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: .45rem .8rem; border-radius: 999px; cursor: pointer; font: inherit; font-size: .9rem; }
+  nav button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  main { max-width: 980px; margin: 0 auto; padding: 1rem 1.25rem 4rem; }
+  section[hidden] { display: none; }
+  h2 { font-size: 1.35rem; margin: 1rem 0 .25rem; }
+  h3 { font-size: 1.05rem; margin: 1.25rem 0 .4rem; }
+  .lead { color: var(--muted); margin-top: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; margin: .8rem 0; }
+  .grid { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  label { display: block; font-weight: 600; margin: .6rem 0 .25rem; font-size: .92rem; }
+  select, input[type=number] { font: inherit; padding: .4rem .5rem; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+  .btns { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+  .btn { border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: .45rem .75rem; border-radius: 8px; cursor: pointer; font: inherit; font-size: .9rem; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .pill { display: inline-block; padding: .1rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 600; }
+  .pill.std { background: var(--good-soft); color: var(--good); }
+  .pill.urg { background: var(--bad-soft); color: var(--bad); }
+  .pill.neutral { background: var(--accent-soft); color: var(--accent); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .chat { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: .6rem .8rem; border-radius: 0 8px 8px 0; margin: .5rem 0; white-space: pre-wrap; }
+  .chat.student { border-left-color: var(--muted); background: var(--bg); }
+  .note { font-size: .9rem; color: var(--muted); }
+  .ok { color: var(--good); font-weight: 600; }
+  .no { color: var(--bad); font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  th, td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  code { font-family: var(--mono); font-size: .88em; background: var(--bg); padding: .05rem .3rem; border-radius: 4px; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+  .flow .step { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: .5rem .7rem; font-size: .9rem; }
+  .flow .step.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .flow .arrow { color: var(--muted); }
+  .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: .35rem; margin: .3rem 0 .8rem; }
+  .levels button { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: .5rem; cursor: pointer; font: inherit; font-size: .9rem; }
+  .levels button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .meter { display: flex; gap: .3rem; margin: .4rem 0; }
+  .meter span { flex: 1; height: 10px; border-radius: 5px; background: var(--line); }
+  .meter span.fill { background: var(--good); }
+  .meter span.bad { background: var(--bad); }
+  ol.log { padding-left: 1.2rem; margin: .4rem 0; max-height: 240px; overflow: auto; font-size: .9rem; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+  @media (max-width: 680px) { .split { grid-template-columns: 1fr; } .levels { grid-template-columns: 1fr; } }
+  .tag-removed { text-decoration: line-through; color: var(--muted); }
+  details summary { cursor: pointer; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mimir: the new teaching system</h1>
+  <p>An interactive tour of the agreed design in <code>docs/teaching-preferences-design.md</code>. Design only: none of this is shipped yet.</p>
+</header>
+<nav><div class="tabs" role="tablist" id="tabs"></div></nav>
+<main>
+
+<!-- 1. Overview -->
+<section id="overview" data-title="Overview">
+  <h2>What changes, at a glance</h2>
+  <p class="lead">Click any step of a session to see what happens there.</p>
+  <div class="card">
+    <div class="flow" id="flow"></div>
+    <div id="flowDetail" class="chat" style="margin-top:.8rem"></div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>You control the session</h3>No timer. A session runs until you say <b>"end session"</b>. When a question set runs out, Mimir says so and leads into the next one.</div>
+    <div class="card"><h3>Mode from the real exam time</h3>Urgent within 48 hours of the actual exam time. You can choose Standard anyway, or ask to cram earlier.</div>
+    <div class="card"><h3>Three teaching settings</h3>Support, question frequency, question depth. Global across courses, each with three levels. Urgent ignores them.</div>
+    <div class="card"><h3>No time forecasts</h3>No "62 days × 1–3 min". No cost of delay. Urgent ranks question types; it never cuts them for a minutes budget.</div>
+  </div>
+</section>
+
+<!-- 2. Delivery class -->
+<section id="mode" data-title="Standard or Urgent" hidden>
+  <h2>Which mode does a session use?</h2>
+  <p class="lead">Change the inputs to see the mode and the opening line Mimir would say.</p>
+  <div class="split">
+    <div class="card">
+      <label for="timeKnown">Exam time saved?</label>
+      <select id="timeKnown"><option value="yes">Yes, date and time</option><option value="no">No, date only</option></select>
+      <div id="hoursBox">
+        <label for="hours">Hours until the exam</label>
+        <input id="hours" type="number" min="0" max="2000" value="16">
+      </div>
+      <div id="daysBox" hidden>
+        <label for="days">Exam day</label>
+        <select id="days"><option value="0">Today</option><option value="1" selected>Tomorrow</option><option value="2">In 2 days</option><option value="5">In 5 days</option><option value="20">In 20 days</option></select>
+      </div>
+      <label for="choice">What did you ask for?</label>
+      <select id="choice">
+        <option value="none">Nothing, let Mimir decide</option>
+        <option value="standard">"Study normally" (this session)</option>
+        <option value="cram">"Let's cram" (this session)</option>
+        <option value="standard-lasting">"Always study normally for this exam"</option>
+      </select>
+    </div>
+    <div class="card">
+      <div>Mode: <span id="modePill" class="pill"></span></div>
+      <div class="chat" id="modeLine"></div>
+      <div id="modeAsk"></div>
+      <p class="note" id="modeWhy"></p>
+    </div>
+  </div>
+  <div class="card note">
+    Exam times: Mimir asks for the time when an exam is added ("don't know" is fine), and asks once more when the exam is within 2 days and the time is still missing. Old date-only rows are not asked about in bulk.
+  </div>
+</section>
+
+<!-- 3. Teaching settings -->
+<section id="settings" data-title="Teaching settings" hidden>
+  <h2>The three teaching settings</h2>
+  <p class="lead">Pick a level on each row. The preview shows what Mimir does on the shared task: <b>"Describe in set notation the language of S → aSc | b."</b></p>
+  <div class="card" id="axes"></div>
+  <div class="split">
+    <div class="card"><h3>Mimir does</h3><div id="doesList"></div></div>
+    <div class="card"><h3>Mimir must not</h3><div id="mustList"></div></div>
+  </div>
+  <div class="card note">
+    Defaults are the middle column. Only Standard study sessions use these settings; Urgent, quizzes and past-question practice ignore them.
+    Once you are working on a question, its answer appears only when you ask. Any depth level may drop to a quick next-step question to find where you are stuck, without changing your setting.
+    <br><br><b>Key decision</b>: a step where a plausible wrong choice gives a different final answer.
+  </div>
+</section>
+
+<!-- 4. How settings change -->
+<section id="probes" data-title="How settings change" hidden>
+  <h2>How a setting changes over time</h2>
+  <p class="lead">Three ways: you ask (instant), a probe trial succeeds (slow), or the one-time "fewer questions?" offer. Wrong answers never change a setting.</p>
+  <div class="split">
+    <div class="card">
+      <h3>Probe trial simulator</h3>
+      <p class="note">Current trial: <b>question frequency, key decisions → every step</b>. Feed it sessions and watch what happens.</p>
+      <div>Level now: <span class="pill neutral" id="pLevel"></span> &nbsp; Trial: <span class="pill" id="pTrial"></span></div>
+      <div class="note" style="margin-top:.4rem">Positive sessions (needs 2, on different days):</div>
+      <div class="meter" id="pMeter"><span></span><span></span></div>
+      <div class="note">Rejections of this change: <b id="pRej">0</b> of 3 &nbsp;·&nbsp; sessions to skip: <b id="pSkip">0</b></div>
+      <div class="btns">
+        <button class="btn" data-p="positive">Standard session, positive signs</button>
+        <button class="btn" data-p="sameday">Positive again, same day</button>
+        <button class="btn" data-p="neutral">Standard session, neutral</button>
+        <button class="btn" data-p="pushback">Student pushes back</button>
+        <button class="btn" data-p="urgent">Urgent session</button>
+        <button class="btn" data-p="near">Standard, within 48 h of exam</button>
+        <button class="btn" data-p="reset">Reset</button>
+      </div>
+    </div>
+    <div class="card"><h3>What happened</h3><ol class="log" id="pLog"></ol></div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>Positive signs</h3>Explaining reasoning willingly, or exploring a follow-up. Brief answers are neutral; being right or wrong counts for nothing either way.</div>
+    <div class="card"><h3>Comfortable engagement</h3>Needed before a probe starts. <span class="ok">Yes:</span> last two answers were real attempts, or the student asked a follow-up. <span class="no">No:</span> recent "just tell me", repeated "idk", caps, several one-word replies, or "I'm tired".</div>
+    <div class="card"><h3>Moving down</h3>Only when you ask. If the "give the answer" help fires in two separate sessions, Mimir asks once: "Want fewer questions from now on?"</div>
+    <div class="card"><h3>Your words win</h3>"Always explain first" changes the setting at once and is never probed against. "For math…" is saved globally, and Mimir says so.</div>
+  </div>
+</section>
+
+<!-- 5. Urgent drill -->
+<section id="urgent" data-title="Urgent drill" hidden>
+  <h2>An Urgent session, step by step</h2>
+  <p class="lead">Order: mode line → gauge offer → triage table → drill. The drill keeps going until you say "end session".</p>
+  <div class="card">
+    <h3>Triage table (replaces the long "Drilling / Skipping" paragraph)</h3>
+    <table>
+      <thead><tr><th>#</th><th>Question type</th><th>Marks</th><th>Seen in papers</th><th>Why this order</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Set notation L(G) for a grammar or PDA</td><td>10</td><td>9 of 11</td><td>Most marks × most often</td></tr>
+        <tr><td>2</td><td>Construct a CFG for a language</td><td>10</td><td>7 of 11</td><td>High marks, frequent</td></tr>
+        <tr><td>3</td><td>NFA to DFA (subset construction)</td><td>8</td><td>6 of 11</td><td>Frequent</td></tr>
+        <tr><td>4</td><td>Pumping lemma: prove not regular</td><td>10</td><td>3 of 11</td><td>High marks, less often</td></tr>
+        <tr><td>…</td><td colspan="4" class="note">Every type is listed and ranked. None is cut for time; you decide how far to go.</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Example data. Real frequencies are cited only when past papers back them; otherwise Mimir names its basis (exam scope, syllabus, lectures).</p>
+  </div>
+  <div class="split">
+    <div class="card">
+      <h3>Continue-or-move-on counter</h3>
+      <p class="note">Per question type, total across the session. Try the answers:</p>
+      <div>Type: <b id="uType">Set notation L(G)</b></div>
+      <div class="meter" id="uMeter"><span></span><span></span><span></span></div>
+      <div class="btns">
+        <button class="btn" data-u="wrong">Wrong</button>
+        <button class="btn" data-u="idk">"idk"</button>
+        <button class="btn" data-u="tell">"just tell me"</button>
+        <button class="btn" data-u="hint">Right after a hint</button>
+        <button class="btn" data-u="right">Right</button>
+        <button class="btn" data-u="dropped">Item dropped by answer check</button>
+        <button class="btn" data-u="reset">Reset</button>
+      </div>
+      <div id="uAsk"></div>
+    </div>
+    <div class="card"><h3>What Mimir says</h3><ol class="log" id="uLog"></ol></div>
+  </div>
+  <div class="card">
+    <h3>End of a set</h3>
+    <div class="chat">That's the last question in this set. Next up: <b>Construct a CFG</b> (seen in 7 of 11 papers). Ready? Or say "another set on set notation", "recheck", or "end session".</div>
+    <p class="note">Never silent, never an automatic "Good luck". This also covers the reported Codex stall after three questions.</p>
+  </div>
+</section>
+
+<!-- 6. Gauge -->
+<section id="gauge" data-title="Knowledge gauge" hidden>
+  <h2>The knowledge gauge</h2>
+  <p class="lead">A short check of what you already know, separate from teaching settings.</p>
+  <div class="split">
+    <div class="card">
+      <label for="gMode">Session mode</label>
+      <select id="gMode"><option value="std">Standard</option><option value="urg">Urgent</option></select>
+      <label for="gTopics">Course has topics?</label>
+      <select id="gTopics"><option value="yes">Yes</option><option value="no">No materials yet</option></select>
+      <label for="gDone">Gauge already done for this course?</label>
+      <select id="gDone"><option value="no">No</option><option value="yes">Yes</option></select>
+    </div>
+    <div class="card"><h3>Result</h3><div id="gOut"></div></div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>Which topics</h3>Only <code>unseen</code> ones, highest priority first. Topics with any evidence (gap, shaky, mastered) are skipped.</div>
+    <div class="card"><h3>How answers count</h3>Fresh questions before any recipe or worked answer, recorded as solved alone. One right answer never marks a topic mastered.</div>
+    <div class="card"><h3>No guessing</h3>No gauge from the course name or general knowledge: answer keys must be checkable against your course files.</div>
+  </div>
+</section>
+
+<!-- 7. Old vs new -->
+<section id="changes" data-title="Old → new" hidden>
+  <h2>What happens to today's features</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Today</th><th>New design</th></tr></thead>
+      <tbody id="changeRows"></tbody>
+    </table>
+  </div>
+  <h3>For people already using Mimir</h3>
+  <div class="card">
+    <div class="chat">New: sessions run until you say 'end session'. You can also ask to cram or to study normally.</div>
+    <p class="note">Shown once, at the first study session after the update. Existing courses get the knowledge gauge once. Your progress, mastery and logs are kept.</p>
+  </div>
+</section>
+
+<!-- 8. Acceptance test -->
+<section id="test" data-title="How it's tested" hidden>
+  <h2>Acceptance test: 9 levels × 2 models</h2>
+  <p class="lead">Run after building. Each run sets one level, keeps the others at default, and uses the same scripted student.</p>
+  <div class="card">
+    <div class="note">Scripted student: one right attempt → one wrong attempt → "idk" → "end session".</div>
+    <table id="testGrid"></table>
+    <p class="note">Each cell passes when the run did its level's "does" line, broke no "must not" line, showed answers only on request, kept going after a set ran out, and closed once on "end session". Click a cell to cycle: not run → pass → fail.</p>
+  </div>
+</section>
+
+</main>
+
+<script>
+// ---------- tabs ----------
+const sections = [...document.querySelectorAll("main > section")];
+const tabs = document.getElementById("tabs");
+function show(id) {
+  sections.forEach(s => s.hidden = s.id !== id);
+  [...tabs.children].forEach(b => b.setAttribute("aria-selected", b.dataset.id === id));
+  history.replaceState(null, "", "#" + id);
+}
+sections.forEach(s => {
+  const b = document.createElement("button");
+  b.textContent = s.dataset.title; b.dataset.id = s.id; b.setAttribute("role", "tab");
+  b.onclick = () => show(s.id);
+  tabs.appendChild(b);
+});
+show(location.hash.slice(1) && document.getElementById(location.hash.slice(1)) ? location.hash.slice(1) : "overview");
+
+// ---------- overview flow ----------
+const flowSteps = [
+  ["Start", "You run /mimir study. Mimir reads the exam row and picks the mode from the real exam time (see the Standard or Urgent tab). First session after the update: one 'what's new' line."],
+  ["Mode line", "One line saying the mode and why, e.g. 'Urgent: exam within 48 hours' or 'Standard: you asked'. Never a made-up countdown when the exam time is unknown."],
+  ["Gauge", "Standard: automatic, once per course, on unseen topics. Urgent: offered every session; say no to go straight to drilling."],
+  ["Teach / drill", "Standard teaches with your three settings and unlimited retries. Urgent shows a recipe, then a fresh question; after 3 failures on a type it asks whether to continue or move on."],
+  ["Set runs out", "Mimir says so and leads into the next set, or offers choices, in the same message. It never goes silent and never closes by itself."],
+  ["\"end session\"", "Only you end it. Mimir stops asking, then saves once: progress, results, a short recap and how long the session ran."],
+];
+const flow = document.getElementById("flow"), flowDetail = document.getElementById("flowDetail");
+flowSteps.forEach(([name, text], i) => {
+  if (i) { const a = document.createElement("span"); a.className = "arrow"; a.textContent = "→"; flow.appendChild(a); }
+  const s = document.createElement("button"); s.className = "step"; s.textContent = name;
+  s.style.cursor = "pointer"; s.style.font = "inherit"; s.style.color = "inherit";
+  s.onclick = () => { [...flow.querySelectorAll(".step")].forEach(x => x.classList.remove("on")); s.classList.add("on"); flowDetail.textContent = text; };
+  flow.appendChild(s);
+  if (i === 0) { s.classList.add("on"); flowDetail.textContent = text; }
+});
+
+// ---------- mode ----------
+const $ = id => document.getElementById(id);
+function updateMode() {
+  const known = $("timeKnown").value === "yes";
+  $("hoursBox").hidden = !known; $("daysBox").hidden = known;
+  const choice = $("choice").value;
+  let urgent, line, why, ask = "";
+  if (known) {
+    const h = Math.max(0, Number($("hours").value) || 0);
+    urgent = h <= 48;
+    const when = h < 1 ? "under 1 hour" : h <= 48 ? `${Math.round(h)} hours` : `${Math.round(h / 24)} days`;
+    why = urgent ? `Exam time is saved and the exam is within 48 hours (${when}).` : `Exam time is saved and the exam is more than 48 hours away (${when}).`;
+    line = urgent ? `Urgent: exam in ${when}.` : `Standard: exam in ${when}.`;
+  } else {
+    const d = Number($("days").value);
+    urgent = d <= 1;
+    const dayText = d === 0 ? "today" : d === 1 ? "tomorrow" : `in ${d} days`;
+    line = urgent ? `Urgent: exam ${dayText}, time unknown.` : `Standard: exam ${dayText}.`;
+    why = urgent ? "Date only, and the exam is today or tomorrow: Urgent, with no hourly countdown." : "Date only, and the exam is further away: Standard. The date alone is enough here.";
+    if (d === 0) ask = "Is the exam still ahead today?";
+    else if (d <= 2) ask = "What time is the exam? (\"don't know\" is fine)";
+  }
+  if (choice === "standard" || choice === "standard-lasting") {
+    if (urgent) { line = choice === "standard" ? "Standard: you asked (for this session)." : "Standard: you asked, for this exam."; why += " Your choice overrides the default" + (choice === "standard" ? " for this session only." : " until this exam passes."); }
+    else why += " You asked for Standard, which is already the default.";
+    urgent = false;
+  } else if (choice === "cram") {
+    if (!urgent) { line = "Urgent: you asked to cram (this session)."; why += " Your request overrides the default for this session only."; }
+    else why += " You asked to cram, which is already the default.";
+    urgent = true;
+  }
+  $("modePill").textContent = urgent ? "Urgent" : "Standard";
+  $("modePill").className = "pill " + (urgent ? "urg" : "std");
+  $("modeLine").textContent = line;
+  $("modeAsk").innerHTML = ask ? `<div class="chat">${ask}</div><p class="note">Asked once because the exam time is missing and the exam is close.</p>` : "";
+  $("modeWhy").textContent = why;
+}
+["timeKnown", "hours", "days", "choice"].forEach(id => $(id).addEventListener("input", updateMode));
+updateMode();
+
+// ---------- teaching settings ----------
+const axes = [
+  { key: "support", name: "Support", levels: [
+    { name: "example-first",
+      does: "Fully solves a different grammar first: \"S → aSb | ε: each step adds a on the left and b on the right; the base case adds nothing; so L = {aⁿbⁿ | n ≥ 0}.\" Then: \"Now yours.\"",
+      must: "Solve your grammar, or show part of its answer." },
+    { name: "method-first", def: true,
+      does: "States the method without working any grammar: \"1) What does one step add on each side? 2) What does the base case add? 3) Count the steps as n and write the exponents.\" Then: \"Try yours.\"",
+      must: "Work an example through to the end, or hint at this answer's exponents." },
+    { name: "try-first",
+      does: "\"Try it first. Tell me how far you get.\" Help comes only after your attempt, and only about where it went wrong.",
+      must: "Explain the method or show an example before you have tried." } ] },
+  { key: "freq", name: "Question frequency", levels: [
+    { name: "checks only",
+      does: "Explains all four steps as statements, then one check at the end on a fresh grammar: \"Your turn: S → aaSb | c.\"",
+      must: "Ask anything partway through the explanation." },
+    { name: "key decisions", def: true,
+      does: "Asks only at key decisions: \"What does aSc add on each side?\" and \"Can the step happen zero times?\" The other steps are stated.",
+      must: "Ask at every step, or at none." },
+    { name: "every step",
+      does: "One question per step: \"What does aSc add on the left?\" \"What does b add?\" \"How many times can it repeat?\" \"So what's the set?\"",
+      must: "State a step's result before asking it." } ] },
+  { key: "depth", name: "Question depth", levels: [
+    { name: "next step",
+      does: "Asks for the next action or fact: \"Apply the rule again: S ⇒ aSc ⇒ ?\"",
+      must: "Ask for a reason or a changed case." },
+    { name: "why", def: true,
+      does: "Asks for the reason: \"Why must the number of a's always equal the number of c's?\"",
+      must: "Settle for a bare next-step answer, or change the problem." },
+    { name: "what-if",
+      does: "Asks about a changed case, after you have the main answer: \"If the rule were S → aScc, what would the set become?\"",
+      must: "Ask a what-if before you have solved the original question." } ] },
+];
+const chosen = { support: 1, freq: 1, depth: 1 };
+const axesBox = $("axes");
+function renderAxes() {
+  axesBox.innerHTML = "";
+  axes.forEach(ax => {
+    const h = document.createElement("div");
+    h.innerHTML = `<b>${ax.name}</b> <span class="note">← more guided · more independent →</span>`;
+    axesBox.appendChild(h);
+    const row = document.createElement("div"); row.className = "levels";
+    ax.levels.forEach((lv, i) => {
+      const b = document.createElement("button");
+      b.textContent = lv.name + (lv.def ? " (default)" : "");
+      b.setAttribute("aria-pressed", chosen[ax.key] === i);
+      b.onclick = () => { chosen[ax.key] = i; renderAxes(); };
+      row.appendChild(b);
+    });
+    axesBox.appendChild(row);
+  });
+  $("doesList").innerHTML = axes.map(ax => `<p><b>${ax.name}:</b> ${ax.levels[chosen[ax.key]].does}</p>`).join("");
+  $("mustList").innerHTML = axes.map(ax => `<p><b>${ax.name}:</b> ${ax.levels[chosen[ax.key]].must}</p>`).join("");
+}
+renderAxes();
+
+// ---------- probe simulator ----------
+const P = { level: "key decisions", trial: "active", pos: [], rej: 0, skip: 0, day: 1, log: [] };
+function plog(t) { P.log.push(t); }
+function pRender() {
+  $("pLevel").textContent = "frequency: " + P.level;
+  const t = $("pTrial");
+  t.textContent = P.trial;
+  t.className = "pill " + (P.trial === "active" ? "neutral" : P.trial === "adopted" ? "std" : P.trial === "stopped" ? "urg" : "warn");
+  [...$("pMeter").children].forEach((s, i) => s.className = i < P.pos.length ? "fill" : "");
+  $("pRej").textContent = P.rej; $("pSkip").textContent = P.skip;
+  $("pLog").innerHTML = P.log.map(x => `<li>${x}</li>`).join("") || "<li class='note'>Nothing yet.</li>";
+  $("pLog").scrollTop = 1e6;
+}
+function pEligible() {
+  if (P.trial === "adopted") { plog("Already adopted. Further probes would try a different change."); return false; }
+  if (P.trial === "stopped") { plog("This change is stopped after 3 rejections. Only your explicit request reopens it."); return false; }
+  if (P.skip > 0) { P.skip--; plog(`Session skipped for probing (cool-down). ${P.skip} more to skip.`); if (P.skip === 0) { P.trial = "active"; plog("Cool-down over: the trial can start again next eligible session."); } return false; }
+  if (P.trial !== "active") P.trial = "active";
+  return true;
+}
+document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => {
+  const k = b.dataset.p;
+  if (k === "reset") { Object.assign(P, { level: "key decisions", trial: "active", pos: [], rej: 0, skip: 0, day: 1, log: [] }); pRender(); return; }
+  if (k === "urgent") { plog("Urgent session: settings ignored, nothing counted, cool-down not advanced."); pRender(); return; }
+  if (k === "near") { plog("Standard within 48 h of an exam: no probe and no evidence (exam stress), cool-down not advanced."); pRender(); return; }
+  if (k !== "sameday") P.day++;
+  if (!pEligible()) { pRender(); return; }
+  if (k === "positive" || k === "sameday") {
+    if (P.pos.includes(P.day)) { plog(`Day ${P.day}: positive again, but the same day as an earlier positive session. Does not count.`); }
+    else {
+      P.pos.push(P.day); plog(`Day ${P.day}: trial ran (asked at every step); you explained your reasoning willingly. Positive ${P.pos.length} of 2.`);
+      if (P.pos.length >= 2) { P.trial = "adopted"; P.level = "every step"; plog("Adopted. Mimir says one line: \"I'll ask at every step from now on.\""); }
+    }
+  } else if (k === "neutral") {
+    plog(`Day ${P.day}: trial ran; short answers only. Neutral: neither counts nor resets.`);
+  } else if (k === "pushback") {
+    P.rej++; P.pos = [];
+    plog(`Day ${P.day}: you pushed back ("too many questions"). Reverted at once; positive evidence reset. Rejection ${P.rej} of 3.`);
+    if (P.rej >= 3) { P.trial = "stopped"; plog("Third rejection: this change is never probed again."); }
+    else { P.skip = P.rej; P.trial = "cooling down"; plog(`Skip the next ${P.skip} eligible Standard session${P.skip > 1 ? "s" : ""} before trying again.`); }
+  }
+  pRender();
+});
+pRender();
+
+// ---------- urgent counter ----------
+const types = ["Set notation L(G)", "Construct a CFG", "NFA to DFA", "Pumping lemma"];
+const U = { t: 0, fails: 0, log: [], waiting: false };
+function uRender() {
+  $("uType").textContent = types[U.t % types.length];
+  [...$("uMeter").children].forEach((s, i) => s.className = i < U.fails ? "bad" : "");
+  $("uLog").innerHTML = U.log.map(x => `<li>${x}</li>`).join("") || "<li class='note'>Answer a question to start.</li>";
+  $("uLog").scrollTop = 1e6;
+  $("uAsk").innerHTML = U.waiting
+    ? `<div class="chat">That's 3 misses on ${types[U.t % types.length]}. It appeared in 9 of 11 past papers. Keep going on it, or move on?</div>
+       <div class="btns"><button class="btn primary" id="uCont">Continue</button><button class="btn" id="uMove">Move on</button></div>`
+    : "";
+  if (U.waiting) {
+    $("uCont").onclick = () => { U.fails = 0; U.waiting = false; U.log.push("You chose continue: counter reset to 0. Next: a fresh question of the same type."); uRender(); };
+    $("uMove").onclick = () => { U.t++; U.fails = 0; U.waiting = false; U.log.push(`Moved on to ${types[U.t % types.length]}. Its counter starts at 0.`); uRender(); };
+  }
+}
+document.querySelectorAll("[data-u]").forEach(b => b.onclick = () => {
+  const k = b.dataset.u;
+  if (k === "reset") { Object.assign(U, { t: 0, fails: 0, log: [], waiting: false }); uRender(); return; }
+  if (U.waiting) { U.log.push("Waiting for your continue / move-on choice first."); uRender(); return; }
+  const label = { wrong: "Wrong", idk: "\"idk\"", tell: "\"just tell me\"" }[k];
+  if (label) { U.fails++; U.log.push(`${label}: Mimir shows the correction and a fresh similar question. Misses: ${U.fails}.`); }
+  if (k === "hint") U.log.push(`Right after a hint: counts as success, but the miss count stays at ${U.fails}.`);
+  if (k === "right") U.log.push(`Right: next fresh question. Miss count stays at ${U.fails} (counted in total, not in a row).`);
+  if (k === "dropped") U.log.push("The answer check dropped this item: not an attempt, nothing counted.");
+  if (U.fails >= 3) U.waiting = true;
+  uRender();
+});
+uRender();
+
+// ---------- gauge ----------
+function updateGauge() {
+  const std = $("gMode").value === "std", topics = $("gTopics").value === "yes", done = $("gDone").value === "yes";
+  let out;
+  if (!topics) out = `<span class="pill warn">No gauge</span><p>No topics yet, so there is nothing real to ask about. The gauge-done marker stays unset; the gauge runs at the first session that has topics.</p>`;
+  else if (std && done) out = `<span class="pill neutral">No gauge</span><p>Already done for this course. Standard runs it only once.</p>`;
+  else if (std) out = `<span class="pill std">Automatic</span><div class="chat">Before we start, a quick check of what you already know: a few questions on topics you haven't studied here yet.</div><p class="note">Runs once, then sets the course's gauge-done marker.</p>`;
+  else out = `<span class="pill urg">Offered</span><div class="chat">Want a quick check of what you already know before we drill? Say no to start drilling now.</div><p class="note">Offered at the start of every Urgent session${done ? ", even after an earlier gauge" : ""}. Types you can already solve skip their recipe; drilling focuses on weaker ones.</p>`;
+  $("gOut").innerHTML = out;
+}
+["gMode", "gTopics", "gDone"].forEach(id => $(id).addEventListener("input", updateGauge));
+updateGauge();
+
+// ---------- old -> new ----------
+const changes = [
+  ["20–25 minute episode timer (<code>session.py clock</code>)", "Gone. Sessions end only on \"end session\"."],
+  ["Urgent closes when the drill list runs out, with \"Good luck\"", "Says the set is done and leads into the next one."],
+  ["Exam stored as a date; countdown to midnight", "Date and time stored; no hourly countdown when the time is unknown."],
+  ["Long \"Drilling: … Skipping: … (lower yield)\" paragraph", "Ranked table: type, marks, seen in papers, reason."],
+  ["Triage cuts types by a minutes budget", "Ranks by marks × frequency; cuts nothing."],
+  ["\"Start today: 62 days × 1–3 min\" forecasts, cost of delay", "Removed. Only real study hours are kept."],
+  ["Route-time estimate can trigger Urgent", "Only real exam proximity (48 h) or your request."],
+  ["\"The student never picks a mode\"", "You can choose Standard or ask to cram."],
+  ["Frustration override saves \"fewer questions\"", "Still gives the answer once; never changes a saved setting."],
+  ["<code>dial_preference</code>", "Becomes frequency \"checks only\", marked legacy, still adjustable."],
+  ["<code>## Rung hints</code>", "Ignored, not deleted. The support setting replaces them."],
+  ["Debrief cram bill with a \"should have taken\" estimate", "Keeps actual hours studied only."],
+  ["Urgent: answer-first worked example", "Recipe, then a fresh question; continue-or-move-on after 3 misses."],
+  ["No knowledge gauge", "Automatic once per course in Standard; offered in Urgent."],
+];
+$("changeRows").innerHTML = changes.map(([a, b]) => `<tr><td class="tag-removed">${a}</td><td>${b}</td></tr>`).join("");
+
+// ---------- test grid ----------
+const models = ["Claude Code", "Codex"];
+const states = [["not run", "neutral"], ["pass", "std"], ["fail", "urg"]];
+let html = "<thead><tr><th>Setting · level</th>" + models.map(m => `<th>${m}</th>`).join("") + "</tr></thead><tbody>";
+axes.forEach(ax => ax.levels.forEach(lv => {
+  html += `<tr><td>${ax.name} · ${lv.name}</td>` + models.map(() => `<td><button class="btn" data-s="0"><span class="pill neutral">not run</span></button></td>`).join("") + "</tr>";
+}));
+$("testGrid").innerHTML = html + "</tbody>";
+$("testGrid").querySelectorAll("button").forEach(b => b.onclick = () => {
+  const n = (Number(b.dataset.s) + 1) % 3; b.dataset.s = n;
+  b.innerHTML = `<span class="pill ${states[n][1]}">${states[n][0]}</span>`;
+});
+</script>
+</body>
+</html>
