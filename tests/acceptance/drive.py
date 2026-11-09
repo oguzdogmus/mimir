@@ -8,8 +8,10 @@ Dev-only, standard library, Python 3.11+. Not part of CI. Usage::
 
 DIR is a folder from ``make_fixture.py``. The first call starts a new host
 session in ``DIR/learning`` with ``HOME=DIR/home``; later calls resume it (the
-session id is kept in ``DIR/session_id``). Claude Code runs with
-``--plugin-dir PLUGIN_DIR``; Codex runs with ``CODEX_HOME`` (a home where
+session id is kept in ``DIR/session_id``). Claude Code runs lean, with
+``--plugin-dir PLUGIN_DIR`` and nothing else: no MCP connectors, no user
+settings, plugins, skills or hooks (a fresh ``~/.claude`` with only the
+login), on ``--model`` (default sonnet); Codex runs with ``CODEX_HOME`` (a home where
 Mimir is installed from PLUGIN_DIR). Both run without permission prompts, so
 use them only on a fixture folder.
 
@@ -37,7 +39,10 @@ def short(value: object, limit: int = 160) -> str:
 
 
 def claude_cmd(args, session: str | None) -> list[str]:
+    # Lean host: only Mimir. No MCP connectors (their tool lists are large and change
+    # while they connect, which voids the prompt cache) and no user settings, plugins or hooks.
     cmd = ["claude", "-p", "--plugin-dir", str(args.plugin), "--dangerously-skip-permissions",
+           "--strict-mcp-config", "--setting-sources", "project", "--model", args.model,
            "--output-format", "stream-json", "--verbose"]
     if session:
         cmd += ["--resume", session]
@@ -52,11 +57,13 @@ def codex_cmd(args, session: str | None) -> list[str]:
 
 
 def parse_claude(lines: list[dict]) -> tuple[str | None, list[str], str]:
-    session, tools, reply = None, [], ""
+    session, tools, texts = None, [], []
     for ev in lines:
         session = ev.get("session_id") or session
-        if ev.get("type") == "assistant":
+        if ev.get("type") == "assistant" and not ev.get("parent_tool_use_id"):
             for part in ev.get("message", {}).get("content", []):
+                if part.get("type") == "text" and part.get("text", "").strip():
+                    texts.append(part["text"])
                 if part.get("type") == "tool_use":
                     inp = part.get("input", {})
                     name = part.get("name")
@@ -65,8 +72,12 @@ def parse_claude(lines: list[dict]) -> tuple[str | None, list[str], str]:
                     else:
                         tools.append(f"{name}: {short(inp.get('command') or inp.get('file_path') or inp.get('skill') or inp)}")
         if ev.get("type") == "result":
-            reply = ev.get("result") or ""
-    return session, tools, reply
+            u = ev.get("usage") or {}
+            tools.append(f"usage: cache_write={u.get('cache_creation_input_tokens', 0)} "
+                         f"cache_read={u.get('cache_read_input_tokens', 0)} out={u.get('output_tokens', 0)} "
+                         f"cost_usd={ev.get('total_cost_usd')}")
+    # Every text the tutor wrote this turn, in order: the class line often comes first.
+    return session, tools, "\n\n".join(texts)
 
 
 def parse_codex(lines: list[dict]) -> tuple[str | None, list[str], str]:
@@ -112,6 +123,7 @@ def main() -> None:
     ap.add_argument("--host", required=True, choices=["claude", "codex"])
     ap.add_argument("--plugin", required=True, type=Path)
     ap.add_argument("--codex-home", type=Path)
+    ap.add_argument("--model", default="sonnet", help="Claude Code host model (default sonnet; opus costs more)")
     ap.add_argument("message")
     args = ap.parse_args()
     run = args.run.resolve()
@@ -120,13 +132,14 @@ def main() -> None:
         sys.exit(f"drive: {run} is not a make_fixture.py folder")
     env = {**os.environ, "HOME": str(home)}
     if args.host == "claude":
-        for name in (".claude", ".claude.json"):
-            real, fake = Path.home() / name, home / name
-            if real.exists() and not fake.exists():
-                if real.is_dir():
-                    fake.symlink_to(real)
-                else:
-                    fake.write_bytes(real.read_bytes())
+        # A fresh ~/.claude holding only the login, so none of the user's own
+        # skills, plugins, hooks or memory load into the host.
+        (home / ".claude").mkdir(exist_ok=True)
+        creds = home / ".claude" / ".credentials.json"
+        if not creds.exists():
+            creds.symlink_to(Path.home() / ".claude" / ".credentials.json")
+        if not (home / ".claude.json").exists() and (Path.home() / ".claude.json").exists():
+            (home / ".claude.json").write_bytes((Path.home() / ".claude.json").read_bytes())
     else:
         if not args.codex_home:
             sys.exit("drive: --codex-home is required for codex")

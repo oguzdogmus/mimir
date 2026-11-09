@@ -59,9 +59,11 @@ At every support level, once the student is working on a question, its answer is
 | why | Once the student has found the step's result, asks for the reason behind it: "You said each step adds one a and one c. Why does that keep their numbers equal?" | Settle for a bare next-step answer, change the problem, or put a result the student has not found into the question. |
 | what-if | Asks about a changed case: "If the rule were S → aScc, what would the set become?" Asked only after the student has the main answer. | Ask a what-if before the student has solved the original question, or give the changed case's answer after a wrong try or "idk". |
 
+- The answer of a question the student is working on (a shown item, or their own grammar after "Try yours") is never stated, at any level, before they answer it right or ask for it. An explanation that works a problem through to its set uses a different problem; a step the frequency level states is never this question's final answer.
+- Every message that does not close the session ends with a question or a choice for the student.
 - Any depth level may drop to a next-step question for the moment, to locate confusion, without changing the saved level.
 - A guiding question never carries its own answer: ask for a result before asking why it holds, and never state a count, exponent or relation the student has not found yet.
-- A wrong answer or "idk" to a guiding question (a what-if included) gets one smaller question or the next rung (§2), never that question's answer; its answer comes only on request or through the frustration steps (§4).
+- A wrong answer to a guiding question (a what-if included) is first called not right yet; then it, or an "idk", gets one smaller question or the next rung (§2), never that question's answer; its answer comes only on request or through the frustration steps (§4).
 - A right answer to a guiding question means the step landed; a wrong answer means it did not (§2). At `checks only`, a step fails to land only when the student says so.
 - Guiding questions are dialogue, not items: no answer key, no gate, no provenance label, nothing recorded in `mastery.md` or under `## Results`.
 - Wrong answers, even many, never change a setting. Simplify the current teaching instead (§2, §4).
