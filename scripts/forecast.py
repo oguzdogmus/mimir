@@ -29,11 +29,11 @@ place) or ``debrief YYYY-MM-DD``.
 
 Confidence, from n = distinct cited sources that are past papers (registry
 role ``past-papers``) or debriefs, over all topics:
-* 0: ``low - No past papers or debriefs to go on, only the outline and
-  slides, so this is a rough guess.``
-* 1: ``low - Only one paper to go on, so this is a rough guess.``
-* 2-3: ``medium - Based on <n> papers; more papers would sharpen it.``
-* 4 or more: ``high - Based on <n> papers.``
+* 0: ``low - None of these topics cites a past paper or debrief, only the
+  outline and slides, so this is a rough guess.``
+* 1: ``low - Only one past paper or debrief cited, so this is a rough guess.``
+* 2-3: ``medium - Based on <n> past papers or debriefs; more would sharpen it.``
+* 4 or more: ``high - Based on <n> past papers or debriefs.``
 
 Block shape (``assets/templates/forecast.md``), newest block first::
 
@@ -68,8 +68,9 @@ write -- store one forecast block for an exam.
     out: {"forecast": "/home/u/learning/2026-Fall/CS201 Theory/.state/
           forecast.md", "course_dir": "...", "exam": "2026-11-05",
           "exam_name": "final", "label": "[forecast, not a guarantee]",
-          "confidence": "low - Only one paper to go on, so this is a rough
-          guess.", "papers": 1, "topics": [{"rank": 1, "topic": "...",
+          "confidence": "low - Only one past paper or debrief cited, so
+          this is a rough guess.", "papers": 1,
+          "topics": [{"rank": 1, "topic": "...",
           "evidence": "...", "sources": ["past-papers/2024-final.pdf"]}],
           "replaced": false, "record_line": null,
           "line": "Forecast saved: ... (1 topic, low confidence)."}
@@ -82,9 +83,10 @@ write -- store one forecast block for an exam.
     true); a scored one exits 2. Scored means ``hit_rate: <h> of <m>``,
     optionally followed by `` (scored YYYY-MM-DD)``, with 1 <= m and h <= m;
     any other ``hit_rate:`` value (pending, blank, malformed) is pending.
-    Everything is checked before anything is created or written. ``record_line`` is "Past forecasts: H of M
-    top topics appeared, across K forecast[s]." or null when nothing is
-    scored. The profile is not changed.
+    Everything is checked before anything is created or written.
+    ``record_line`` is "Past forecasts across your courses: H of M top
+    topics appeared, across K forecast[s]." (summed over every course) or
+    null when nothing is scored. The profile is not changed.
 
 score -- store the hit rate of an exam's forecast and recompute the record.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "date": "2026-11-12",
@@ -92,9 +94,10 @@ score -- store the hit rate of an exam's forecast and recompute the record.
     out: {"forecast": "...", "profile": "/home/u/learning/.state/profile.md",
           "course_dir": "...", "hit_rate": "3 of 5", "hits": 3, "of": 5,
           "record": {"hits": 3, "of": 5, "forecasts": 1},
-          "record_line": "Past forecasts: 3 of 5 top topics appeared, across 1
-          forecast.", "line": "Forecast for final (2026-11-05): 3 of 5 top
-          topics appeared. Past forecasts: ..."}
+          "record_line": "Past forecasts across your courses: 3 of 5 top
+          topics appeared, across 1 forecast.",
+          "line": "Forecast for final (2026-11-05): 3 of 5 top topics
+          appeared. Past forecasts across your courses: ..."}
     ``hits`` are the distinct ranks that appeared, each within 1..m, m =
     min(TOP_N, topics in the block); ``[]`` scores 0. ``date`` may not be
     before ``exam``. The block (pending or
@@ -151,12 +154,12 @@ def _norm(name: str) -> str:
 
 def confidence(n: int) -> str:
     if n == 0:
-        return "low - No past papers or debriefs to go on, only the outline and slides, so this is a rough guess."
+        return "low - None of these topics cites a past paper or debrief, only the outline and slides, so this is a rough guess."
     if n == 1:
-        return "low - Only one paper to go on, so this is a rough guess."
+        return "low - Only one past paper or debrief cited, so this is a rough guess."
     if n <= 3:
-        return f"medium - Based on {n} papers; more papers would sharpen it."
-    return f"high - Based on {n} papers."
+        return f"medium - Based on {n} past papers or debriefs; more would sharpen it."
+    return f"high - Based on {n} past papers or debriefs."
 
 
 def _plural(n: int, word: str) -> str:
@@ -268,7 +271,7 @@ def record_line(rec: tuple[int, int, int]) -> str | None:
     h, m, k = rec
     if not k:
         return None
-    return f"Past forecasts: {h} of {m} top topics appeared, across {_plural(k, 'forecast')}."
+    return f"Past forecasts across your courses: {h} of {m} top topics appeared, across {_plural(k, 'forecast')}."
 
 
 def _profile_text(text: str, value: str) -> str:

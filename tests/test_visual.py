@@ -257,7 +257,8 @@ def test_injection_is_escaped(home, cdir, field):
     assert page.count("<script") == 3 and "alert(1)</script>" not in page
     assert "&lt;/p&gt;&lt;script&gt;alert(1)&lt;/script&gt;" in page
     hashes = set(re.findall(r"'sha256-[^']+'", csp(page)))
-    assert len(hashes) == 3
+    assert hashes == {"'sha256-" + base64.b64encode(hashlib.sha256(b.encode()).digest()).decode() + "'"
+                      for b in scripts(page)}
 
 
 def test_attribute_breakout_is_escaped(home, cdir):
@@ -756,6 +757,42 @@ def test_steps_page(home, cdir):
     assert 'id="mimir-controls" hidden' in body  # shown by the script, so no-JS readers see every step
 
 
+@pytest.mark.parametrize("cmd", ["sheet", "steps"])
+def test_plain_page_is_small_without_katex(home, cdir, cmd):
+    payload = (sheet({"text": "Explain the method."}) if cmd == "sheet" else
+               steps_payload([{"text": "Explain the method."}]))
+    page = Path(ok(home, cmd, payload)["path"]).read_text(encoding="utf-8")
+    assert len(page.encode("utf-8")) < 50_000
+    assert (KATEX / "katex.min.js").read_text() not in page
+    assert (KATEX / "contrib" / "auto-render.min.js").read_text() not in page
+    assert "data:font/woff2;base64," not in page
+    assert_safe_page(page, 3 if cmd == "sheet" else 4)
+    assert "<p>Explain the method.</p>" in main_part(page)
+    if cmd == "steps":
+        assert '<li class="step"' in main_part(page)
+        assert 'id="mimir-next"' in main_part(page)
+
+
+@pytest.mark.parametrize("cmd,payload", [
+    ("sheet", sheet({"math": r"\frac{1}{2}"})),
+    ("sheet", sheet({"text": r"Let \(x\) be the length."})),
+    ("sheet", sheet({"heading": r"Length \(x\)"})),
+    ("sheet", sheet({"text": "plain"}, title=r"Length \(x\)")),
+    ("steps", steps_payload([{"math": r"\frac{1}{2}"}])),
+    ("steps", steps_payload([{"text": r"Let \(x\) be the length."}])),
+    ("steps", steps_payload([{"text": "plain"}], blocks=[{"math": r"\frac{1}{2}"}])),
+    ("steps", steps_payload([{"text": "plain"}], blocks=[{"text": r"Length \(x\)"}])),
+    ("steps", steps_payload([{"text": "plain"}], blocks=[{"heading": r"Length \(x\)"}])),
+    ("steps", steps_payload([{"text": "plain"}], title=r"Length \(x\)")),
+])
+def test_math_page_still_inlines_katex(home, cdir, cmd, payload):
+    page = Path(ok(home, cmd, payload)["path"]).read_text(encoding="utf-8")
+    assert (KATEX / "katex.min.js").read_text() in page
+    assert (KATEX / "contrib" / "auto-render.min.js").read_text() in page
+    assert "data:font/woff2;base64," in page
+    assert_safe_page(page, 3 if cmd == "sheet" else 4)
+
+
 def test_steps_original_beside_question(home, cdir):
     payload = steps_payload([{"text": "one"}], blocks=[{"text": "[real, from photo/scan, wording may be off]"},
                                                        {"original": {"path": "past-papers/q.jpg", "page": 1}}])
@@ -1064,6 +1101,21 @@ def run_ui(tmp_path: Path, code: str, setup: str, actions: str) -> dict:
     proc = subprocess.run([NODE, str(harness)], capture_output=True, text=True, timeout=30)
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout)
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+@pytest.mark.parametrize("cmd", ["sheet", "steps"])
+def test_plain_page_scripts_run_without_katex(home, cdir, tmp_path, cmd):
+    payload = (sheet({"text": "Explain the method."}) if cmd == "sheet" else
+               steps_payload([{"text": "Explain the method."}]))
+    page = Path(ok(home, cmd, payload)["path"]).read_text(encoding="utf-8")
+    out = run_ui(tmp_path, "\n".join(scripts(page)), 'var steps = list(".step", 1);', """
+out.loaded = true;
+out.initially_hidden = steps[0].hidden;
+byId["mimir-next"] && byId["mimir-next"].click();
+out.hidden = steps[0].hidden;
+""")
+    assert out == {"loaded": True, "initially_hidden": cmd == "steps", "hidden": False}
 
 
 @pytest.mark.skipif(NODE is None, reason="node not installed")

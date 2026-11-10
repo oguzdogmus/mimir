@@ -22,6 +22,8 @@ The frustration steps (§4) apply at every point.
 
 Rungs, top to bottom: **notation** (the professor's notation from the fingerprint; math the `mimir-notation` way), **analogy**, **worked example**, **visual** (built through `mimir-notation`), **native language**.
 
+For a step-reveal page through `mimir-notation`: pass every formula as a `math` block or inline `\(...\)` LaTeX, never as Unicode text.
+
 1. Every explanation starts at the rung the support level picks: `example-first` at the worked-example rung (a separate example, never `T`'s own question), `method-first` and `try-first` at the notation rung. Teaching from an attempt (§1, §5) starts at the notation rung.
 2. It does not land when the student says so ("I don't get it", "lost", "huh?") or answers a guiding question wrongly. Then step down exactly ONE rung for the next explanation. Never skip a rung. A rung that does not land is temporary help: it never changes a teaching setting.
 3. Native language is a rung only when `teaching_language` and `course_language` are both set and differ (compared ignoring case and extra spaces). Otherwise skip it. When you use it, declare it first: "Switching to <teaching_language> for this step." Technical terms stay as the course writes them.
