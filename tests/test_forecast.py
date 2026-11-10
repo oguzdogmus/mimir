@@ -126,12 +126,12 @@ def test_constants_are_the_spec_values():
 
 
 @pytest.mark.parametrize("n, want", [
-    (0, "low - No past papers or debriefs to go on, only the outline and slides, so this is a rough guess."),
-    (1, "low - Only one paper to go on, so this is a rough guess."),
-    (2, "medium - Based on 2 papers; more papers would sharpen it."),
-    (3, "medium - Based on 3 papers; more papers would sharpen it."),
-    (4, "high - Based on 4 papers."),
-    (7, "high - Based on 7 papers.")])
+    (0, "low - None of these topics cites a past paper or debrief, only the outline and slides, so this is a rough guess."),
+    (1, "low - Only one past paper or debrief cited, so this is a rough guess."),
+    (2, "medium - Based on 2 past papers or debriefs; more would sharpen it."),
+    (3, "medium - Based on 3 past papers or debriefs; more would sharpen it."),
+    (4, "high - Based on 4 past papers or debriefs."),
+    (7, "high - Based on 7 past papers or debriefs.")])
 def test_confidence_bands(n, want):
     assert forecast.confidence(n) == want
 
@@ -145,7 +145,7 @@ def test_one_paper_low_confidence_block_first(root, home):
           {"topic": "Regular expressions", "evidence": "Outline week 9", "sources": ["outline/outline.pdf"]},
           {"topic": "DFA minimisation", "evidence": "Both", "sources": ["past-papers/p1.pdf"]}]
     out = ok(home, "write", write(topics=ts))
-    assert out["confidence"] == "low - Only one paper to go on, so this is a rough guess."
+    assert out["confidence"] == "low - Only one past paper or debrief cited, so this is a rough guess."
     assert out["papers"] == 1 and out["replaced"] is False and out["record_line"] is None
     assert out["label"] == "[forecast, not a guarantee]"
     assert [t["rank"] for t in out["topics"]] == [1, 2, 3]
@@ -154,7 +154,7 @@ def test_one_paper_low_confidence_block_first(root, home):
     at = lines.index("## 2026-11-05 final")
     assert lines[at:at + 11] == [
         "## 2026-11-05 final", "date: 2026-10-19", "label: [forecast, not a guarantee]",
-        "confidence: low - Only one paper to go on, so this is a rough guess.", "hit_rate: pending", "",
+        "confidence: low - Only one past paper or debrief cited, so this is a rough guess.", "hit_rate: pending", "",
         "| rank | topic | evidence |", "|---|---|---|",
         "| 1 | Pumping lemma | 20 marks on the final (source: past-papers/p1.pdf; outline/outline.pdf) |",
         "| 2 | Regular expressions | Outline week 9 (source: outline/outline.pdf) |",
@@ -174,10 +174,10 @@ def test_confidence_counts_distinct_papers_and_debriefs(root, home):
     course(home, root)
     ts = [{"topic": "A", "evidence": "e", "sources": ["past-papers/p1.pdf", "past-papers/p2.pdf"]},
           {"topic": "B", "evidence": "e", "sources": ["past-papers/p1.pdf", "slides/s1.pdf"]}]
-    assert ok(home, "write", write(topics=ts))["confidence"].startswith("medium - Based on 2 papers")
+    assert ok(home, "write", write(topics=ts))["confidence"].startswith("medium - Based on 2 past papers or debriefs")
     ts.append({"topic": "C", "evidence": "e", "sources": ["debrief 2026-06-01", "past-papers/p3.pdf"]})
-    assert ok(home, "write", write(topics=ts))["confidence"] == "high - Based on 4 papers."
-    assert ok(home, "write", write(topics=topics(2)))["confidence"].startswith("low - No past papers")
+    assert ok(home, "write", write(topics=ts))["confidence"] == "high - Based on 4 past papers or debriefs."
+    assert ok(home, "write", write(topics=topics(2)))["confidence"].startswith("low - None of these topics cites")
 
 
 def test_rewrite_pending_replaces_block(root, home):
@@ -292,7 +292,7 @@ def test_score_five_topics(root, home):
     assert "hit_rate: pending" not in fc_text(cdir)
     assert profile_line(root) == "forecast_record: 3 of 5 across 1 forecast"
     assert out["record"] == {"hits": 3, "of": 5, "forecasts": 1}
-    assert out["record_line"] == "Past forecasts: 3 of 5 top topics appeared, across 1 forecast."
+    assert out["record_line"] == "Past forecasts across your courses: 3 of 5 top topics appeared, across 1 forecast."
 
 
 def test_score_short_list_and_top_five_cap(root, home):
@@ -324,7 +324,7 @@ def test_two_courses_sum_and_record_line_in_next_write(root, home):
     assert out["record"] == {"hits": 7, "of": 10, "forecasts": 2}
     assert profile_line(root) == "forecast_record: 7 of 10 across 2 forecasts"
     nxt = ok(home, "write", write(exam="2027-01-10"))
-    assert nxt["record_line"] == "Past forecasts: 7 of 10 top topics appeared, across 2 forecasts."
+    assert nxt["record_line"] == "Past forecasts across your courses: 7 of 10 top topics appeared, across 2 forecasts."
 
 
 def test_record_skips_symlinked_courses(root, home):
@@ -486,7 +486,7 @@ def test_non_utf8_forecast_elsewhere_is_skipped(root, home):
     out = ok(home, "score", score([1, 2]))
     assert out["record"] == {"hits": 2, "of": 5, "forecasts": 1}
     nxt = ok(home, "write", write(exam="2027-01-10"))
-    assert nxt["record_line"] == "Past forecasts: 2 of 5 top topics appeared, across 1 forecast."
+    assert nxt["record_line"] == "Past forecasts across your courses: 2 of 5 top topics appeared, across 1 forecast."
 
 
 def test_score_matches_exam_name_ignoring_case_and_spaces(root, home):
