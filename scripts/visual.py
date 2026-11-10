@@ -387,8 +387,9 @@ def _json_script(value) -> str:
 
 
 def render_sheet(title: str, blocks_html: list[str]) -> str:
-    return render_page(_TEMPLATE, {"TITLE": html.escape(title), "BLOCKS": "\n".join(blocks_html),
-                                   **_katex_values(html.escape(title), *blocks_html)})
+    title = html.escape(title)
+    return render_page(_TEMPLATE, {"TITLE": title, "BLOCKS": "\n".join(blocks_html),
+                                   **_katex_values(title, *blocks_html)})
 
 
 def render_page(template_path: Path, values: dict[str, str]) -> str:
@@ -463,9 +464,10 @@ def cmd_steps(data: dict) -> dict:
         parts = [_sheet_block(block, f"steps[{k}][{n}]", rows, course_dir, index, _STEP_KINDS)
                  for n, block in enumerate(step, 1)]
         items.append(f'<li class="step" id="mimir-step-{k}"><h2>Step {k}</h2>\n' + "\n".join(parts) + "</li>")
-    page = render_page(_STEPS_TEMPLATE, {"TITLE": html.escape(title), "BLOCKS": "\n".join(intro),
+    title = html.escape(title)
+    page = render_page(_STEPS_TEMPLATE, {"TITLE": title, "BLOCKS": "\n".join(intro),
                                          "STEPS": "\n".join(items),
-                                         **_katex_values(html.escape(title), *intro, *items)})
+                                         **_katex_values(title, *intro, *items)})
     return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 

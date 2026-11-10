@@ -64,8 +64,8 @@ Files read (all inside the learning root, see ``workspace.py``)
   value is a date or datetime (``plan.py`` rules). With no valid
   ``first_contact:``, first contact falls back to the first valid ``started:``
   in name order, or null when neither exists. This fallback never rewrites
-  logs. For ``debrief`` also ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
-  disagreements``, and ``next_course_offer:`` lines in every course of the
+  logs. For ``debrief`` also ``started:``/``ended:`` datetimes, ``- ``
+  lines under ``## Verifier disagreements``, and ``next_course_offer:`` lines in every course of the
   term; for ``prefs``' ``whats_new``, whether any course has a log at all.
   Symlinked, unreadable or non-UTF-8 logs are skipped.
 * A ``save.md`` or ``mastery.md`` that is itself a symlink reads as empty.
@@ -735,6 +735,7 @@ def _first_log_moment(course_dir: Path, key: str) -> str | None:
 
 
 def _first_contact(course_dir: Path) -> str | None:
+    """The course's first contact: the first valid ``first_contact:`` log line, else the first valid ``started:``."""
     return _first_log_moment(course_dir, "first_contact") or _first_log_moment(course_dir, "started")
 
 
@@ -1440,12 +1441,12 @@ def cmd_triage(data: dict) -> dict:
         t["topic"] = saved["name"] if saved is not None else topic
         if "status" not in t:
             t["status"] = saved["status"] if saved is not None else "unseen"
-    ranking = {"class": klass, "basis": basis,
+    triage_request = {"class": klass, "basis": basis,
                "scope": {k: scope[k] for k in ("in", "out")} if scope is not None else None}
-    ranked = _plan(plan.triage, {**ranking, "types": types})
+    ranked = _plan(plan.triage, {**triage_request, "types": types})
     if excluded:
         # Rank separately so past-paper marks cannot fill outline marks or change its order.
-        ranked["rows"].extend(_plan(plan.triage, {**ranking, "types": excluded})["rows"])
+        ranked["rows"].extend(_plan(plan.triage, {**triage_request, "types": excluded})["rows"])
     metadata = {_norm(t["name"]): {k: t[k] for k in ("topic", "source_note", "tentative", "prior_term")}
                 for t in types + excluded}
     return {**context, **ranked, "state": "ready",

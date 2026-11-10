@@ -69,7 +69,8 @@ write -- store one forecast block for an exam.
           forecast.md", "course_dir": "...", "exam": "2026-11-05",
           "exam_name": "final", "label": "[forecast, not a guarantee]",
           "confidence": "low - Only one past paper or debrief cited, so
-          this is a rough guess.", "papers": 1, "topics": [{"rank": 1, "topic": "...",
+          this is a rough guess.", "papers": 1,
+          "topics": [{"rank": 1, "topic": "...",
           "evidence": "...", "sources": ["past-papers/2024-final.pdf"]}],
           "replaced": false, "record_line": null,
           "line": "Forecast saved: ... (1 topic, low confidence)."}
@@ -82,9 +83,10 @@ write -- store one forecast block for an exam.
     true); a scored one exits 2. Scored means ``hit_rate: <h> of <m>``,
     optionally followed by `` (scored YYYY-MM-DD)``, with 1 <= m and h <= m;
     any other ``hit_rate:`` value (pending, blank, malformed) is pending.
-    Everything is checked before anything is created or written. ``record_line`` is "Past forecasts across your courses:
-    H of M top topics appeared, across K forecast[s]." (summed over every course) or null when nothing is
-    scored. The profile is not changed.
+    Everything is checked before anything is created or written.
+    ``record_line`` is "Past forecasts across your courses: H of M top
+    topics appeared, across K forecast[s]." (summed over every course) or
+    null when nothing is scored. The profile is not changed.
 
 score -- store the hit rate of an exam's forecast and recompute the record.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "date": "2026-11-12",
@@ -93,8 +95,9 @@ score -- store the hit rate of an exam's forecast and recompute the record.
           "course_dir": "...", "hit_rate": "3 of 5", "hits": 3, "of": 5,
           "record": {"hits": 3, "of": 5, "forecasts": 1},
           "record_line": "Past forecasts across your courses: 3 of 5 top
-          topics appeared, across 1 forecast.", "line": "Forecast for final (2026-11-05): 3 of 5 top
-          topics appeared. Past forecasts across your courses: ..."}
+          topics appeared, across 1 forecast.",
+          "line": "Forecast for final (2026-11-05): 3 of 5 top topics
+          appeared. Past forecasts across your courses: ..."}
     ``hits`` are the distinct ranks that appeared, each within 1..m, m =
     min(TOP_N, topics in the block); ``[]`` scores 0. ``date`` may not be
     before ``exam``. The block (pending or
