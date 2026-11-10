@@ -169,7 +169,7 @@ def test_topic_fallback_uses_start_remaining_and_scope_order(home, root):
     assert [r["name"] for r in out["rows"]] == [r["name"] for r in start["remaining"]] == ["Inside", "Outside"]
     assert out["drill"] == ["Inside"]
     assert [(r["marks"], r["marks_source"], r["frequency"], r["source_note"], r["tentative"], r["prior_term"])
-            for r in out["rows"]] == [(1, "estimated", None, "", False, False)] * 2
+            for r in out["rows"]] == [(None, "estimated", None, "", False, False)] * 2
     assert out["line"] == "No past papers: ranked from the course outline, without paper statistics."
     assert triage(home, {}) == out
     fails(home, "triage", {**CONTEXT, "associations": {"Inside": None}}, "associations")

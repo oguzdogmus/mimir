@@ -439,7 +439,7 @@ def test_triage_skipped_mastered_types_come_after_every_drilled_type():
 def test_triage_no_papers_outline_names_no_statistics():
     out = ok("triage", {"basis": "outline", "types": [qtype("A", None, 0, 0), qtype("B", None, 0, 0)]})
     assert [(r["marks"], r["marks_source"], r["frequency"]) for r in out["rows"]] == [
-        (1, "estimated", None), (1, "estimated", None)]
+        (None, "estimated", None), (None, "estimated", None)]
     assert out["drill"] == ["A", "B"]
     assert out["line"] == "No past papers: ranked from the course outline, without paper statistics."
     assert out["basis"] == "outline"
@@ -453,6 +453,41 @@ def test_triage_null_marks_take_mean_of_known_and_unknown_frequency_counts_as_on
     assert out["drill"] == ["B", "C", "A"]  # 15 x 1, 10 x 1, 20 x 1/4
 
 
+def test_triage_estimated_marks_are_rounded_without_changing_rank():
+    out = ok("triage", {"types": [qtype("A", 2), qtype("B", 4),
+                                   qtype("C", 3.2, 19, 20), qtype("Unknown", None)]})
+    assert [(r["name"], r["marks"], r["marks_source"]) for r in out["rows"]] == [
+        ("B", 4, "printed"), ("Unknown", 3, "estimated"),
+        ("C", 3.2, "printed"), ("A", 2, "printed")]
+    # The exact mean (3.0666...) outranks C's 3.04; rounding the score would reverse them.
+    assert out["drill"] == ["B", "Unknown", "C", "A"]
+
+
+@pytest.mark.parametrize("known_marks, estimate, order", [
+    ([20, 5], 13, ["Known 0", "Unknown", "Known 1"]),
+    ([2, 3], 3, ["Known 1", "Unknown", "Known 0"]),
+    ([2.499, 2.499], 2, ["Known 0", "Known 1", "Unknown"]),
+    ([0.2, 0.4], 1, ["Known 1", "Unknown", "Known 0"]),
+    ([0, 0], 1, ["Known 0", "Known 1", "Unknown"]),
+])
+def test_triage_estimated_marks_round_half_up_with_a_minimum_of_one(known_marks, estimate, order):
+    types = [qtype(f"Known {i}", marks) for i, marks in enumerate(known_marks)]
+    out = ok("triage", {"types": types + [qtype("Unknown", None)]})
+    by_name = {r["name"]: r for r in out["rows"]}
+    assert by_name["Unknown"]["marks"] == estimate
+    assert by_name["Unknown"]["marks_source"] == "estimated"
+    assert out["drill"] == order
+
+
+def test_triage_all_marks_unknown_rank_by_frequency_and_keep_input_order_on_ties():
+    out = ok("triage", {"types": [qtype("Low", None, 1, 4), qtype("Tie first", None, 1, 2),
+                                   qtype("High", None, 3, 4), qtype("Tie second", None, 2, 4)]})
+    assert [(r["name"], r["marks"], r["marks_source"]) for r in out["rows"]] == [
+        ("High", None, "estimated"), ("Tie first", None, "estimated"),
+        ("Tie second", None, "estimated"), ("Low", None, "estimated")]
+    assert out["drill"] == ["High", "Tie first", "Tie second", "Low"]
+
+
 def test_triage_edge_cases():
     out = ok("triage", {"types": []})
     assert out["rows"] == [] and out["drill"] == [] and out["line"] == "Nothing to drill: no question types."
@@ -460,7 +495,7 @@ def test_triage_edge_cases():
     assert out["drill"] == [] and rows(out) == [("A", "skip", "mastered")]
     assert out["line"] == "Nothing to drill: every question type is mastered."
     only = ok("triage", {"types": [{"name": "A"}]})["rows"]
-    assert only == [{"name": "A", "marks": 1, "marks_source": "estimated", "frequency": None,
+    assert only == [{"name": "A", "marks": None, "marks_source": "estimated", "frequency": None,
                      "decision": "drill", "reason": "not studied yet", "scope": None}]
 
 

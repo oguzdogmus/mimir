@@ -95,15 +95,17 @@ triage -- question-type triage: every type in one ranked table, none cut.
     out: {"rows": [
             {"name": "Pumping lemma proof", "marks": 20, "marks_source": "printed",
              "frequency": "2 of 2 papers", "decision": "drill", "reason": "gap", "scope": null},
-            {"name": "DFA construction", "marks": 12.5, "marks_source": "estimated",
+            {"name": "DFA construction", "marks": 13, "marks_source": "estimated",
              "frequency": "1 of 2 papers", "decision": "drill", "reason": "not studied yet",
              "scope": null},
             {"name": "Regex", "marks": 5, "marks_source": "printed",
              "frequency": "2 of 2 papers", "decision": "skip", "reason": "mastered", "scope": null}],
           "drill": ["Pumping lemma proof", "DFA construction"], "basis": "papers",
           "line": "Ranked by marks × how often each type appeared in past papers."}
-    One row per type. ``marks`` null is estimated as the mean of the known
-    marks, else 1 (``marks_source`` "estimated"; otherwise "printed").
+    One row per type. For ranking, an input ``marks`` null uses the exact mean
+    of the known marks, else 1. Its output ``marks`` is that mean rounded
+    half-up to a whole number, at least 1, or null when no type has printed
+    marks (``marks_source`` "estimated"; otherwise "printed").
     ``frequency`` is "<seen> of <papers> papers", or null (unknown) when
     ``papers`` is 0. Rank score = marks x seen/papers, an unknown frequency
     counting as 1; higher first, ties in input order. There is no minutes
@@ -567,6 +569,7 @@ def triage(data: dict) -> dict:
 
     known = [t["marks"] for t in types if t["marks"] is not None]
     fill = sum(known, Fraction(0)) / len(known) if known else Fraction(1)
+    estimated_marks = max(1, math.floor(fill + Fraction(1, 2))) if known else None
     rows = []
     for t in types:
         printed = t["marks"] is not None
@@ -583,7 +586,7 @@ def triage(data: dict) -> dict:
             "out": mark == "out",
             "row": {
                 "name": t["name"],
-                "marks": num(marks),
+                "marks": num(marks) if printed else estimated_marks,
                 "marks_source": "printed" if printed else "estimated",
                 "frequency": f"{t['seen']} of {count(t['papers'], 'paper')}" if t["papers"] else None,
                 "decision": "skip" if skip else "drill",
