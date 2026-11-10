@@ -54,6 +54,7 @@ a:focus-visible { outline: 3px solid var(--link); outline-offset: 2px; }
 <script>
 (function () {
   "use strict";
+  if (typeof katex === "undefined" || typeof renderMathInElement === "undefined") return;
   var base = {output: "htmlAndMathml", throwOnError: false, trust: false};
   var blocks = document.querySelectorAll(".mimir-display");
   for (var i = 0; i < blocks.length; i++) {

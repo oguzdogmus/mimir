@@ -48,7 +48,8 @@ sheet -- an offline HTML math sheet from ``assets/math-sheet.html``.
     ``math`` at most BLOCK_MAX_CHARS (4000); at most SHEET_MAX_BLOCKS (200)
     blocks. Strings have no control characters (one line each). The template
     is filled in one pass, so inserted values are never re-scanned, and every
-    string is HTML-escaped. KaTeX (``assets/vendor/katex``) is inlined: its
+    string is HTML-escaped. When a math block or inline ``\\(...\\)`` is present,
+    KaTeX (``assets/vendor/katex``) is inlined: its
     JS, auto-render and CSS, with the woff2 fonts as data URIs and other font
     formats dropped. KaTeX runs with ``output: "htmlAndMathml"``,
     ``throwOnError: false``, ``trust: false`` and the delimiters ``\\(\\)``
@@ -368,7 +369,10 @@ def _fill(template: str, values: dict[str, str]) -> str:
     return _SLOT.sub(lambda m: values[m.group(1)], template)
 
 
-def _katex_values() -> dict[str, str]:
+def _katex_values(*content: str) -> dict[str, str]:
+    """Load KaTeX only for display blocks or inline delimiters in escaped page content."""
+    if not any('class="mimir-display"' in part or r"\(" in part for part in content):
+        return {"KATEX_CSS": "", "KATEX_JS": "", "AUTO_RENDER_JS": ""}
     return {
         "KATEX_CSS": _check_raw(_inline_fonts(_vendor_text("katex.min.css")), "</style", "KaTeX CSS"),
         "KATEX_JS": _check_raw(_vendor_text("katex.min.js"), "</script", "KaTeX JS"),
@@ -384,7 +388,7 @@ def _json_script(value) -> str:
 
 def render_sheet(title: str, blocks_html: list[str]) -> str:
     return render_page(_TEMPLATE, {"TITLE": html.escape(title), "BLOCKS": "\n".join(blocks_html),
-                                   **_katex_values()})
+                                   **_katex_values(html.escape(title), *blocks_html)})
 
 
 def render_page(template_path: Path, values: dict[str, str]) -> str:
@@ -460,7 +464,8 @@ def cmd_steps(data: dict) -> dict:
                  for n, block in enumerate(step, 1)]
         items.append(f'<li class="step" id="mimir-step-{k}"><h2>Step {k}</h2>\n' + "\n".join(parts) + "</li>")
     page = render_page(_STEPS_TEMPLATE, {"TITLE": html.escape(title), "BLOCKS": "\n".join(intro),
-                                         "STEPS": "\n".join(items), **_katex_values()})
+                                         "STEPS": "\n".join(items),
+                                         **_katex_values(html.escape(title), *intro, *items)})
     return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
