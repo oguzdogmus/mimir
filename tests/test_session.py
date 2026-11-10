@@ -429,10 +429,32 @@ def test_route_all_mastered_stale_rechecks_one(home, root):
 def test_first_contact_from_logs(home, root):
     cdir = course(home)
     logs = cdir / ".state" / "logs"
-    (logs / "2026-10-01-0900.md").write_text("## Quiz\nstarted: x\n", encoding="utf-8")
-    (logs / "2026-10-02-0900.md").write_text("first_contact:\nfirst_contact: 2026-10-02T09:00:00+03:00\n",
-                                             encoding="utf-8")
+    (logs / "2026-10-01-0900.md").write_text("## Quiz\nstarted: 2026-10-01T09:00:00+03:00\n", encoding="utf-8")
+    (logs / "2026-10-02-0900.md").write_text(
+        "started: 2026-10-02T10:00:00+03:00\nfirst_contact:\nfirst_contact: 2026-10-02T09:00:00+03:00\n",
+        encoding="utf-8")
     (logs / "2026-10-03-0900.md").write_text("first_contact: later\n", encoding="utf-8")
+    assert ok(home, "start", {"now": NOW})["first_contact"] == "2026-10-02T09:00:00+03:00"
+
+
+def test_first_contact_falls_back_to_started_for_cram_bill(home, root):
+    cdir = due_course(home, root)
+    log(cdir, "2026-11-04-1751", session_log("2026-11-04T17:51:03+02:00", "2026-11-04T18:21:03+02:00"))
+    before = snapshot(root)
+    assert ok(home, "start", {"now": DUE_NOW})["first_contact"] == "2026-11-04T17:51:03+02:00"
+    out = ok(home, "debrief", {"now": DUE_NOW})
+    assert out["cram"]["session_count"] == 1 and out["cram"]["actual_minutes"] == 30
+    assert out["line"] == "Cram bill: 30 min studied in 1 session. First contact: 1 day before the exam."
+    assert snapshot(root) == before
+
+
+def test_first_contact_fallback_skips_invalid_moments_in_log_name_order(home, root):
+    cdir = course(home)
+    log(cdir, "2026-10-03-0900", "started: 2026-10-03T09:00:00+03:00\n")
+    log(cdir, "2026-10-02-0900", "first_contact: soon\nstarted:\nstarted: 2026-13-01\n"
+        "started: 2026-10-02T09:00:00+03:00\nstarted: 2026-10-02T10:00:00+03:00\n")
+    log(cdir, "2026-10-01-0900", "first_contact:\nstarted: yesterday\n")
+    (cdir / ".state" / "logs" / "2026-09-30-0900.md").write_bytes(b"started: \xff\n")
     assert ok(home, "start", {"now": NOW})["first_contact"] == "2026-10-02T09:00:00+03:00"
 
 
@@ -895,6 +917,7 @@ def test_debrief_offer_once_per_term(home, root):
 
 def test_debrief_no_first_contact(home, root):
     due_course(home, root)
+    assert ok(home, "start", {"now": DUE_NOW})["first_contact"] is None
     out = ok(home, "debrief", {"now": DUE_NOW})
     assert out["debrief"]["due"] is True
     assert out["cram"] is None and out["line"] == "Cram bill: no study sessions logged."
