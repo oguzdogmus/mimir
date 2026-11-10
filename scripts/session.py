@@ -227,7 +227,8 @@ triage -- read-only question-type preparation and ranking for a resolved session
           "class": "Urgent"}
     All four fields are required; ``class`` is ``start.class.class``, including
     a session or lasting choice already resolved by ``start``. With fingerprint
-    types, returns ``state: needs-associations``, ``types`` (name, source_note,
+    types, unless the next exam's saved scope marks every one ``out``, returns
+    ``state: needs-associations``, ``types`` (name, source_note,
     tentative, prior_term), and ``mastery_topics`` (canonical mastery names).
     Print nothing yet. The agent chooses a covering mastery topic per type,
     then repeats the same request with ``associations``:
@@ -236,10 +237,14 @@ triage -- read-only question-type preparation and ranking for a resolved session
     null uses the type's own name for mastery lookup and recording. Names
     compare ignoring case and repeated spaces; unknown/missing/repeated keys
     or non-null values outside the candidate topics exit 2.
-    With no fingerprint types, returns ready directly: ``start.remaining``'s
+    With no fingerprint types, or all of them ``out`` under the next exam's
+    scope, returns ready directly with ``basis: outline``: ``start.remaining``'s
     topics and statuses, else distinct INDEX topics checked by their own name.
     This preserves the remaining route's exclusion of mastered topics even
     in Standard. An empty associations object is allowed on this path.
+    In the all-out fallback, the excluded types are appended as ``not on this
+    exam`` rows; their paper statistics do not affect the outline ranking.
+    With no scope or any type ``in`` or ``not checked``, the papers path is unchanged.
     ``state: ready`` carries ``plan.py triage``'s rows, drill names, basis and
     line. Each row adds ``topic`` (recording name), ``source_note`` (the whole
     annotation, including markers, else empty), ``tentative`` and ``prior_term``.
@@ -1392,6 +1397,14 @@ def cmd_triage(data: dict) -> dict:
     types = _triage_types(course_dir)
     rows = route(course_dir)
     topics = {_norm(r["name"]): r for r in mastery(course_dir)}
+    code = course_code(course)
+    profile = _text(root / ".state" / "profile.md")
+    exam = _exam(profile, code, now)
+    scope, _, _ = scope_view(root, course_dir, code, rows, exam,
+                             _code_exams(profile, code, now.tzinfo), now.date())
+    excluded = []
+    if types and scope is not None and all(scope_mark(scope, t["name"]) == "out" for t in types):
+        excluded, types = types, []
     context = {"term": term, "course": course, "course_dir": str(course_dir), "class": klass}
     if types and "associations" not in data:
         return {**context, "state": "needs-associations",
@@ -1399,11 +1412,6 @@ def cmd_triage(data: dict) -> dict:
                 "mastery_topics": [r["name"] for r in topics.values()],
                 "line": "Choose a mastery topic for each question type, or null when none covers it."}
     matches = _triage_associations(data.get("associations", {}), types, topics)
-    code = course_code(course)
-    profile = _text(root / ".state" / "profile.md")
-    exam = _exam(profile, code, now)
-    scope, _, _ = scope_view(root, course_dir, code, rows, exam,
-                             _code_exams(profile, code, now.tzinfo), now.date())
     basis = "papers" if types else "outline"
     if not types:
         # Exactly start.remaining's ordering and exclusion, including in Standard.
@@ -1420,16 +1428,23 @@ def cmd_triage(data: dict) -> dict:
                     types.append({"name": name})
         for t in types:
             t.update(source_note="", tentative=False, prior_term=False, marks=None, seen=0, papers=0)
-    for t in types:
+    # A type can also be a route topic: keep its excluded fingerprint row only once.
+    excluded_names = {_norm(t["name"]) for t in excluded}
+    types = [t for t in types if _norm(t["name"]) not in excluded_names]
+    for t in types + excluded:
         topic = matches.get(_norm(t["name"]), t["name"])
         saved = topics.get(_norm(topic))
         t["topic"] = saved["name"] if saved is not None else topic
         if "status" not in t:
             t["status"] = saved["status"] if saved is not None else "unseen"
-    ranked = _plan(plan.triage, {"types": types, "class": klass, "basis": basis,
-                                "scope": {k: scope[k] for k in ("in", "out")} if scope is not None else None})
+    ranking = {"class": klass, "basis": basis,
+               "scope": {k: scope[k] for k in ("in", "out")} if scope is not None else None}
+    ranked = _plan(plan.triage, {**ranking, "types": types})
+    if excluded:
+        # Rank separately so past-paper marks cannot fill outline marks or change its order.
+        ranked["rows"].extend(_plan(plan.triage, {**ranking, "types": excluded})["rows"])
     metadata = {_norm(t["name"]): {k: t[k] for k in ("topic", "source_note", "tentative", "prior_term")}
-                for t in types}
+                for t in types + excluded}
     return {**context, **ranked, "state": "ready",
             "rows": [{**row, **metadata[_norm(row["name"])]} for row in ranked["rows"]]}
 

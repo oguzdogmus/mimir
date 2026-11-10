@@ -175,6 +175,78 @@ def test_topic_fallback_uses_start_remaining_and_scope_order(home, root):
     fails(home, "triage", {**CONTEXT, "associations": {"Inside": None}}, "associations")
 
 
+@pytest.fixture
+def final_course(home, root):
+    cdir = course(home, mastery=[("FIR filters", "gap", "2026-10-10", 1, 0),
+                                  ("IIR filters", "shaky", "2026-10-10", 1, 0),
+                                  ("Filter design", "unseen", "", 0, 0),
+                                  ("Multirate systems", "unseen", "", 0, 0),
+                                  ("Revision", "mastered", "2026-10-10", 0, 2)])
+    fingerprint(cdir, [("Fourier transform", "2 of 2 papers", "20"),
+                       ("Z transform", "1 of 2 papers", "10"),
+                       ("Sampling (source: past-papers/midterm.pdf) (prior term)", "1 of 2 papers", "5")])
+    profile(root, exams=[("CS201", "final", "2026-12-20")])
+    return cdir
+
+
+def test_all_fingerprint_types_out_of_scope_falls_back_to_remaining_route_without_associations(home, root, final_course):
+    route_topics = ["FIR filters", "IIR filters", "Filter design", "Multirate systems"]
+    save_scope(home, exam_name="final", exam_date="2026-12-20", words="FIR filters onwards",
+               **{"in": route_topics + ["Revision"], "out": ["Fourier transform", "Z transform", "Sampling"]})
+    before = snapshot(root)
+    out = triage(home)
+    assert out["state"] == "ready" and out["basis"] == "outline"
+    assert out["drill"] == route_topics
+    assert [r["name"] for r in out["rows"]] == route_topics + ["Fourier transform", "Z transform", "Sampling"]
+    assert [r["reason"] for r in out["rows"]] == [
+        "gap", "shaky", "not studied yet", "not studied yet",
+        "not on this exam", "not on this exam", "not on this exam"]
+    assert all(r["scope"] == "in" for r in out["rows"][:4])
+    assert all(r["decision"] == "skip" and r["scope"] == "out" for r in out["rows"][4:])
+    assert [r["topic"] for r in out["rows"]] == [r["name"] for r in out["rows"]]
+    assert out["rows"][-1]["source_note"] == "(source: past-papers/midterm.pdf) (prior term)"
+    assert out["rows"][-1]["prior_term"] is True
+    assert out["line"] == "No past papers: ranked from the course outline, without paper statistics."
+    assert triage(home, {}) == out
+    assert snapshot(root) == before
+    # Excluded past-paper statistics must not change the outline rows.
+    (final_course / ".state" / "fingerprint.md").unlink()
+    assert triage(home)["rows"] == out["rows"][:4]
+
+
+@pytest.mark.parametrize("scope_case", ["in", "not checked", "no scope"])
+def test_fingerprint_path_keeps_associations_when_any_type_is_not_out(home, root, final_course, scope_case):
+    if scope_case != "no scope":
+        save_scope(home, exam_name="final", exam_date="2026-12-20", words="FIR filters onwards",
+                   **{"in": ["FIR filters"] + (["Fourier transform"] if scope_case == "in" else []),
+                      "out": ["Z transform", "Sampling"]})
+    draft = triage(home)
+    assert draft["state"] == "needs-associations"
+    assert [t["name"] for t in draft["types"]] == ["Fourier transform", "Z transform", "Sampling"]
+    out = triage(home, {"Fourier transform": None, "Z transform": None, "Sampling": None})
+    assert out["state"] == "ready" and out["basis"] == "papers"
+    assert out["drill"] == (["Fourier transform", "Z transform", "Sampling"]
+                            if scope_case == "no scope" else ["Fourier transform"])
+    assert out["rows"][0]["scope"] == (None if scope_case == "no scope" else scope_case)
+    assert out["line"] == "Ranked by marks × how often each type appeared in past papers."
+
+
+def test_all_out_fallback_uses_index_when_route_is_complete_and_lists_shared_names_once(home, root, final_course):
+    course(home, mastery=[("Fourier transform", "mastered", "2026-10-10", 0, 2)])
+    index(final_course, [("outline/syllabus.pdf", "outline")],
+          [("FOURIER   TRANSFORM", "outline/syllabus.pdf#page=1"),
+           ("FIR filters", "outline/syllabus.pdf#page=2"),
+           ("FIR FILTERS", "outline/syllabus.pdf#page=3")])
+    save_scope(home, exam_name="final", exam_date="2026-12-20", words="FIR filters onwards",
+               **{"in": ["FIR filters"], "out": ["Fourier transform", "Z transform", "Sampling"]})
+    out = triage(home)
+    assert out["state"] == "ready" and out["basis"] == "outline"
+    assert out["drill"] == ["FIR filters"]
+    assert [(r["name"], r["reason"]) for r in out["rows"]] == [
+        ("FIR filters", "not studied yet"), ("Fourier transform", "not on this exam"),
+        ("Z transform", "not on this exam"), ("Sampling", "not on this exam")]
+
+
 def test_without_outline_fallback_includes_only_nonmastered_augmented_route(home, root):
     cdir = course(home, mastery=[("Done", "mastered", "2026-10-10", 0, 2),
                                   ("Gap", "gap", "2026-10-10", 1, 0)])
