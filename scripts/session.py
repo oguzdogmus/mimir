@@ -61,8 +61,10 @@ Files read (all inside the learning root, see ``workspace.py``)
   (``ingest.py`` rules; a non-UTF-8 one exits 2) for the route.
 * ``<course>/.state/logs/*.md`` (name order): the first ``first_contact:``
   line and the first ``gauge_done:`` line (the gauge-done marker) whose
-  value is a date or datetime (``plan.py`` rules); for ``debrief`` also
-  ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
+  value is a date or datetime (``plan.py`` rules). With no valid
+  ``first_contact:``, first contact falls back to the first valid ``started:``
+  in name order, or null when neither exists. This fallback never rewrites
+  logs. For ``debrief`` also ``started:``/``ended:`` datetimes, ``- `` lines under ``## Verifier
   disagreements``, and ``next_course_offer:`` lines in every course of the
   term; for ``prefs``' ``whats_new``, whether any course has a log at all.
   Symlinked, unreadable or non-UTF-8 logs are skipped.
@@ -315,7 +317,8 @@ debrief -- what the post-exam debrief needs. Read-only, like the rest.
     with target T and previous exam B (the latest row of ``code`` dated
     before T, none when there is none):
     * ``cram``: ``plan.py debrief`` (actual hours studied only) with
-      ``first_contact`` (as in ``start``), ``exam`` T and the sessions:
+      ``first_contact`` (as in ``start``, including the ``started:`` fallback),
+      ``exam`` T and the sessions:
       each log's ``started:`` and the next ``ended:`` after it, kept when the start's own calendar date is after B and on or before T;
       a pair that ends before it starts, overlaps an earlier kept pair or
       mixes offset/no-offset with ``now`` is dropped. ``cram`` is null (line
@@ -727,7 +730,7 @@ def _first_log_moment(course_dir: Path, key: str) -> str | None:
 
 
 def _first_contact(course_dir: Path) -> str | None:
-    return _first_log_moment(course_dir, "first_contact")
+    return _first_log_moment(course_dir, "first_contact") or _first_log_moment(course_dir, "started")
 
 
 def _gauge_done(course_dir: Path) -> str | None:
