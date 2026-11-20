@@ -198,12 +198,18 @@ _DOCUMENT_SUFFIXES = {f".{e}" for e in ingest._DOCUMENT_EXT}
 
 # --- input ------------------------------------------------------------------------
 
+def normalise(value: str) -> str:
+    """A one-line value as the ledger keeps it: surrounding whitespace removed. ``submit`` stores
+    sessions and items this way and ``session.py record`` looks them up the same way."""
+    return value.strip()
+
+
 def _text(value, where: str, limit: int | None, required: bool = True) -> str:
     if not isinstance(value, str):
         raise InputError(f"{where} must be a string")
     if _has_control(value):
         raise InputError(f"{where} must be one line without control characters")
-    value = value.strip()
+    value = normalise(value)
     if required and not value:
         raise InputError(f"{where} is required")
     if limit is not None and len(value) > limit:
@@ -316,6 +322,7 @@ def _decision(entry: dict) -> str:
 def ledger_question(course_dir: Path, session: str, item: str) -> dict | None:
     """For ``session.py record``: ``{"decision", "label", "real"}`` of a ledger question, None when the
     session's ledger does not hold it."""
+    session, item = normalise(session), normalise(item)
     ledger = _load(ledger_path(course_dir, session), session)
     entry = (ledger or {}).get("questions", {}).get(item)
     if entry is None:
@@ -740,7 +747,8 @@ def cmd_summary(data: dict) -> dict:
     _check_keys(data, {"term", "course", "session"})
     course_dir = _course(data)
     if "session" in data:
-        ledger = _load(ledger_path(course_dir, _session(data)), data["session"].strip())
+        session = _session(data)
+        ledger = _load(ledger_path(course_dir, session), session)
         ledgers = [ledger] if ledger else []
     else:
         folder = course_dir / ".state" / "checks"

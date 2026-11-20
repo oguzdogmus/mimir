@@ -1405,6 +1405,44 @@ def test_record_logs_overrides_and_answers_after_one(home, root):
         "- heaps-practice-2 [practice, not from a real paper] (Heaps): after frustration override, not counted"]
 
 
+def test_record_finds_a_checked_answer_whatever_whitespace_surrounds_its_session_and_item(home, root):
+    """submit stores the session and item stripped; record looks them up the same way."""
+    cdir = record_course(home)
+    checked(home, "heaps-practice-1")
+    out = ok(home, "record", attempt(session=" s1 ", item="  heaps-practice-1 "))
+    assert out["recorded"] is True
+    assert ok(home, "record", attempt())["duplicate"] is True
+    assert results(cdir) == ["- heaps-practice-1 [practice, not from a real paper] (Heaps): unassisted solve"]
+
+
+def test_a_frustration_override_records_even_when_the_ledger_is_damaged(home, root):
+    cdir = record_course(home)
+    checked(home, "heaps-practice-1")
+    ledger = next((cdir / ".state" / "checks").glob("session-*.json"))
+    ledger.write_text("{not json")
+    out = ok(home, "record", attempt(item="topic:Heaps", outcome="assisted", override=True))
+    assert out["recorded"] is True and out["status"] == "shaky"
+    assert results(cdir) == ["- Heaps frustration override: answer given"]
+    fails(home, "record", attempt(), "is damaged")  # a credited answer still needs a readable ledger
+
+
+@pytest.mark.skipif(sys.platform == "win32" or os.geteuid() == 0,
+                    reason="needs POSIX directory permissions that bind the current user")
+def test_a_failed_mastery_write_leaves_no_results_line(home, root):
+    cdir = record_course(home)
+    checked(home, "heaps-practice-1")
+    state = cdir / ".state"
+    state.chmod(0o555)  # mastery.md cannot be written; the log in .state/logs/ still can
+    try:
+        proc = _run(SS, home, "record", attempt())
+    finally:
+        state.chmod(0o755)
+    assert proc.returncode == 2, proc.stderr.decode()
+    assert results(cdir) == []
+    assert ok(home, "record", attempt())["recorded"] is True
+    assert results(cdir) == ["- heaps-practice-1 [practice, not from a real paper] (Heaps): unassisted solve"]
+
+
 @pytest.mark.parametrize("how", ["never submitted", "waiting for its check", "retry", "dropped",
                                  "other session"])
 def test_record_gives_no_mastery_credit_without_a_settled_correct_check(home, root, how):

@@ -1883,6 +1883,8 @@ def cmd_record(data: dict) -> dict:
         value = data.get(field)
         if not isinstance(value, str) or not value.strip() or _has_control(value):
             raise InputError(f"{field} must be a nonempty one-line string")
+    # The check ledger keys sessions and items normalised; every use below sees the same form.
+    data = {**data, "session": verify.normalise(data["session"]), "item": verify.normalise(data["item"])}
     day = _valid_date(data["date"])
     if day is None:
         raise InputError("date must be YYYY-MM-DD")
@@ -1919,7 +1921,8 @@ def cmd_record(data: dict) -> dict:
         outcome = "assisted"
     identity = base + [kind]
     override = data.get("override", False)
-    checked = verify.ledger_question(folder, data["session"], data["item"])
+    # An override needs no ledger entry, so a damaged ledger cannot block it.
+    checked = None if override else verify.ledger_question(folder, data["session"], data["item"])
     if not override and (checked is None or checked["decision"] != "show"):
         return {**result, "line": "Attempt does not count: the item has no correct check."}
     label = checked["label"] if checked else ""
@@ -1960,9 +1963,10 @@ def cmd_record(data: dict) -> dict:
     row.update(evidence="; ".join(f'{e["date"]}: {e["evidence"]}' for e in entry["recent"]),
                evidence_date=data["date"], last_check=data["date"])
     state[key] = entry
+    # Mastery first: a failed write leaves no log line claiming an attempt that was never recorded.
+    _save_record(path, text, state)
     _log_result(log_path, f'- {data["topic"]} frustration override: answer given' if override else
                 f'{shown}: {outcome if outcome == "wrong" else outcome + " solve"}')
-    _save_record(path, text, state)
     return {"status": row["status"], "duplicate": False, "recorded": True,
             "line": f'{row["name"]}: {row["status"]}.'}
 
