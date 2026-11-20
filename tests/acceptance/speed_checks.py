@@ -43,7 +43,8 @@ import re
 import sys
 from pathlib import Path
 
-MAX_SET = 6
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+import verify  # noqa: E402  (the set limit: verify.MAX_SET)
 MAX_DISPATCHES = 2
 
 
@@ -217,8 +218,9 @@ def check_turn(events: list[dict], verifier_types: set[str] | None = None) -> di
     if len(dispatches) > MAX_DISPATCHES:
         found["L"].append(f"{len(dispatches)} checker dispatches in one turn (at most {MAX_DISPATCHES})")
     for i in submits:
-        if submit_questions(seq[i]) > MAX_SET:
-            found["L"].append(f"a submit call with {submit_questions(seq[i])} questions (a set holds at most {MAX_SET})")
+        if submit_questions(seq[i]) > verify.MAX_SET:
+            found["L"].append(f"a submit call with {submit_questions(seq[i])} questions "
+                              f"(a set holds at most {verify.MAX_SET})")
     for i in dispatches:
         if seq[i][2].get("run_in_background") is True or seq[i][3] in background:
             found["M"].append("checker dispatched in the background")

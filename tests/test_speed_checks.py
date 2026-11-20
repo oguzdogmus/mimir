@@ -206,3 +206,17 @@ def test_antigravity_definitions_read_both_argument_shapes(tmp_path):
     assert defs["verifier"]["system_prompt"] == VERIFIER_BODY and defs["verifier"]["enable_write_tools"] is False
     probe = {"definition": json.dumps({"name": "probe", "system_prompt": "x", "enable_write_tools": False})}
     assert speed_checks.normalize_definition(probe) == {"name": "probe", "system_prompt": "x", "enable_write_tools": False}
+
+
+def test_the_set_limit_is_verify_py_s(monkeypatch):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import verify
+    monkeypatch.setattr(verify, "MAX_SET", 2)
+    assert set(failures([text("Item 1"), submit(3)])) == {"L"}
+
+
+def test_the_script_runs_from_any_folder(tmp_path):
+    import subprocess
+    script = Path(__file__).resolve().parent / "acceptance" / "speed_checks.py"
+    proc = subprocess.run([sys.executable, str(script), str(tmp_path)], cwd=tmp_path, capture_output=True, text=True)
+    assert proc.returncode == 1 and proc.stderr.strip() == f"speed_checks: no events in {tmp_path}", proc.stderr
