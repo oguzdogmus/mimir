@@ -157,3 +157,52 @@ def test_antigravity_a_checker_defined_in_an_earlier_turn_still_counts():
 def test_antigravity_an_answer_turn_that_records_first_fails_j():
     events = [INIT, *run_command(1, AGY_RECORD), *say(2, "Right.")]
     assert set(agy_failures(events)) == {"J"}
+
+
+def stream_define(index, name="verifier"):
+    """define_subagent as agy 1.4.12 streams it: name and description only, no system prompt."""
+    params = {"Name": name, "Description": "Mimir answer-key checker."}
+    return [{"event": "step_update", "step_update": {"step_index": index, "state": "DONE", "step_type": "tool",
+                                                     "tool_name": "define_subagent",
+                                                     "tool_info": {"name": "define_subagent", "parameters": params}}}]
+
+
+def full_transcript(path, prompt):
+    """The conversation's transcript_full.jsonl, where agy keeps a call's whole arguments."""
+    call = {"name": "define_subagent", "args": {"Name": "verifier", "Description": "checker", "SystemPrompt": prompt,
+                                                "EnableWriteTools": False, "EnableMCPTools": False,
+                                                "EnableSubagentTools": False}}
+    path.write_text(json.dumps({"step_index": 17, "source": "MODEL", "tool_calls": [call]}) + "\n")
+
+
+def agy_run(tmp_path, prompt):
+    tmp_path.mkdir(exist_ok=True)
+    events = tmp_path / "events"
+    events.mkdir()
+    turn = [INIT, *say(1, "Item 1"), *run_command(2, AGY_SUBMIT), *stream_define(3), *invoke(4, "verifier"),
+            *run_command(5, AGY_SETTLE)]
+    (events / "turn-1.jsonl").write_text("\n".join(json.dumps(e) for e in turn))
+    if prompt is not None:
+        full_transcript(events / "agy-transcript-full.jsonl", prompt)
+    return speed_checks.main([str(tmp_path)])
+
+
+def test_antigravity_definitions_come_from_the_full_transcript_the_driver_keeps(tmp_path, capsys):
+    from test_drive import VERIFIER_BODY
+    assert agy_run(tmp_path, VERIFIER_BODY) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == "J PASS K PASS L PASS M PASS N PASS"
+
+
+def test_antigravity_without_the_full_transcript_or_with_another_prompt_fails_n(tmp_path):
+    assert agy_run(tmp_path / "a", None) == 1
+    assert agy_run(tmp_path / "b", "Check these keys.") == 1
+
+
+def test_antigravity_definitions_read_both_argument_shapes(tmp_path):
+    from test_drive import VERIFIER_BODY
+    path = tmp_path / "t.jsonl"
+    full_transcript(path, VERIFIER_BODY)
+    defs = speed_checks.antigravity_definitions(path)
+    assert defs["verifier"]["system_prompt"] == VERIFIER_BODY and defs["verifier"]["enable_write_tools"] is False
+    probe = {"definition": json.dumps({"name": "probe", "system_prompt": "x", "enable_write_tools": False})}
+    assert speed_checks.normalize_definition(probe) == {"name": "probe", "system_prompt": "x", "enable_write_tools": False}

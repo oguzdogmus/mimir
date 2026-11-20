@@ -31,6 +31,7 @@ import os
 import random
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -158,6 +159,7 @@ def run(out: Path, data: dict, checker: Callable[[Path], dict], parallel: int = 
                                                              "reply": rep["reply"]})
         verdicts = {q["item"]: q for q in settled["questions"]} if code == 0 else {}
         batches.append({"batch": sub["batch"], "seconds": rep["seconds"], "usage": rep.get("usage") or {},
+                        "models": rep.get("models"),
                         "cost_usd": rep.get("cost_usd"), "settle": settled if code else settled["line"],
                         "reply": rep["reply"]})
         for q in sub["questions"]:
@@ -189,10 +191,10 @@ def host_cmd(host: str, pack: Path, plugin: Path | None = None, model: str | Non
         cmd += ["-c", f'model_reasoning_effort="{effort}"'] if effort else []
         return cmd + [message]
     if host == "antigravity":
-        cmd = ["agy", "-p", "--output-format", "stream-json", "--dangerously-skip-permissions"]
+        cmd = ["agy", "--output-format", "stream-json", "--dangerously-skip-permissions"]
         cmd += ["--model", model] if model else []
         cmd += ["--effort", effort] if effort else []
-        return cmd + [message]
+        return cmd + ["-p", message]  # -p takes the next word as the prompt
     raise ValueError(f"unknown host {host}")
 
 
@@ -211,6 +213,7 @@ def parse_output(host: str, stdout: str) -> dict:
     if host == "claude":
         data = json.loads(stdout)
         return {"reply": data.get("result") or "", "cost_usd": data.get("total_cost_usd"),
+                "models": sorted(data.get("modelUsage") or {}),
                 "usage": {k: v for k, v in (data.get("usage") or {}).items() if isinstance(v, (int, float))}}
     reply, usage = "", {}
     for ev in _events(stdout):
@@ -230,11 +233,14 @@ def host_checker(host: str, codex_home: Path | None = None, **opts) -> Callable[
     """A checker for ``run``: one host process per evidence pack, in the fixture's learning root
     with the fixture's HOME (Claude Code lean, as ``drive.py`` runs it; Codex with ``codex_home``),
     timed by the wall clock."""
+    lock = threading.Lock()
+
     def check(pack: Path) -> dict:
         root = pack.parents[4]
         env = {**os.environ, "HOME": str(root.parent / "home")}
         if host == "claude":
-            lean_claude_home(root.parent / "home")
+            with lock:  # packs are checked in parallel; the home is made once
+                lean_claude_home(root.parent / "home")
         if host == "codex":
             env["CODEX_HOME"] = str(codex_home)
         start = time.monotonic()

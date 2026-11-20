@@ -28,7 +28,9 @@ a subagent, which carry a ``parent_tool_use_id``, are skipped). Per turn:
 A checker dispatch is an ``Agent`` (or ``Task``) call with ``subagent_type``
 ``mimir:verifier`` on Claude Code, and on Antigravity (#79) an ``invoke_subagent``
 call of a type that a ``define_subagent`` call of the session defined with the
-whole body of ``helpers/verifier.md`` as its system prompt. Antigravity starts no
+whole body of ``helpers/verifier.md`` as its system prompt (read from
+``RUN_DIR/events/agy-transcript-full.jsonl``, the conversation's full transcript
+that ``drive.py`` keeps, since agy's stream leaves the system prompt out). Antigravity starts no
 checker in the background (its subagent replies arrive inside the turn), so M
 passes there by construction. Prints one line per finding and a ``J K L M N`` summary;
 exits 0 when every check passes, else 1.
@@ -81,6 +83,41 @@ def from_verifier(prompt: str) -> str:
     return "partial" if _flat(VERIFIER_BODY.strip().splitlines()[0]) in flat else "no"
 
 
+_DEFINITION_FIELDS = {"Name": "name", "Description": "description", "SystemPrompt": "system_prompt",
+                      "EnableWriteTools": "enable_write_tools", "EnableMCPTools": "enable_mcp_tools",
+                      "EnableSubagentTools": "enable_subagent_tools"}
+FULL_TRANSCRIPT = "agy-transcript-full.jsonl"
+
+
+def normalize_definition(params: dict) -> dict:
+    """A ``define_subagent`` call's arguments in one shape (``name``, ``system_prompt``,
+    ``enable_*_tools``): agy sends either one JSON ``definition`` or separate fields."""
+    if "definition" in params:
+        try:
+            return json.loads(params["definition"])
+        except (TypeError, json.JSONDecodeError):
+            return {}
+    return {_DEFINITION_FIELDS.get(k, k): v for k, v in params.items()}
+
+
+def antigravity_definitions(path: Path) -> dict[str, dict]:
+    """Every ``define_subagent`` call in an Antigravity conversation's ``transcript_full.jsonl``
+    (the stream leaves out the system prompt; this file keeps the whole arguments), by name."""
+    found = {}
+    if not path.is_file():
+        return found
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        try:
+            calls = json.loads(raw).get("tool_calls") or []
+        except (json.JSONDecodeError, AttributeError):
+            continue
+        for call in calls:
+            if call.get("name") == "define_subagent" and isinstance(call.get("args"), dict):
+                definition = normalize_definition(call["args"])
+                found[definition.get("name")] = definition
+    return found
+
+
 def antigravity_steps(events: list[dict]) -> list[tuple]:
     """Antigravity ``agy --output-format stream-json`` events as the tutor's steps in order:
     ``("text", str)`` per finished reply step and ``("tool", name, input, id)`` per finished tool
@@ -107,10 +144,7 @@ def antigravity_steps(events: list[dict]) -> list[tuple]:
             if name == "run_command":
                 inp["command"] = inp.get("CommandLine", "")
             elif name == "define_subagent":
-                try:
-                    inp = json.loads(inp.get("definition", "{}"))
-                except json.JSONDecodeError:
-                    inp = {}
+                inp = normalize_definition(inp)
             elif name == "invoke_subagent":
                 child = ((update.get("subagent_info") or {}).get("subagents") or [{}])[0]
                 inp.setdefault("TypeName", child.get("type_name"))
@@ -212,7 +246,9 @@ def main(argv: list[str]) -> int:
     turns = sorted((Path(argv[0]) / "events").glob("turn-*.jsonl"), key=lambda p: int(p.stem.split("-")[1]))
     if not turns:
         sys.exit(f"speed_checks: no events in {argv[0]}")
-    failed, verifier_types = set(), set()
+    defs = antigravity_definitions(Path(argv[0]) / "events" / FULL_TRANSCRIPT)
+    failed = set()
+    verifier_types = {n for n, d in defs.items() if from_verifier(d.get("system_prompt") or "") == "yes"}
     for path in turns:
         found = check_turn(load(path), verifier_types)
         for line in found.pop("K_ok", []):

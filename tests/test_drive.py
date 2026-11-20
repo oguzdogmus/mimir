@@ -79,7 +79,7 @@ def test_agy_cmd_starts_print_mode_with_the_plugin_dir_and_resumes_by_conversati
         message = "Let's study CS301."
         model = None
     first = drive.agy_cmd(Args, None)
-    assert first[:2] == ["agy", "-p"]
+    assert first[0] == "agy" and first[-2:] == ["-p", "Let's study CS301."]  # agy -p takes the next word as the prompt
     assert ["--add-dir", str(tmp_path / "mimir")] == first[first.index("--add-dir"):first.index("--add-dir") + 2]
     assert "--dangerously-skip-permissions" in first and first[-1] == "Let's study CS301."
     assert "--conversation" not in first
@@ -95,7 +95,16 @@ def test_an_antigravity_turn_runs_in_the_fixture_with_the_installed_home_and_kee
     (run / "learning").mkdir()
     agy_home = tmp_path / "agy-home"
     (agy_home / ".gemini" / "config" / "plugins" / "mimir").mkdir(parents=True)
-    events = [INIT, *say(1, "Standard delivery: exam in 21 days"), *define(2), *invoke(3), result()]
+    # agy streams define_subagent without its system prompt; the conversation's full transcript keeps it.
+    streamed = {"Name": "mimir-verifier", "Description": "checker"}
+    events = [INIT, *say(1, "Standard delivery: exam in 21 days"),
+              step(2, "tool", tool_name="define_subagent", tool_info={"name": "define_subagent", "parameters": streamed}),
+              *invoke(3), result()]
+    logs = agy_home / ".gemini" / "antigravity-cli" / "brain" / CONV / ".system_generated" / "logs"
+    logs.mkdir(parents=True)
+    call = {"name": "define_subagent", "args": {**streamed, "SystemPrompt": VERIFIER_BODY, "EnableWriteTools": False,
+                                                "EnableMCPTools": False, "EnableSubagentTools": False}}
+    (logs / "transcript_full.jsonl").write_text(json.dumps({"step_index": 2, "tool_calls": [call]}) + "\n")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     fake = bin_dir / "agy"
@@ -114,7 +123,8 @@ def test_an_antigravity_turn_runs_in_the_fixture_with_the_installed_home_and_kee
     assert (run / "home" / ".gemini").resolve() == (agy_home / ".gemini").resolve()
     assert (run / "session_id").read_text().strip() == CONV
     transcript = (run / "transcript.md").read_text()
-    assert "- define_subagent name=mimir-verifier from_verifier=yes" in transcript
+    assert "- define_subagent name=mimir-verifier from_verifier=yes write=False mcp=False subagents=False" in transcript
+    assert (run / "events" / "agy-transcript-full.jsonl").read_text() == (logs / "transcript_full.jsonl").read_text()
     assert "- invoke_subagent type=mimir-verifier" in transcript
     assert "Standard delivery: exam in 21 days" in transcript
     assert (run / "events" / "turn-1.jsonl").is_file()

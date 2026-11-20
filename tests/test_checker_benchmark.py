@@ -97,19 +97,21 @@ def test_the_claude_code_checker_is_the_plugin_agent_with_only_the_pack_line_as_
 
 
 def test_the_codex_and_antigravity_checkers_get_the_helper_body_and_the_pack_line():
-    for host, head in (("codex", ["codex", "exec"]), ("antigravity", ["agy", "-p"])):
+    for host, head in (("codex", ["codex", "exec"]), ("antigravity", ["agy"])):
         cmd = bench.host_cmd(host, PACK)
-        assert cmd[:2] == head
+        assert cmd[:len(head)] == head
         assert cmd[-1].startswith("You check answer keys for a study tool")
         assert cmd[-1].endswith(f"Check the evidence pack at {PACK}.")
     assert "read-only" in bench.host_cmd("codex", PACK)
+    assert bench.host_cmd("antigravity", PACK)[-2] == "-p"  # agy -p takes the next word as the prompt
 
 
 def test_each_hosts_output_gives_the_checker_reply_and_its_usage():
     claude = json.dumps({"type": "result", "result": "ab12cd34\n1 | correct | ok", "total_cost_usd": 0.031,
-                         "usage": {"input_tokens": 9, "cache_read_input_tokens": 7000, "output_tokens": 300}})
+                         "usage": {"input_tokens": 9, "cache_read_input_tokens": 7000, "output_tokens": 300},
+                         "modelUsage": {"claude-sonnet-5-5": {"costUSD": 0.031}}})
     assert bench.parse_output("claude", claude) == {
-        "reply": "ab12cd34\n1 | correct | ok", "cost_usd": 0.031,
+        "reply": "ab12cd34\n1 | correct | ok", "cost_usd": 0.031, "models": ["claude-sonnet-5-5"],
         "usage": {"input_tokens": 9, "cache_read_input_tokens": 7000, "output_tokens": 300}}
     codex = "\n".join(json.dumps(e) for e in [
         {"type": "thread.started", "thread_id": "t"},
