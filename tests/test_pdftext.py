@@ -105,23 +105,52 @@ def test_non_pdf_files_are_refused(root, no_poppler):
         pdftext.cmd_pages({"path": str(notes), "first": 1})
 
 
+def _tool_broke(call) -> str | None:
+    """Why the installed pdftotext itself failed (it hung, or crashed: killed by a signal, or a Windows
+    NTSTATUS exit such as 0xC0000374 heap corruption, seen from Git for Windows' bundled copy), else None.
+    An ordinary exit status, even a nonzero one, is no crash: it answered what Mimir asked."""
+    if isinstance(call, subprocess.TimeoutExpired):
+        return f"pdftotext hung past {call.timeout} s"
+    if isinstance(call, subprocess.CompletedProcess) and (call.returncode < 0 or call.returncode >= 0xC0000000):
+        return f"pdftotext crashed (exit {call.returncode:#x})" if call.returncode > 0 else \
+            f"pdftotext crashed (signal {-call.returncode})"
+    return None
+
+
 @pytest.mark.skipif(shutil.which("pdftotext") is None, reason="poppler not installed")
 def test_pdftotext_is_preferred_when_installed(root, monkeypatch):
-    calls, real_run = [], subprocess.run  # what pdftotext returned, for the failure message
+    calls, real_run = [], subprocess.run  # every pdftotext run: its result or what it raised
 
     def run(*args, **kwargs):
         try:
             proc = real_run(*args, **kwargs)
         except BaseException as exc:
-            calls.append(repr(exc))
+            calls.append(exc)
             raise
-        calls.append((proc.args, proc.returncode, proc.stdout[:80], proc.stderr[:300]))
+        calls.append(proc)
         return proc
 
     monkeypatch.setattr(pdftext.subprocess, "run", run)
     out = pdftext.cmd_pages({"path": str(course_pdf(root, text_pdf(2))), "first": 1, "last": 2})
-    assert out["engine"] == "pdftotext", calls
-    assert [t["text"] for t in out["text"]] == ["Pumping lemma", "Pumping lemma"]
+    assert [t["text"] for t in out["text"]] == ["Pumping lemma", "Pumping lemma"]  # read either way
+    broke = [why for why in map(_tool_broke, calls) if why]
+    if out["engine"] == "builtin" and broke:
+        pytest.skip(f"{broke[0]}: a problem of the installed tool, not of Mimir, which fell back to its "
+                    "builtin reader as designed")
+    shown = [c if isinstance(c, BaseException) else (c.args, c.returncode, c.stdout[:80], c.stderr[:300])
+             for c in calls]
+    assert out["engine"] == "pdftotext", shown
+
+
+@pytest.mark.parametrize("call,why", [
+    (subprocess.TimeoutExpired(["pdftotext"], 30), "pdftotext hung past 30 s"),
+    (subprocess.CompletedProcess(["pdftotext"], 3221226356, b"", b""), "pdftotext crashed (exit 0xc0000374)"),
+    (subprocess.CompletedProcess(["pdftotext"], -11, b"", b""), "pdftotext crashed (signal 11)"),
+    (subprocess.CompletedProcess(["pdftotext"], 99, b"", b"Usage: pdftotext"), None),
+    (subprocess.CompletedProcess(["pdftotext"], 0, b"Pumping lemma", b""), None),
+])
+def test_only_a_hung_or_crashed_pdftotext_counts_as_a_tool_problem(call, why):
+    assert _tool_broke(call) == why
 
 
 def test_cli_prints_one_json_object(root, home):
