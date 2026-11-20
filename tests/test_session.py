@@ -1289,10 +1289,109 @@ def test_practice_only_session_accounting(home, root, monkeypatch, kind):
         assert result["cram"]["actual_minutes"] == 30
 
 
+REC_LOG = "2026-10-17-0900"
+
+
+def record_course(home: Path, **kw) -> Path:
+    """A course with this session's log, as a study or quiz session creates it at its start."""
+    cdir = course(home, **kw)
+    log(cdir, REC_LOG, f"## Session\nstarted: {NOW}\nclass: Standard (calm)\n")
+    return cdir
+
+
+def results(cdir: Path) -> list[str]:
+    """The lines of the log's ``## Results`` sections, in order."""
+    out, inside = [], False
+    for line in (cdir / ".state" / "logs" / f"{REC_LOG}.md").read_text(encoding="utf-8").splitlines():
+        if line.startswith("#"):
+            inside = line == "## Results"
+        elif inside and line.strip():
+            out.append(line)
+    return out
+
+
+def attempt(**kw) -> dict:
+    return {**dict(term=TERM, course="CS201 Theory", topic="Heaps", item="heaps-practice-1", log=REC_LOG,
+                   gate={"decision": "show", "counts_for_mastery": True,
+                         "label": "[practice, not from a real paper]"},
+                   outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17"), **kw}
+
+
+def test_record_writes_one_results_line_in_the_session_log(home, root):
+    cdir = record_course(home)
+    out = ok(home, "record", attempt())
+    assert out["recorded"] is True
+    assert results(cdir) == ["- heaps-practice-1 [practice, not from a real paper] (Heaps): unassisted solve"]
+    text = (cdir / ".state/logs" / f"{REC_LOG}.md").read_text(encoding="utf-8")
+    assert text.startswith(f"## Session\nstarted: {NOW}\nclass: Standard (calm)\n")
+    assert text.count("## Results") == 1
+
+
+def test_a_retried_record_and_a_duplicate_write_no_second_line(home, root):
+    cdir = record_course(home)
+    ok(home, "record", attempt(outcome="wrong"))
+    for _ in range(2):
+        assert ok(home, "record", attempt(outcome="wrong"))["duplicate"] is True
+    ok(home, "record", attempt(outcome="unassisted"))
+    assert ok(home, "record", attempt(outcome="unassisted"))["duplicate"] is True
+    assert results(cdir) == ["- heaps-practice-1 [practice, not from a real paper] (Heaps): wrong",
+                             "- heaps-practice-1 [practice, not from a real paper] (Heaps): assisted solve"]
+
+
+def test_record_keeps_one_results_section_per_session(home, root):
+    """A later section (topic timings) does not split the results: new lines join the existing section."""
+    cdir = record_course(home)
+    path = cdir / ".state/logs" / f"{REC_LOG}.md"
+    ok(home, "record", attempt())
+    path.write_text(path.read_text() + "\n## Topic timings\n| topic | started | ended |\n|---|---|---|\n")
+    ok(home, "record", attempt(item="heaps-practice-2", outcome="assisted"))
+    text = path.read_text()
+    assert text.count("## Results") == 1 and text.index("## Results") < text.index("## Topic timings")
+    assert results(cdir)[1] == "- heaps-practice-2 [practice, not from a real paper] (Heaps): assisted solve"
+
+
+def test_record_starts_a_new_results_section_for_a_later_session_in_the_same_log(home, root):
+    cdir = record_course(home)
+    path = cdir / ".state/logs" / f"{REC_LOG}.md"
+    ok(home, "record", attempt())
+    path.write_text(path.read_text() + f"ended: {NOW}\n\n## Quiz\nstarted: 2026-10-17T09:30:00+03:00\n")
+    ok(home, "record", attempt(session="s2", item="heaps-practice-2"))
+    text = path.read_text()
+    assert text.count("## Results") == 2 and text.rindex("## Results") > text.index("## Quiz")
+
+
+def test_record_logs_overrides_and_answers_after_one(home, root):
+    cdir = record_course(home)
+    ok(home, "record", attempt(outcome="assisted", override=True))
+    assert ok(home, "record", attempt(item="heaps-practice-2"))["recorded"] is False
+    ok(home, "record", attempt(item="heaps-practice-2"))  # a retry adds no second line
+    assert results(cdir) == [
+        "- Heaps frustration override: answer given",
+        "- heaps-practice-2 [practice, not from a real paper] (Heaps): after frustration override, not counted"]
+
+
+def test_record_logs_nothing_for_an_item_without_a_correct_check(home, root):
+    cdir = record_course(home)
+    out = ok(home, "record", attempt(gate={"decision": "verify", "counts_for_mastery": False}))
+    assert out["recorded"] is False and out["line"] == "Attempt does not count: the item has no correct check."
+    assert results(cdir) == []
+
+
+@pytest.mark.parametrize("change,needle", [
+    ({"log": None}, "log"), ({"log": "notes"}, "log"), ({"log": "2026-10-17-1000"}, "not found"),
+])
+def test_record_needs_this_sessions_log(home, root, change, needle):
+    record_course(home)
+    payload = attempt(**change)
+    if change["log"] is None:
+        del payload["log"]
+    fails(home, "record", payload, needle)
+
+
 def test_record_requires_distinct_items_and_day(home, root):
-    course(home)
+    record_course(home)
     payload = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-                   gate={"decision": "show", "counts_for_mastery": True},
+                   log=REC_LOG, gate={"decision": "show", "counts_for_mastery": True},
                    outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17")
     assert ok(home, "record", payload)["status"] == "shaky"
     assert ok(home, "record", payload)["duplicate"] is True
@@ -1303,9 +1402,9 @@ def test_record_requires_distinct_items_and_day(home, root):
 def test_record_first_miss_once_then_right_after_guidance_as_assisted(home, root):
     """Standard retries: the first wrong answer on an item records once, repeated
     misses on it record nothing, and the later right answer records as assisted."""
-    course(home)
+    record_course(home)
     p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "show", "counts_for_mastery": True},
+             log=REC_LOG, gate={"decision": "show", "counts_for_mastery": True},
              outcome="wrong", real_past_paper=False, session="s1", date="2026-10-17")
     assert ok(home, "record", p)["status"] == "gap"
     for _ in range(2):
@@ -1321,9 +1420,9 @@ def test_record_first_miss_once_then_right_after_guidance_as_assisted(home, root
 
 
 def test_record_right_after_a_miss_on_the_same_item_never_counts_unassisted(home, root):
-    course(home)
+    record_course(home)
     p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "show", "counts_for_mastery": True},
+             log=REC_LOG, gate={"decision": "show", "counts_for_mastery": True},
              outcome="wrong", real_past_paper=False, session="s1", date="2026-10-17")
     ok(home, "record", p)
     assert ok(home, "record", {**p, "outcome": "unassisted"})["recorded"] is True
@@ -1341,13 +1440,13 @@ def test_record_right_after_a_miss_on_the_same_item_never_counts_unassisted(home
     ({"item": "a", "real_past_paper": True, "session": "s2"}, "shaky", True),
     ({"item": "b", "outcome": "assisted"}, "shaky", True),
     ({"item": "b", "outcome": "wrong"}, "gap", True),
-    ({"item": "b", "gate": {"decision": "flagged", "counts_for_mastery": False}}, "shaky", False),
+    ({"item": "b", "gate": {"decision": "verify", "counts_for_mastery": False}}, "shaky", False),
     ({"item": "b", "gate": {"decision": "drop", "counts_for_mastery": True}}, "shaky", False),
 ])
 def test_record_boundaries(home, root, change, status, recorded):
-    course(home)
+    record_course(home)
     p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "show", "counts_for_mastery": True},
+             log=REC_LOG, gate={"decision": "show", "counts_for_mastery": True},
              outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17")
     ok(home, "record", p)
     r = ok(home, "record", {**p, **change})
@@ -1355,10 +1454,10 @@ def test_record_boundaries(home, root, change, status, recorded):
 
 
 def test_record_override_legacy_and_recent(home, root):
-    c = course(home, mastery=[("Heaps", "mastered", "2026-10-01", 2, 5)])
+    c = record_course(home, mastery=[("Heaps", "mastered", "2026-10-01", 2, 5)])
     original = (c / ".state/mastery.md").read_text()
     p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "show", "counts_for_mastery": True},
+             log=REC_LOG, gate={"decision": "show", "counts_for_mastery": True},
              outcome="wrong", real_past_paper=True, session="s1", date="2026-10-17")
     assert ok(home, "record", p)["status"] == "shaky"
     ok(home, "record", {**p, "override": True})
@@ -1377,22 +1476,23 @@ def test_record_override_legacy_and_recent(home, root):
     ({"item": ""}, "item"), ({"session": "\n"}, "session"),
     ({"real_past_paper": 1}, "real_past_paper"),
     ({"gate": {"decision": "show", "counts_for_mastery": 1}}, "gate"),
+    ({"gate": {"decision": "flagged", "counts_for_mastery": False}}, "gate"),
 ])
 def test_record_invalid(home, root, change, field):
-    course(home)
+    record_course(home)
     p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "show", "counts_for_mastery": True},
+             log=REC_LOG, gate={"decision": "show", "counts_for_mastery": True},
              outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17")
     fails(home, "record", {**p, **change}, field)
 
 
 def test_record_initialization_and_legacy_evidence(home, root):
-    course(home, mastery=[("Heaps", "shaky", "2026-10-01", 0, 1)])
+    record_course(home, mastery=[("Heaps", "shaky", "2026-10-01", 0, 1)])
     init = dict(term=TERM, course="CS201 Theory", topic="Graphs", initialize=True)
     assert ok(home, "record", init)["status"] == "unseen"
     assert ok(home, "record", init)["duplicate"]
     p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "flagged", "counts_for_mastery": False},
+             log=REC_LOG, gate={"decision": "verify", "counts_for_mastery": False},
              outcome="assisted", real_past_paper=False, session="s1", date="2026-10-17", override=True)
     assert not ok(home, "record", p)["recorded"]
     assert not ok(home, "record", {**p, "gate": {"decision": "drop", "counts_for_mastery": False}})["recorded"]
@@ -1650,7 +1750,7 @@ def test_gauge_answers_record_unassisted_and_leave_teaching_settings_alone(home,
     """One right gauge answer never marks a topic mastered, and the gauge is no preference evidence."""
     cdir = course(home, mastery=TWO_LEFT)
     log(cdir, GAUGE_LOG, session_log(NOW))
-    answer = dict(term=TERM, course="CS201 Theory", topic="Sorting", item="gauge:sorting:1",
+    answer = dict(term=TERM, course="CS201 Theory", topic="Sorting", item="gauge:sorting:1", log=GAUGE_LOG,
                   gate={"decision": "show", "counts_for_mastery": True},
                   outcome="unassisted", real_past_paper=False, session=GAUGE_LOG, date="2026-10-17")
     assert ok(home, "record", answer)["status"] == "shaky"
