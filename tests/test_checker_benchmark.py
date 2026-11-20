@@ -89,7 +89,7 @@ PACK = Path("/l/2026-Fall/CS301 Automata/.state/checks/session-x-batch1.md")
 def test_the_claude_code_checker_is_the_plugin_agent_with_only_the_pack_line_as_its_prompt():
     cmd = bench.host_cmd("claude", PACK, plugin=Path("/p/mimir"), model="haiku", effort="low")
     assert cmd[:2] == ["claude", "-p"]
-    assert cmd[cmd.index("--agent") + 1] == "mimir:verifier" and cmd[cmd.index("--plugin-dir") + 1] == "/p/mimir"
+    assert cmd[cmd.index("--agent") + 1] == "mimir:verifier" and cmd[cmd.index("--plugin-dir") + 1] == str(Path("/p/mimir"))
     assert cmd[cmd.index("--model") + 1] == "haiku" and cmd[cmd.index("--effort") + 1] == "low"
     assert cmd[-1] == f"Check the evidence pack at {PACK}."
     default = bench.host_cmd("claude", PACK, plugin=Path("/p/mimir"))
