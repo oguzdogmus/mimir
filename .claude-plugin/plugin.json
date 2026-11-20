@@ -1,6 +1,6 @@
 {
   "name": "mimir",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Exam study companion for AI coding agents (Claude Code, Codex, Antigravity). Teaches college students for their exams in the professor's style and remembers them across sessions.",
   "author": {
     "name": "Oguz Dogmus"
@@ -8,11 +8,9 @@
   "license": "Apache-2.0",
   "repository": "https://github.com/oguzdogmus/mimir",
   "skills": [
-    "./skills/mimir-core-rules",
     "./skills/mimir-setup",
     "./skills/mimir-ingest",
     "./skills/mimir-quiz",
-    "./skills/mimir-notation",
     "./skills/mimir-study",
     "./skills/mimir-past-questions",
     "./skills/mimir-plan",

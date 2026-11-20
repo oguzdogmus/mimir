@@ -141,7 +141,7 @@ def test_past_exam(payload):
     proc = run("class", payload)
     assert proc.returncode == 2
     assert proc.stdout == b""
-    assert proc.stderr.decode() == "plan.py: exam is not in the future\n"
+    assert proc.stderr.decode().replace("\r\n", "\n") == "plan.py: exam is not in the future\n"
 
 
 def test_horizon():
@@ -156,7 +156,7 @@ def test_horizon():
 def test_null_now():
     proc = run("class", {"now": None, "exam": "2026-11-05"})
     assert proc.returncode == 2 and proc.stdout == b""
-    assert proc.stderr.decode() == "plan.py: now is required\n"
+    assert proc.stderr.decode().replace("\r\n", "\n") == "plan.py: now is required\n"
 
 
 # --- No learning-time forecasts ---------------------------------------------------
@@ -258,7 +258,7 @@ def test_first_contact_later_same_day_than_datetime_exam():
     proc = run("summary", {"first_contact": "2026-11-05T10:00:00+02:00",
                            "exam": "2026-11-05T09:00:00+02:00"})
     assert proc.returncode == 2 and proc.stdout == b""
-    assert proc.stderr.decode() == "plan.py: first_contact is after the exam\n"
+    assert proc.stderr.decode().replace("\r\n", "\n") == "plan.py: first_contact is after the exam\n"
 
 
 def test_summary_first_contact_after_exam():
@@ -303,7 +303,6 @@ BASE = {"now": NOW, "exam": "2026-11-05"}
     ("class", b"{not json", "not valid JSON"),
     ("class", b"[1, 2]", "one JSON object"),
     ("class", b'{"now": "\xff"}', "not valid UTF-8"),
-    ("class", b"[" * 100_000, "too deeply nested"),
     ("class", {"exam": "2026-11-05"}, "now is required"),
     ("debrief", {"exam": "2026-11-05"}, "first_contact is required"),
     ("summary", {"first_contact": None, "exam": "2026-11-05"}, "first_contact is required"),
@@ -341,6 +340,17 @@ def test_invalid_input_exits_2(cmd, payload, message):
     err = proc.stderr.decode()
     assert err.startswith("plan.py: ") and err.endswith("\n") and err.count("\n") == 1, err
     assert message in err
+    assert "Traceback" not in err
+
+
+def test_deeply_nested_input_exits_2():
+    # Python up to 3.14 raises RecursionError on this input; 3.15's decoder reaches the
+    # end and reports the unclosed brackets. Either way it is one clean exit-2 line.
+    proc = run("class", b"[" * 100_000)
+    assert proc.returncode == 2 and proc.stdout == b""
+    err = proc.stderr.decode()
+    assert err.startswith("plan.py: ") and err.count("\n") == 1, err
+    assert "too deeply nested" in err or "not valid JSON" in err, err
     assert "Traceback" not in err
 
 

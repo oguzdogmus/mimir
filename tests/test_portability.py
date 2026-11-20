@@ -5,7 +5,8 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SKILLS = sorted(d for d in (ROOT_DIR / "skills").iterdir() if (d / "SKILL.md").is_file())
-MARKDOWN = sorted((ROOT_DIR / "skills").rglob("*.md")) + sorted((ROOT_DIR / "helpers").glob("*.md"))
+MARKDOWN = (sorted((ROOT_DIR / "skills").rglob("*.md")) + sorted((ROOT_DIR / "reference").glob("*.md"))
+            + sorted((ROOT_DIR / "helpers").glob("*.md")))
 NAME = re.compile(r"^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
 
 
@@ -28,6 +29,32 @@ def test_no_claude_only_paths_or_command_names():
         assert "CLAUDE_PLUGIN_ROOT" not in text, path
         assert not re.search(r"/mimir:(?!mimir-)", text), path
         assert not re.search(r"`mimir:(?!verifier`|visual-builder`)", text), path
+
+
+INTERNAL = {"mimir-core-rules", "mimir-notation"}
+CORE_RULES_LINE = re.compile(r"^First read `([^`]+)`")
+
+
+def test_internal_rules_live_in_reference_not_skills():
+    """#3: Antigravity ignores `user-invocable: false`, so every folder under skills/
+    is a user command. Core rules and notation are plain files under reference/."""
+    assert not INTERNAL & {s.name for s in SKILLS}
+    assert len(SKILLS) == 10, [s.name for s in SKILLS]
+    for skill in SKILLS:
+        assert "user-invocable" not in frontmatter(skill / "SKILL.md"), skill.name
+    for name in ("core-rules.md", "notation.md", "recording.md", "session-close.md", "verified-items.md"):
+        text = (ROOT_DIR / "reference" / name).read_text(encoding="utf-8")
+        assert not text.startswith("---"), name  # plain file, no skill frontmatter
+
+
+def test_every_skill_first_loads_the_core_rules_by_a_path_that_resolves():
+    for skill in SKILLS:
+        body = (skill / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[2]
+        first = next(line for line in body.splitlines() if line.strip() and not line.startswith("#"))
+        match = CORE_RULES_LINE.match(first)
+        assert match, (skill.name, first[:80])
+        target = match.group(1)
+        assert (skill / target).resolve() == ROOT_DIR / "reference" / "core-rules.md", skill.name
 
 
 def test_every_mimir_path_exists():
@@ -100,14 +127,39 @@ def test_no_shell_date_commands():
             assert not SHELL_DATE.search(line), f"{path}:{n}: {line.strip()[:80]}"
 
 
+def test_python_command_fallback_for_windows():
+    """A standard Windows Python install ships `python` and `py`, not `python3`."""
+    core = (ROOT_DIR / "reference/core-rules.md").read_text(encoding="utf-8")
+    paths = core.split("## Paths, commands and helpers", 1)[1].split("\n## ", 1)[0]
+    assert "`python3` is missing" in paths and "`python`" in paths and "`py -3`" in paths
+
+
 def test_verification_dispatch_and_provenance_contract():
-    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text()
+    core = (ROOT_DIR / "reference/core-rules.md").read_text()
     helper = (ROOT_DIR / "helpers/verifier.md").read_text()
-    assert "native independent subagent" in core
     assert "checker: self" in core and "checker: independent" in core
     assert "once per session" in core
-    assert "pdftext.py" in helper and "ambiguous" in helper
-    assert "Bash" in frontmatter(ROOT_DIR / "helpers/verifier.md")["tools"]
+    assert "ambiguous" in helper and "evidence pack" in helper and "Pack token" in helper
+    assert "Read the pack and the files it names, nothing else." in helper
+    # The pack carries the page text, so the checker needs no shell on Claude Code (#78).
+    assert frontmatter(ROOT_DIR / "helpers/verifier.md")["tools"] == "Read, Grep, Glob"
+    assert "<pack token>\nN | verdict | reason" in helper
+
+
+def test_nothing_refers_to_the_gate_a_typed_gate_object_or_the_fake_real_cell():
+    """#78: the check ledger replaced `verify.py gate`; labels are checked by script, so the
+    checker's fake-real cell is gone, and record reads the ledger instead of a typed gate."""
+    for path in MARKDOWN + [ROOT_DIR / "README.md"]:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not re.search(r"verify\.py\W+gate|\bgate\b|\bgated\b|fake.real|real_past_paper|"
+                                 r"counts_for_mastery", line, re.I), f"{path}:{n}: {line.strip()[:100]}"
+    flow = _read(VERIFIED)
+    for step in ("verify.py submit", "verify.py settle", "verify.py read", "verify.py concede"):
+        assert f"`{step}`" in flow or step.split()[1] in flow, step
+    assert "pasted unchanged" in flow and "Check the evidence pack at `<pack>`." in flow
+    assert "verify.py summary" in _read("reference/session-close.md")
+    recording = _read(RECORDING)
+    assert '"gate"' not in recording and "settled `correct` check" in recording
 
 
 FORECAST = re.compile(r"delay_line|cost.of.delay|counterfactual|route_minutes|capacity_minutes|visual\.py delay"
@@ -137,10 +189,10 @@ def test_no_episode_clock_or_automatic_close():
 
 
 def test_sessions_close_only_on_end_session_with_a_set_hand_off():
-    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text(encoding="utf-8")
+    core = (ROOT_DIR / "reference/core-rules.md").read_text(encoding="utf-8")
     assert "## Ending a session" in core and "**End-of-set hand-off**" in core
     assert '"end session"' in core
-    close = (ROOT_DIR / "skills/mimir-core-rules/references/session-close.md").read_text(encoding="utf-8")
+    close = (ROOT_DIR / "reference/session-close.md").read_text(encoding="utf-8")
     assert "session.py close" in close  # the script writes the one end stamp
     for flow in SESSION_FLOWS:
         text = (ROOT_DIR / flow).read_text(encoding="utf-8")
@@ -210,22 +262,22 @@ def test_standard_study_has_unlimited_retries_and_the_recording_rule():
     assert "only when the student asks" in session
     assert "`duplicate`" in session  # repeated misses add no log line either
     assert not re.search(r'"idk": show the key', session)  # "idk" gets guidance, not the key
-    recording = (ROOT_DIR / "skills/mimir-core-rules/references/recording.md").read_text(encoding="utf-8")
+    recording = (ROOT_DIR / "reference/recording.md").read_text(encoding="utf-8")
     assert "first wrong answer" in recording and "records as assisted" in recording
 
 
-# Per-item labels only for real, flagged, OCR and tentative items; plain
+# Per-item labels only for real, OCR and tentative items; plain
 # practice is declared once per session.
 LABEL_FLOWS = ["skills/mimir-study/references/session.md", "skills/mimir-study/references/teaching.md",
                "skills/mimir-study/references/urgent.md", "skills/mimir-quiz/SKILL.md"]
 
 
 def test_plain_practice_is_declared_once_and_other_items_keep_their_label():
-    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text(encoding="utf-8")
+    core = (ROOT_DIR / "reference/core-rules.md").read_text(encoding="utf-8")
     labels = core.split("## Provenance labels", 1)[1].split("\n## ", 1)[0]
     assert "Every question shown carries exactly one label" not in labels
     assert "**Plain practice item**" in labels and "once per session" in labels
-    for kind in ("real", "`ocr`", "flagged", "`(tentative)`"):
+    for kind in ("real", "`ocr`", "`(tentative)`"):
         assert kind in labels, kind
     for flow in LABEL_FLOWS:
         text = (ROOT_DIR / flow).read_text(encoding="utf-8")
@@ -303,14 +355,14 @@ def test_study_asks_exam_time_within_two_days_and_whether_today_is_still_ahead()
         assert field in session, field
     assert "time unknown" in session  # the marker that stops a second re-ask
     assert "still ahead" in session
-    core = _read("skills/mimir-core-rules/SKILL.md")
+    core = _read("reference/core-rules.md")
     assert "within two days" in core and "still ahead" in core  # allowed admin questions
 
 
 def test_past_questions_checks_an_exam_today_and_passes_the_class_choice():
     exam_today = "Is your <name> today still ahead?"
-    holders = [str(p.relative_to(ROOT_DIR)) for p in MARKDOWN if exam_today in p.read_text(encoding="utf-8")]
-    assert holders == ["skills/mimir-core-rules/SKILL.md"], holders  # defined once, reused
+    holders = [p.relative_to(ROOT_DIR).as_posix() for p in MARKDOWN if exam_today in p.read_text(encoding="utf-8")]
+    assert holders == ["reference/core-rules.md"], holders  # defined once, reused
     past = _read("skills/mimir-past-questions/SKILL.md")
     assert "`ask_exam_ahead`" in past and "Exam today" in past and "Mode and dates" in past
     assert past.index("Exam today") < past.index("5. Triage")  # before any drilling
@@ -334,7 +386,7 @@ def test_no_skill_writes_a_bare_date_from_parse_date():
 
 # The knowledge gauge (issue #39): rules and the Urgent offer live once in core
 # rules; study (Standard and Urgent) and past-question practice use them.
-CORE = "skills/mimir-core-rules/SKILL.md"
+CORE = "reference/core-rules.md"
 GAUGE_OFFER = "Quick gauge first? A few fresh questions, before any recipe, to see what you can already solve. Yes or no?"
 
 
@@ -374,7 +426,7 @@ def test_standard_session_runs_the_gauge_once_before_any_topic():
     assert "`gauge`" in gauge and "`done` false" in gauge and "`session.py gauge`" in gauge
     assert "core rules" in gauge
     assert episode.index("**Knowledge gauge**") < episode.index("Topic `T` is")
-    recording = _read("skills/mimir-core-rules/references/recording.md")
+    recording = _read("reference/recording.md")
     assert "gauge" in recording and "unassisted" in recording
 
 
@@ -384,7 +436,7 @@ def test_student_chooses_standard_or_urgent_through_session_start():
     for path in MARKDOWN + [ROOT_DIR / "README.md"]:
         text = path.read_text(encoding="utf-8")
         assert "never picks a mode" not in text and "only mode input" not in text, path
-    core = _read("skills/mimir-core-rules/SKILL.md")
+    core = _read("reference/core-rules.md")
     assert '"choice"' in core and '"lasting": true' in core
     assert "study normally" in core and "cram" in core and "until that exam passes" in core
     session = _read("skills/mimir-study/references/session.md")
@@ -399,7 +451,7 @@ def test_student_chooses_standard_or_urgent_through_session_start():
 # What an exam covers (issue #45): resolved once into in/out lists, confirmed by the
 # student, saved with the exam through session.py scope, then used unchanged.
 def test_exam_scope_is_confirmed_before_it_is_saved_through_session_scope():
-    core = _read("skills/mimir-core-rules/SKILL.md")
+    core = _read("reference/core-rules.md")
     assert "## Exam scope" in core
     assert "In scope:" in core and "Out:" in core and "confirm" in core
     assert "`session.py scope`" in core and "never a file edit" in core
@@ -496,7 +548,7 @@ def test_setup_offers_the_sampler_once_with_a_skip_before_setup_is_done():
 
 def test_only_setup_runs_sampler_events():
     for path in MARKDOWN:
-        rel = str(path.relative_to(ROOT_DIR))
+        rel = path.relative_to(ROOT_DIR).as_posix()
         text = path.read_text(encoding="utf-8")
         if rel not in (SETUP, SAMPLER):
             assert '"event": "sampler' not in text, rel
@@ -587,8 +639,95 @@ def test_whats_new_line_is_said_once_at_session_start_and_setup_marks_it_seen():
     # Every first session marks it seen, said or not, so a new lazy-setup user never hears it later.
     assert "either way" in start[start.index("`whats_new`"):start.index('{"event": "whats-new-seen"}')]
     for path in MARKDOWN:
-        rel = str(path.relative_to(ROOT_DIR))
+        rel = path.relative_to(ROOT_DIR).as_posix()
         text = path.read_text(encoding="utf-8")
         assert "sessions run until you say" not in text, rel  # the line comes from session.py, verbatim
         if rel not in (SETUP, "skills/mimir-study/references/session.md"):
             assert "whats-new-seen" not in text, rel
+
+
+# --- speed slice (#77): show what is ready first, check behind the first question ----
+
+VERIFIED = "reference/verified-items.md"
+RECORDING = "reference/recording.md"
+QUESTION_FLOWS = ["skills/mimir-study/references/session.md", "skills/mimir-study/references/teaching.md",
+                  "skills/mimir-study/references/urgent.md", "skills/mimir-quiz/SKILL.md",
+                  "skills/mimir-past-questions/SKILL.md"]
+WAIT_LINE = "Checking my answers before you study them."
+
+
+def test_no_flagged_state_compare_reference_or_wait_estimate_is_left():
+    for path in MARKDOWN:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not re.search(r"flagged|`flag`|flag line|\bcompare|⚠|about 30 seconds", line, re.I), \
+                f"{path}:{n}: {line.strip()[:100]}"
+
+
+def test_checker_dispatch_names_one_foreground_recipe_per_host_before_the_fallback():
+    dispatch = core_section("Checker dispatch")
+    claude = dispatch.index("`run_in_background: false`")
+    codex = dispatch.index("`spawn_agent`")
+    antigravity = dispatch.index("`define_subagent`")
+    fallback = dispatch.index("checker: self")
+    assert claude < codex < antigravity < fallback
+    assert "`mimir:verifier`" in dispatch and "`fork_turns` none" in dispatch and "`wait_agent`" in dispatch
+    assert "`invoke_subagent`" in dispatch and "helpers/verifier.md" in dispatch
+    assert "foreground" in dispatch and "never in the background" in dispatch
+
+
+def test_wait_line_has_no_estimate_and_is_said_once_when_nothing_new_is_readable():
+    holders = [p for p in MARKDOWN if WAIT_LINE in p.read_text(encoding="utf-8")]
+    assert holders == [ROOT_DIR / CORE], holders
+    rule = next(line for line in _read(CORE).splitlines() if WAIT_LINE in line)
+    assert "once per session" in rule and "nothing new to read" in rule
+
+
+def test_feedback_and_the_next_question_share_one_turn_with_text_before_tools():
+    core = _read(CORE)
+    assert "share one turn" in core and "share one message" not in core
+    turn = _read(VERIFIED).split("## Turn shape", 1)[1].split("\n## ", 1)[0]
+    steps = [turn.index(f"\n{k}. ") for k in (1, 2, 3)]
+    assert steps == sorted(steps)
+    assert "needs no tool call" in turn and "`session.py record`" in turn
+    assert "nothing is written after `record`" in turn
+    # Live runs (Claude Code, Sonnet and Opus) lost text written before tool calls: the set's
+    # first question is written again once its check settles, so it is never lost.
+    assert "written again in full: the set's first question" in turn and "explanation or recipe" in turn and 'never point to a question "above"' in turn
+
+
+def test_question_sets_cap_and_failed_check_lines():
+    text = _read(VERIFIED)
+    sets = text.split("## Question sets", 1)[1].split("\n## ", 1)[0]
+    assert "at most 6 questions" in sets and "sets of one" in sets
+    assert "before any submit call or checker dispatch" in sets
+    assert "at least 8 words in a row" in sets
+    assert "ends when its check has settled" in sets
+    policy = text.split("## Check policy", 1)[1].split("\n## ", 1)[0]
+    assert "before its check has finished" in policy and "never shown before" in policy
+    failed = text.split("## Failed checks", 1)[1]
+    assert "at most one recheck" in failed
+    assert '"Dropped K question(s) my checker could not confirm."' in failed
+    assert '"Withdrawn: my checker could not confirm this question."' in failed
+    assert "never sees the wrong key" in failed and "nothing is recorded" in failed.lower()
+
+
+def test_every_question_flow_follows_the_set_rules_and_names_what_is_shown_at_once():
+    for flow in QUESTION_FLOWS:
+        assert "verified-items.md" in _read(flow), flow
+    shown = {"skills/mimir-quiz/SKILL.md": "first question of the set",
+             "skills/mimir-study/references/teaching.md": "explanation",
+             "skills/mimir-study/references/urgent.md": "recipe of the first question type",
+             "skills/mimir-past-questions/SKILL.md": "first real question"}
+    for flow, needle in shown.items():
+        assert "at once" in _read(flow) and needle in _read(flow), flow
+    assert "first question of the set" in core_section("Knowledge gauge")
+
+
+def test_record_writes_the_results_line_and_skills_no_longer_append_it():
+    recording = _read(RECORDING)
+    assert '"log":' in recording and "## Results" in recording and "duplicate" in recording
+    for path in MARKDOWN:
+        text = path.read_text(encoding="utf-8")
+        assert "## Quiz results" not in text, path
+        assert not re.search(r"[Aa]ppend (the outcome|to the log)|logging under `## Results`|"
+                             r"Log each under `## Results`", text), path

@@ -4,6 +4,8 @@ Mimir opens the pages it builds (math sheets, step pages and step-through pages)
 
 `scripts/release_check.py` is a dev-only script (standard library, Python 3.11+); no skill uses it. It writes `mimir-release-check.html` and `mimir-release-check.svg` into a new temp folder whose name contains a space, opens each one through the shipped `visual.open_in_browser`, and prints one JSON object: `platform`, `html`, `svg`, `opened_html`, `opened_svg`, `line`. It exits 0 when both files opened, else 1. `--no-open` only builds the files.
 
+An Antigravity install (`agy plugin install`) is a snapshot of the repository: after every change, reinstall it (`agy plugin uninstall mimir`, then install again) before any live check on Antigravity.
+
 ## Run it
 
 From a clone of this repository, in a graphical session:
@@ -31,5 +33,5 @@ Then fill in that OS's row below, with the commit you ran (`git rev-parse --shor
 |---|---|---|---|---|---|---|
 | Linux | 2026-10-19 | 71ed3ae + story 15 | yes, both (exit 0) | passed: HTML in Firefox, SVG in Gwenview, platform text right | Claude Code run, eye check by the maintainer | CachyOS, KDE on Wayland, Python 3.14.8. SVG opens in the system SVG default (Gwenview), accepted by design. |
 | macOS | pending | pending | pending | pending | pending | |
-| Windows | pending | pending | pending | pending | pending | |
-| WSL | pending | pending | pending | pending | pending | |
+| Windows | not run | n/a | not run | not checked by hand | n/a | The by-eye check was not run by hand. The script tests pass in CI (`.github/workflows/tests.yml`). |
+| WSL | not run | n/a | not run | not checked by hand | n/a | The by-eye check was not run by hand. |

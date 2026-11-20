@@ -3,7 +3,7 @@ name: mimir-plan
 description: Show what is left to study in a course of the student's Mimir learning folder - how far away the exam is and the remaining topics with their status, without time estimates. Use only when the student asks about their study plan or what is left before an exam.
 ---
 
-First read `../mimir-core-rules/SKILL.md` (beside this skill's folder) unless it is already loaded; it defines `<mimir>`.
+First read `../../reference/core-rules.md` (Mimir's `reference/` folder sits beside `skills/`; follow a linked skill folder to its real path first) unless it is already loaded; it defines `<mimir>`.
 
 Reads at start: script output only (`session.py now`, `session.py start`). No memory or course file.
 
