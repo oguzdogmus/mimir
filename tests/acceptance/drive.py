@@ -68,7 +68,9 @@ def parse_claude(lines: list[dict]) -> tuple[str | None, list[str], str]:
                     inp = part.get("input", {})
                     name = part.get("name")
                     if name in ("Agent", "Task"):
-                        tools.append(f"{name} subagent_type={inp.get('subagent_type')}: {short(inp.get('description') or inp.get('prompt'))}")
+                        tools.append(f"{name} subagent_type={inp.get('subagent_type')} "
+                                     f"run_in_background={inp.get('run_in_background')}: "
+                                     f"{short(inp.get('description') or inp.get('prompt'))}")
                     else:
                         tools.append(f"{name}: {short(inp.get('command') or inp.get('file_path') or inp.get('skill') or inp)}")
         if ev.get("type") == "result":

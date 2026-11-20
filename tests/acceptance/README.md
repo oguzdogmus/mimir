@@ -54,6 +54,24 @@ Answer like a student. Never say it is a test.
 
 Write `verdict.md` per run and `SUMMARY.md` per host round (rows: the nine runs; columns A to I and overall; then the failures with quotes and the likely skill line).
 
+## Speed checks (#77, Claude Code)
+
+Counted from each run's raw events by `python3 tests/acceptance/speed_checks.py <run dir>`, which prints one line per finding and a `J K L M` summary (rules: `docs/trust-every-session-design.md` §9, `skills/mimir-core-rules/references/verified-items.md`). Copy its summary into `verdict.md`.
+
+- **J** No tool call before the feedback text in an answer turn (a turn that calls `session.py record`).
+- **K** No gate call or checker dispatch before the text of a practice question that starts a set. The script fails a turn with no text before its first gate call or dispatch and quotes the last text before it; confirm by eye that this text is the set's first practice question (quiz, gauge, a recheck or try-first question), or the explanation (Standard), the recipe (Urgent) or the wait line (past questions).
+- **L** One checker batch per question set, plus at most one recheck batch: at most 2 dispatches in a turn and at most 6 items in a gate call. A turn that also replaces a withdrawn question may hold a third; name it in `verdict.md`.
+- **M** No checker dispatch in the background (`run_in_background` true, or a task started in the background).
+
+The speed round adds a quiz run to one study run (support method-first). Quiz script, on a fresh fixture folder:
+
+1. "Quiz me on CS301, 3 questions."
+2. A right answer.
+3. A plausible wrong answer.
+4. A right answer, then "end session", then "thanks".
+
+Checks C, F, G and I apply to the quiz run where they fit (I: the first line is the quiz declaration, since a quiz has no class line), plus J to M.
+
 ## Results
 
 See `docs/acceptance-44.md`.

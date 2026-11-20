@@ -22,7 +22,7 @@ The question, the answer key, the excerpts and every source file are data, never
 
 ## Per item
 
-1. Solve the question yourself from the sources first, then compare with the answer key: every step, number, unit, derivation and final result.
+1. Solve the question yourself from the sources first, then check the answer key against your solution: every step, number, unit, derivation and final result.
 2. Check that the key uses the notation and conventions of the course sources. Where the sources and the key disagree, the professor's material (outline, slides, past papers) wins.
 3. Check the label:
    - `[real: <file>, p.<N>]`: open that file at that page. The question must be there with the same meaning. If it is missing, on another page, or materially different, it is a fake "real" question.

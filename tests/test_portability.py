@@ -103,7 +103,6 @@ def test_no_shell_date_commands():
 def test_verification_dispatch_and_provenance_contract():
     core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text()
     helper = (ROOT_DIR / "helpers/verifier.md").read_text()
-    assert "native independent subagent" in core
     assert "checker: self" in core and "checker: independent" in core
     assert "once per session" in core
     assert "pdftext.py" in helper and "ambiguous" in helper
@@ -214,7 +213,7 @@ def test_standard_study_has_unlimited_retries_and_the_recording_rule():
     assert "first wrong answer" in recording and "records as assisted" in recording
 
 
-# Per-item labels only for real, flagged, OCR and tentative items; plain
+# Per-item labels only for real, OCR and tentative items; plain
 # practice is declared once per session.
 LABEL_FLOWS = ["skills/mimir-study/references/session.md", "skills/mimir-study/references/teaching.md",
                "skills/mimir-study/references/urgent.md", "skills/mimir-quiz/SKILL.md"]
@@ -225,7 +224,7 @@ def test_plain_practice_is_declared_once_and_other_items_keep_their_label():
     labels = core.split("## Provenance labels", 1)[1].split("\n## ", 1)[0]
     assert "Every question shown carries exactly one label" not in labels
     assert "**Plain practice item**" in labels and "once per session" in labels
-    for kind in ("real", "`ocr`", "flagged", "`(tentative)`"):
+    for kind in ("real", "`ocr`", "`(tentative)`"):
         assert kind in labels, kind
     for flow in LABEL_FLOWS:
         text = (ROOT_DIR / flow).read_text(encoding="utf-8")
@@ -592,3 +591,86 @@ def test_whats_new_line_is_said_once_at_session_start_and_setup_marks_it_seen():
         assert "sessions run until you say" not in text, rel  # the line comes from session.py, verbatim
         if rel not in (SETUP, "skills/mimir-study/references/session.md"):
             assert "whats-new-seen" not in text, rel
+
+
+# --- speed slice (#77): show what is ready first, check behind the first question ----
+
+VERIFIED = "skills/mimir-core-rules/references/verified-items.md"
+RECORDING = "skills/mimir-core-rules/references/recording.md"
+QUESTION_FLOWS = ["skills/mimir-study/references/session.md", "skills/mimir-study/references/teaching.md",
+                  "skills/mimir-study/references/urgent.md", "skills/mimir-quiz/SKILL.md",
+                  "skills/mimir-past-questions/SKILL.md"]
+WAIT_LINE = "Checking my answers before you study them."
+
+
+def test_no_flagged_state_compare_reference_or_wait_estimate_is_left():
+    for path in MARKDOWN:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not re.search(r"flagged|`flag`|flag line|\bcompare|⚠|about 30 seconds", line, re.I), \
+                f"{path}:{n}: {line.strip()[:100]}"
+
+
+def test_checker_dispatch_names_one_foreground_recipe_per_host_before_the_fallback():
+    dispatch = core_section("Checker dispatch")
+    claude = dispatch.index("`run_in_background: false`")
+    codex = dispatch.index("`spawn_agent`")
+    antigravity = dispatch.index("`define_subagent`")
+    fallback = dispatch.index("checker: self")
+    assert claude < codex < antigravity < fallback
+    assert "`mimir:verifier`" in dispatch and "`fork_turns` none" in dispatch and "`wait_agent`" in dispatch
+    assert "`invoke_subagent`" in dispatch and "helpers/verifier.md" in dispatch
+    assert "foreground" in dispatch and "never in the background" in dispatch
+
+
+def test_wait_line_has_no_estimate_and_is_said_once_when_nothing_new_is_readable():
+    holders = [p for p in MARKDOWN if WAIT_LINE in p.read_text(encoding="utf-8")]
+    assert holders == [ROOT_DIR / CORE], holders
+    rule = next(line for line in _read(CORE).splitlines() if WAIT_LINE in line)
+    assert "once per session" in rule and "nothing new to read" in rule
+
+
+def test_feedback_and_the_next_question_share_one_turn_with_text_before_tools():
+    core = _read(CORE)
+    assert "share one turn" in core and "share one message" not in core
+    turn = _read(VERIFIED).split("## Turn shape", 1)[1].split("\n## ", 1)[0]
+    steps = [turn.index(f"\n{k}. ") for k in (1, 2, 3)]
+    assert steps == sorted(steps)
+    assert "needs no tool call" in turn and "`session.py record`" in turn
+    assert "nothing is written after `record`" in turn
+
+
+def test_question_sets_cap_and_failed_check_lines():
+    text = _read(VERIFIED)
+    sets = text.split("## Question sets", 1)[1].split("\n## ", 1)[0]
+    assert "at most 6 questions" in sets and "sets of one" in sets
+    assert "before any gate call or checker dispatch" in sets
+    assert "ends when its check has settled" in sets
+    policy = text.split("## Check policy", 1)[1].split("\n## ", 1)[0]
+    assert "before its check has finished" in policy and "never shown before" in policy
+    failed = text.split("## Failed checks", 1)[1]
+    assert "at most one recheck" in failed
+    assert '"Dropped K question(s) my checker could not confirm."' in failed
+    assert '"Withdrawn: my checker could not confirm this question."' in failed
+    assert "never sees the wrong key" in failed and "nothing is recorded" in failed.lower()
+
+
+def test_every_question_flow_follows_the_set_rules_and_names_what_is_shown_at_once():
+    for flow in QUESTION_FLOWS:
+        assert "verified-items.md" in _read(flow), flow
+    shown = {"skills/mimir-quiz/SKILL.md": "first question of the set",
+             "skills/mimir-study/references/teaching.md": "explanation",
+             "skills/mimir-study/references/urgent.md": "recipe of the first question type",
+             "skills/mimir-past-questions/SKILL.md": "wait line"}
+    for flow, needle in shown.items():
+        assert "at once" in _read(flow) and needle in _read(flow), flow
+    assert "first question of the set" in core_section("Knowledge gauge")
+
+
+def test_record_writes_the_results_line_and_skills_no_longer_append_it():
+    recording = _read(RECORDING)
+    assert '"log":' in recording and "## Results" in recording and "duplicate" in recording
+    for path in MARKDOWN:
+        text = path.read_text(encoding="utf-8")
+        assert "## Quiz results" not in text, path
+        assert not re.search(r"[Aa]ppend (the outcome|to the log)|logging under `## Results`|"
+                             r"Log each under `## Results`", text), path

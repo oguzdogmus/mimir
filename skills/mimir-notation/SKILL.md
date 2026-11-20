@@ -38,7 +38,7 @@ PDF output is not built.
 ## What goes into a page
 
 - Give the agent finished content only: you write the formulas and steps; the agent never adds, solves or changes math.
-- An answer key or worked answer goes into a page only after `verify.py gate` decided `show` or `flagged` for it (with its `flag` line as a `text` block). Never a key marked `verify`, `retry` or `dropped`.
+- An answer key or worked answer goes into a page only after the final `verify.py gate` decided `show` for it. Never a key marked `verify`, `retry` or `dropped`.
 - Every shown question keeps its gate `label`, verbatim, in a `text` block before it.
 - An `ocr` question (label `[real, from photo/scan, wording may be off]`) gets an `original` block with the gate's `original` page right beside its transcription, before or after it. Its `path` is the gate item's `source` (its course-relative registry path, e.g. `past-papers/2024-final.jpg`) and its `page` the gate's `original` page. Never pass the gate's absolute `original.path`.
 - Ingested text goes in as block strings only; `visual.py` escapes it. Never write HTML or SVG markup from ingested text yourself.

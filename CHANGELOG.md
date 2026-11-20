@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.1
+
+Less waiting between questions. Measured on real study sessions, the checker was never the slow part: the tutor's own steps before the student had anything to read were. This release changes how sessions run, not the script contracts, except where listed. Tracked in [#77](https://github.com/oguzdogmus/mimir/issues/77); design in [the design doc](docs/trust-every-session-design.md), sections 1 to 4 and 9.
+
+### Major changes
+
+- **What is ready comes first.** Feedback on an answer, its key and the next checked question are written before any tool call; `session.py record` and the checks run after them, in the same turn.
+- **Question sets.** Questions are prepared and checked in sets of at most 6, one checker batch per set. The first question of a set is shown at once when it is a practice question, and the set is checked behind it. Answer keys, worked answers and hints still wait for a `correct` verdict, and a real past-paper question still waits for its check. Standard study shows the explanation first, Urgent the first recipe.
+- **Failed checks.** Each question gets at most one recheck. A question not yet seen is fixed or dropped. A wrong key on a question already on screen is fixed quietly; a flawed question on screen is withdrawn in one line and replaced. The "flagged" state, its ⚠ line and the `compare` field are gone: in 428 real verdicts it was never reached.
+- **The checker runs in the foreground,** with one named recipe per host (Claude Code, Codex, Antigravity) before the same-context fallback.
+- **Shorter wait line:** "Checking my answers before you study them.", once per session, only when there is nothing new to read ([#23](https://github.com/oguzdogmus/mimir/issues/23) finding 5).
+
+### Script changes
+
+- `verify.py gate` no longer returns `flagged` and no longer accepts `compare`; a question whose recheck fails is `dropped`. A key the checker caught and the tutor fixed adds a `fixed` disagreement line.
+- `session.py record` takes the session's `log` name and writes the outcome line under `## Results` itself, once: a retried call or a `duplicate` writes no second line. It no longer accepts `flagged` as a gate decision.
+
+### Validation
+
+VALIDATION
+
+### Updating
+
+Update or reinstall Mimir through your agent's plugin manager. Saved progress carries over.
+
 ## 0.4.0
 
 Study sessions are now led by the student: they run until the student says "end session", the student can choose how a session runs, and Mimir learns how each student likes to be taught. Tracked in [#30](https://github.com/oguzdogmus/mimir/issues/30); design in [the design doc](docs/teaching-preferences-design.md).

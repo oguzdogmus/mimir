@@ -26,7 +26,7 @@ For a step-reveal page through `mimir-notation`: pass every formula as a `math` 
 
 1. Every explanation starts at the rung the support level picks: `example-first` at the worked-example rung (a separate example, never `T`'s own question), `method-first` and `try-first` at the notation rung. Teaching from an attempt (§1, §5) starts at the notation rung.
 2. It does not land when the student says so ("I don't get it", "lost", "huh?") or answers a guiding question wrongly. Then step down exactly ONE rung for the next explanation. Never skip a rung. A rung that does not land is temporary help: it never changes a teaching setting.
-3. Native language is a rung only when `teaching_language` and `course_language` are both set and differ (compared ignoring case and extra spaces). Otherwise skip it. When you use it, declare it first: "Switching to <teaching_language> for this step." Technical terms stay as the course writes them.
+3. Native language is a rung only when `teaching_language` and `course_language` are both set and differ (matched ignoring case and extra spaces). Otherwise skip it. When you use it, declare it first: "Switching to <teaching_language> for this step." Technical terms stay as the course writes them.
 4. On the lowest available rung, keep explaining at that rung in smaller steps.
 5. Once it lands (the student says it makes sense, or answers a guiding question right), restate the point in the professor's notation, in `course_language`. Always end there.
 6. When a rung below notation landed, append to the session log: `rung: <T> <rung>`. Nothing is written to the profile.
@@ -86,7 +86,7 @@ The override applies to topic `U`: the topic of the item or explanation in progr
 2. The student's next reply after the smaller step is another signal, another "idk", or a wrong answer to the same step: say "Giving you the answer. This topic stays marked shaky until you solve one on your own in a later session." and give the answer (the worked key of the item shown, or the point being explained, in the professor's notation). Then the override:
    - Call `session.py record` with `override: true`, topic U and outcome `assisted`, following core rules' recording reference. For explanation-only overrides add `explanation_only: true` and use a stable explanation item identity and a gate with decision `drop`, counts_for_mastery false.
    - For the rest of this session, teach at frequency `checks only` (§3). This is temporary help: say nothing about settings and change none.
-   - Append to the log under `## Results`: `- <U> frustration override: answer given`.
+   - That `record` call writes the log line `- <U> frustration override: answer given` itself.
    - When this session ran the session event (`session.md` §4), run `session.py pref-event` with `{"event": "frustration", "session": "<S>"}`. When its `offer` is true, end the same message with exactly "Want fewer questions from now on?" (the script allows it once ever). A yes is a lasting request: §7 with frequency one level toward `checks only` and wording "Want fewer questions from now on? <the student's reply>". A no, or no answer, changes nothing.
 3. From here the Frustration rule in core rules applies to `U`.
 4. Before an attempt-first attempt, only "just tell me"-type and all-caps signals come here; "hint", "skip" and "idk" follow §5.
@@ -107,7 +107,7 @@ When `attempt_first` is true:
 The practice after teaching: ONE underlying problem on `T` in `DISGUISE_VARIANTS = 2` surface forms.
 
 1. Build 2 variants from the fingerprint's `## Disguise types` (fallback when it has none: renamed symbols, reworded text, reversed direction), in the professor's notation and phrasing. A `(tentative)` disguise type is used with "from a photo/scan, may be off" once.
-2. Each variant is an item `{"topic": "<T>", "origin": "practice"}` with its own key and hint. Gate both as ONE batch (`verified-items.md`).
+2. Each variant is an item `{"topic": "<T>", "origin": "practice"}` with its own key and hint. Both are ONE question set (`verified-items.md`). The explanation that ends the teaching is what the student reads at once: write it first in the turn, then check the set, and show the variants only after the check, in the same turn.
 3. Show both shown items, labelled per core rules' Provenance labels. Frequency `key decisions` or `every step`: ask one guiding question, "What do these two have in common underneath?", then confirm or correct the shared structure in words. Frequency `checks only`: state the shared structure yourself instead of asking. Either way the shared structure names the kind of rule and what to look at (what each step adds, what the base case adds), never a general formula, exponents, counts or a set that answers either variant: the variants are now items, so their answers come only as Retries allow.
 4. The student solves each variant, one at a time. Record each answer per Recording (and §4 step 3 after an override).
 5. When the drill's last variant is answered, say in the same message that the drill on `T` is done and lead on: the next topic (`session.md` §4 step 4) or, with none left, the End-of-set hand-off choices.
