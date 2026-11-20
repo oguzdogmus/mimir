@@ -18,6 +18,11 @@ Scripts now own the answer-key check. Before, `verify.py gate` was stateless and
 - `session.py record` no longer accepts `gate` or `real_past_paper`. It looks the question up in the session's ledger by `item`; the label and the real-paper flag come from there. Frustration overrides need no ledger entry.
 - The checker (`helpers/verifier.md`) takes the path of a pack and replies with the token line, then `N | verdict | reason` per question.
 
+### Validation
+
+- The full test suite passes.
+- A live quiz run on Claude Code with a scripted student: the checker read only the evidence pack, its reply carried the pack token, `settle` and `record` worked from the ledger, and the new acceptance check N (no batch settled without a checker call) passed: [results](docs/acceptance-78.md). The first run found that the checker wrote its working before the token line; `settle` now ignores text before it.
+
 ### Updating
 
 Update or reinstall Mimir through your agent's plugin manager. Saved progress carries over. Session logs of earlier versions keep their disagreement lines; the ledger starts with the first session on 0.5.0.
