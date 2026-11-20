@@ -560,7 +560,7 @@ def test_sessions_have_separate_ledgers(home, cdir):
 
 def test_labels_work_with_the_builtin_pdf_reader_too(home, cdir):
     proc = subprocess.run([sys.executable, str(VF), "submit"], input=json.dumps(submit(real())).encode(),
-                          capture_output=True, env={**os.environ, "HOME": str(home), "PATH": ""})
+                          capture_output=True, env={**os.environ, "HOME": str(home), "USERPROFILE": str(home), "PATH": ""})
     assert proc.returncode == 0, proc.stderr.decode()
     assert json.loads(proc.stdout)["questions"][0]["label"] == "[real: past-papers/2024-final.pdf, p.3]"
 
