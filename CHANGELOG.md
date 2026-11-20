@@ -18,6 +18,10 @@ Scripts now own the answer-key check. Before, `verify.py gate` was stateless and
 - `session.py record` no longer accepts `gate` or `real_past_paper`. It looks the question up in the session's ledger by `item`; the label and the real-paper flag come from there. Frustration overrides need no ledger entry.
 - The checker (`helpers/verifier.md`) takes the path of a pack and replies with the token line, then `N | verdict | reason` per question.
 
+### Layout
+
+- The core rules and the notation rules are no longer skills: they moved from `skills/` to plain files in `reference/` (`core-rules.md`, `notation.md`, and the shared `recording.md`, `session-close.md` and `verified-items.md`). Antigravity ignores `user-invocable: false` and listed them as `/mimir-core-rules` and `/mimir-notation` commands ([#3](https://github.com/oguzdogmus/mimir/issues/3)). Mimir now ships 10 skills, one per command, and each still reads the core rules first.
+
 ### Validation
 
 - The full test suite passes.

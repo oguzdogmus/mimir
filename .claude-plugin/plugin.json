@@ -8,11 +8,9 @@
   "license": "Apache-2.0",
   "repository": "https://github.com/oguzdogmus/mimir",
   "skills": [
-    "./skills/mimir-core-rules",
     "./skills/mimir-setup",
     "./skills/mimir-ingest",
     "./skills/mimir-quiz",
-    "./skills/mimir-notation",
     "./skills/mimir-study",
     "./skills/mimir-past-questions",
     "./skills/mimir-plan",

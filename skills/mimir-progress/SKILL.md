@@ -3,7 +3,7 @@ name: mimir-progress
 description: Show what Mimir believes the student knows in a course of their Mimir learning folder - every topic's mastery status with its dated evidence, solves alone and with help, and which topics are due a recheck. Use only when the student asks what they know, their progress, or their mastery for a course.
 ---
 
-First read `../mimir-core-rules/SKILL.md` (beside this skill's folder) unless it is already loaded; it defines `<mimir>`.
+First read `../../reference/core-rules.md` (Mimir's `reference/` folder sits beside `skills/`; follow a linked skill folder to its real path first) unless it is already loaded; it defines `<mimir>`.
 
 Reads at start: script output only (`session.py now`, `session.py progress`). No memory or course file.
 

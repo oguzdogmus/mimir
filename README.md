@@ -49,7 +49,7 @@ agy --add-dir "$(realpath ~/.gemini/config/plugins/mimir)"
 2. Drop course files (outline, slides, past papers) into `~/learning/_inbox/` and run `mimir-ingest`.
 3. Run `mimir-study` and tell it when your exam is.
 
-Each command is a skill. Type it like this:
+Each command is a skill, 10 in all (listed under [Commands](#commands)). The rules every skill follows are plain files in the plugin's `reference/` folder, not commands. Type a command like this:
 
 | Agent | Format | Example |
 |---|---|---|

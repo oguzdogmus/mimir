@@ -3,7 +3,7 @@ name: mimir-forecast
 description: Forecast the likely topics of a course's next exam from the student's Mimir learning folder - a ranked topic list with one evidence line each, a computed confidence line and the past forecast record, labelled [forecast, not a guarantee]. Use only when the student asks what will be on the next exam, which topics are likely to come up, or for a forecast or prediction of an exam.
 ---
 
-First read `../mimir-core-rules/SKILL.md` (beside this skill's folder) unless it is already loaded; it defines `<mimir>`.
+First read `../../reference/core-rules.md` (Mimir's `reference/` folder sits beside `skills/`; follow a linked skill folder to its real path first) unless it is already loaded; it defines `<mimir>`.
 
 Reads at start: script output (`session.py now`, `session.py start`). Course files only from step 5.
 
