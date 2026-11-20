@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mimir answer-key gate: provenance labels and the show/retry/flag/drop decision.
+"""Mimir answer-key gate: provenance labels and the show/retry/drop decision.
 
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py`` and ``ingest.py`` (same folder). Run as::
@@ -22,7 +22,7 @@ items before verification and decides after it.
 Items
 -----
 ``{"topic", "origin", "source"?, "page"?, "question"?, "quote"?, "verdicts"?,
-"compare"?, "dispute"?}``. Strings are one line without control characters;
+"dispute"?}``. Strings are one line without control characters;
 ``topic`` (required) and ``dispute`` at most TOPIC_MAX_CHARS (120)
 characters, ``question`` at most 40. Paths are course-relative registry paths
 (e.g. ``past-papers/2024-final.pdf``); pages are integers >= 1. A registry
@@ -48,10 +48,8 @@ course folder counts as no row. Errors name the field, e.g.
 * ``verdicts``: the verifier's verdicts so far, oldest first, each
   ``correct``, ``wrong``, ``ambiguous`` or ``source-conflict``; at most
   VERIFIER_RETRIES + 1 of them, and none after a ``correct``.
-* ``compare`` ``{path, page, question?}``: a solved reference in this course
-  to name when the checker still disagrees. It counts only when ``path`` has
-  a registry row in this course and ``page`` is within its pages.
-* ``dispute``: what the checker disagrees on, e.g. ``step 3``.
+* ``dispute``: the tutor's few words for what the checker disagreed on, e.g.
+  ``step 3``; named in the item's ``disagreements`` line.
 
 Decision
 --------
@@ -59,15 +57,13 @@ Decision
   ``needs_verification`` is always true);
 * last verdict ``correct``: ``show``;
 * fewer than VERIFIER_RETRIES + 1 verdicts, last not correct: ``retry``;
-* VERIFIER_RETRIES + 1 non-correct verdicts: ``flagged`` when ``compare``
-  counts, else ``dropped``.
-Only ``show`` and ``flagged`` items may reach the student; ``counts_for_mastery``
-is true only for ``show``. A ``flagged`` item carries ``flag``: ``⚠ my checker
-disagrees on <dispute or "this answer">, compare with `<path>` p.<page>[
-<question>]``. Each flagged or dropped item adds one ``disagreements`` line
-for the session log: ``- YYYY-MM-DD item N (<topic>): <flagged|dropped>,
-checker said <last verdict>[, compare <path> p.<page>[ <question>]]``, dated
-today by the local clock.
+* VERIFIER_RETRIES + 1 non-correct verdicts: ``dropped``.
+Only ``show`` items may reach the student, and only they have
+``counts_for_mastery`` true. Each item the checker disputed adds one
+``disagreements`` line for the session log, dated today by the local clock:
+``- YYYY-MM-DD item N (<topic>): <fixed|dropped>, checker said <verdict>[, on
+<dispute>]``. ``fixed`` is a ``show`` item with an earlier non-correct verdict
+(the first one is named); ``dropped`` names the last verdict.
 
 Example (root /home/u/learning; INDEX has past-papers/2024-final.pdf, text)
 ------------------------------------------------------------------------
@@ -76,9 +72,7 @@ gate -- label the items and decide which may be shown.
             {"topic": "Pumping lemma", "origin": "real",
              "source": "past-papers/2024-final.pdf", "page": 3, "question": "Q2"},
             {"topic": "DFA minimisation", "origin": "practice",
-             "verdicts": ["wrong", "ambiguous"], "dispute": "step 3",
-             "compare": {"path": "past-papers/2024-final.pdf", "page": 3,
-                         "question": "Q4"}}]}
+             "verdicts": ["wrong", "ambiguous"], "dispute": "step 3"}]}
     out: {"course_dir": "/home/u/learning/2026-Fall/CS201 Theory",
           "results": [
             {"n": 1, "topic": "Pumping lemma", "origin": "real",
@@ -87,17 +81,14 @@ gate -- label the items and decide which may be shown.
              "counts_for_mastery": false},
             {"n": 2, "topic": "DFA minimisation", "origin": "practice",
              "label": "[practice, not from a real paper]",
-             "needs_verification": true, "decision": "flagged",
-             "counts_for_mastery": false,
-             "flag": "⚠ my checker disagrees on step 3, compare with
-                      `past-papers/2024-final.pdf` p.3 Q4"}],
+             "needs_verification": true, "decision": "dropped",
+             "counts_for_mastery": false}],
           "verify": [1], "retry": [],
-          "disagreements": ["- 2026-10-18 item 2 (DFA minimisation): flagged,
-                             checker said ambiguous, compare
-                             past-papers/2024-final.pdf p.3 Q4"],
-          "line": "Gate: 2 items, 1 to verify, 1 flagged."}
+          "disagreements": ["- 2026-10-18 item 2 (DFA minimisation): dropped,
+                             checker said ambiguous, on step 3"],
+          "line": "Gate: 2 items, 1 to verify, 1 dropped."}
     ``original`` appears only on real items whose fidelity is not
-    ``text``, ``flag`` only on flagged ones. ``verify`` and ``retry`` list item numbers (1-based).
+    ``text``. ``verify`` and ``retry`` list item numbers (1-based).
 
 Exit codes: invalid input, a refused operation, a usage error or a filesystem
 error exits 2 with one line on stderr (``verify.py: <message>``) and nothing
@@ -120,8 +111,8 @@ VERIFIER_RETRIES = 1
 _QUESTION_MAX = 40
 _VERDICTS = ("correct", "wrong", "ambiguous", "source-conflict")
 _ORIGINS = ("practice", "real")
-_ITEM_KEYS = {"topic", "origin", "source", "page", "question", "quote", "verdicts", "compare", "dispute"}
-_DECISIONS = ("show", "verify", "retry", "flagged", "dropped")
+_ITEM_KEYS = {"topic", "origin", "source", "page", "question", "quote", "verdicts", "dispute"}
+_DECISIONS = ("show", "verify", "retry", "dropped")
 _PRACTICE_LABEL = "[practice, not from a real paper]"
 _OCR_LABEL = "[real, from photo/scan, wording may be off]"
 
@@ -151,27 +142,17 @@ def _keys(obj: dict, allowed: set[str], where: str) -> None:
         raise InputError(f"{where}: unknown field {_short(extra[0])}")
 
 
-def _ref(value, where: str, with_question: bool) -> dict:
-    """A ``{path, page[, question]}`` reference, checked for shape only."""
+def _quote(value, where: str) -> None:
+    """A ``{path, page}`` quote claim, checked for shape only."""
     if not isinstance(value, dict):
         raise InputError(f"{where} must be an object")
-    _keys(value, {"path", "page", "question"} if with_question else {"path", "page"}, where)
+    _keys(value, {"path", "page"}, where)
     if "path" not in value:
         raise InputError(f"{where}.path is required")
     if "page" not in value:
         raise InputError(f"{where}.page is required")
-    ref = {"path": _text(value["path"], f"{where}.path", None), "page": _page(value["page"], f"{where}.page")}
-    if with_question and "question" in value:
-        ref["question"] = _text(value["question"], f"{where}.question", _QUESTION_MAX, required=False)
-    return ref
-
-
-def _in_range(rows: dict, ref: dict) -> tuple[str, int | None, str] | None:
-    """The registry row of ``ref`` when it exists and its page is within the row's pages."""
-    row = rows.get(ref["path"])
-    if row is None or (row[1] is not None and ref["page"] > row[1]):
-        return None
-    return row
+    _text(value["path"], f"{where}.path", None)
+    _page(value["page"], f"{where}.page")
 
 
 def _inside(course_dir: Path, path: str) -> bool:
@@ -237,7 +218,7 @@ def _gate_item(item, n: int, rows: dict, course_dir: Path, index: Path, today: s
             result["original"] = {"path": str(course_dir / source), "page": page}
 
     if "quote" in item:
-        _ref(item["quote"], f"{where}.quote", with_question=False)
+        _quote(item["quote"], f"{where}.quote")
 
     verdicts = item.get("verdicts", [])
     if not isinstance(verdicts, list):
@@ -251,26 +232,22 @@ def _gate_item(item, n: int, rows: dict, course_dir: Path, index: Path, today: s
         if k < len(verdicts) and verdict == "correct":
             raise InputError(f"{where}.verdicts[{k + 1}] follows a correct verdict; a correct item is not rechecked")
 
-    compare = _ref(item["compare"], f"{where}.compare", with_question=True) if "compare" in item else None
     dispute = _text(item["dispute"], f"{where}.dispute", ingest.TOPIC_MAX_CHARS, required=False) \
         if "dispute" in item else ""
 
+    said = None
     if not verdicts:
         decision = "verify"
     elif verdicts[-1] == "correct":
         decision = "show"
+        said = verdicts[0] if len(verdicts) > 1 else None
     elif len(verdicts) < VERIFIER_RETRIES + 1:
         decision = "retry"
     else:
-        reference = compare if compare is not None and _in_range(rows, compare) is not None else None
-        decision = "flagged" if reference else "dropped"
-        line = f"- {today} item {n} ({topic}): {decision}, checker said {verdicts[-1]}"
-        if reference:
-            tail = f" p.{reference['page']}" + (f" {reference['question']}" if reference.get("question") else "")
-            result["flag"] = (f"⚠ my checker disagrees on {dispute or 'this answer'}, compare with "
-                              f"`{reference['path']}`{tail}")
-            line += f", compare {reference['path']}{tail}"
-        result["disagreement"] = line
+        decision, said = "dropped", verdicts[-1]
+    if said:
+        result["disagreement"] = (f"- {today} item {n} ({topic}): {'fixed' if decision == 'show' else decision}, "
+                                  f"checker said {said}" + (f", on {dispute}" if dispute else ""))
     result.update(needs_verification=True, decision=decision, counts_for_mastery=decision == "show")
     return result
 
@@ -288,8 +265,7 @@ def cmd_gate(data: dict) -> dict:
     results = [_gate_item(item, n, rows, course_dir, index, today) for n, item in enumerate(items, 1)]
     disagreements = [r.pop("disagreement") for r in results if "disagreement" in r]
     counts = {d: sum(1 for r in results if r["decision"] == d) for d in _DECISIONS}
-    words = {"show": "to show", "verify": "to verify", "retry": "to retry", "flagged": "flagged",
-             "dropped": "dropped"}
+    words = {"show": "to show", "verify": "to verify", "retry": "to retry", "dropped": "dropped"}
     parts = [f"{counts[d]} {words[d]}" for d in _DECISIONS if counts[d]]
     noun = "item" if len(results) == 1 else "items"
     return {"course_dir": str(course_dir), "results": results,
@@ -300,7 +276,7 @@ def cmd_gate(data: dict) -> dict:
 
 
 COMMANDS = {
-    "gate": (cmd_gate, "label answer-key items and decide show, verify, retry, flagged or dropped"),
+    "gate": (cmd_gate, "label answer-key items and decide show, verify, retry or dropped"),
 }
 
 

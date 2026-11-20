@@ -254,32 +254,35 @@ def test_last_correct_shows(home, cdir, verdicts):
     assert r["decision"] == "show" and r["counts_for_mastery"] is True and "flag" not in r
 
 
-def test_disputed_twice_with_compare_is_flagged(home, cdir):
-    out, days = dated(home, gate(practice(), practice(verdicts=["wrong", "ambiguous"], compare=COMPARE,
-                                                      dispute="step 3")))
+def test_disputed_twice_is_dropped_never_flagged(home, cdir):
+    """A question whose recheck also fails is dropped: there is no flagged state (#77)."""
+    out, days = dated(home, gate(practice(), practice(verdicts=["wrong", "ambiguous"], dispute="step 3")))
     r = out["results"][1]
-    assert r["decision"] == "flagged" and r["counts_for_mastery"] is False
-    assert r["flag"] == "⚠ my checker disagrees on step 3, compare with `past-papers/2024-final.pdf` p.3 Q4"
-    assert same_on_a_day(out["disagreements"], days, "- {day} item 2 (DFA minimisation): flagged, checker said "
-                         "ambiguous, compare past-papers/2024-final.pdf p.3 Q4")
-    assert out["line"] == "Gate: 2 items, 1 to verify, 1 flagged."
-
-
-def test_flag_without_dispute_or_question(home, cdir):
-    out, days = dated(home, gate(practice(verdicts=["wrong", "wrong"], compare={"path": "slides/s1.pdf", "page": 5})))
-    assert out["results"][0]["flag"] == "⚠ my checker disagrees on this answer, compare with `slides/s1.pdf` p.5"
+    assert r["decision"] == "dropped" and r["counts_for_mastery"] is False and "flag" not in r
     assert same_on_a_day(out["disagreements"], days,
-                         "- {day} item 1 (DFA minimisation): flagged, checker said wrong, compare slides/s1.pdf p.5")
+                         "- {day} item 2 (DFA minimisation): dropped, checker said ambiguous, on step 3")
+    assert out["line"] == "Gate: 2 items, 1 to verify, 1 dropped."
 
 
-@pytest.mark.parametrize("extra", [{}, {"compare": {"path": "slides/missing.pdf", "page": 1}},
-                                   {"compare": {"path": "slides/s1.pdf", "page": 6}}])
-def test_no_reference_is_dropped(home, cdir, extra):
-    out, days = dated(home, gate(practice(verdicts=["wrong", "wrong"], **extra)))
+def test_dropped_without_dispute(home, cdir):
+    out, days = dated(home, gate(practice(verdicts=["wrong", "wrong"])))
     r = out["results"][0]
     assert r["decision"] == "dropped" and r["counts_for_mastery"] is False and "flag" not in r
     assert same_on_a_day(out["disagreements"], days, "- {day} item 1 (DFA minimisation): dropped, checker said wrong")
     assert out["line"] == "Gate: 1 item, 1 dropped."
+
+
+def test_a_key_fixed_on_recheck_is_shown_and_logged(home, cdir):
+    """A key the checker caught and the tutor fixed is shown, and the catch is logged."""
+    out, days = dated(home, gate(practice(verdicts=["wrong", "correct"], dispute="step 2"),
+                                 practice(verdicts=["correct"])))
+    assert [r["decision"] for r in out["results"]] == ["show", "show"]
+    assert same_on_a_day(out["disagreements"], days,
+                         "- {day} item 1 (DFA minimisation): fixed, checker said wrong, on step 2")
+
+
+def test_compare_is_not_an_input_field(home, cdir):
+    fails(home, gate(practice(verdicts=["wrong", "wrong"], compare=COMPARE)), "items[1]: unknown field")
 
 
 def test_verdicts_apply_to_quote_items(home, cdir):
@@ -300,7 +303,8 @@ def test_mixed_batch_numbers_and_line(home, cdir):
     assert [r["n"] for r in out["results"]] == [1, 2, 3, 4, 5]
     assert out["verify"] == [1, 2] and out["retry"] == [3]
     assert out["line"] == "Gate: 5 items, 1 to show, 2 to verify, 1 to retry, 1 dropped."
-    assert len(out["disagreements"]) == 1 and "item 5 " in out["disagreements"][0]
+    assert [line.split(": ", 1)[1].split(",")[0] for line in out["disagreements"]] == ["fixed", "dropped"]
+    assert "item 4 " in out["disagreements"][0] and "item 5 " in out["disagreements"][1]
 
 
 UNSAFE = [("/etc/passwd", "past-papers", "4", "text"),
@@ -321,8 +325,6 @@ def unsafe(home, root, tmp_path):
 def test_registry_paths_outside_the_course_count_as_no_row(home, unsafe, path):
     fails(home, gate(real(source=path, page=1)), "items[1].source")
     assert one(home, practice(quote={"path": path, "page": 1}))["decision"] == "verify"
-    r = one(home, practice(verdicts=["wrong", "wrong"], compare={"path": path, "page": 1}))
-    assert r["decision"] == "dropped" and "flag" not in r
 
 
 def test_inside_paths_still_work_next_to_unsafe_rows(home, unsafe):
@@ -363,9 +365,7 @@ def test_inside_paths_still_work_next_to_unsafe_rows(home, unsafe):
     (practice(quote={"page": 1}), "items[1].quote.path"),
     (practice(quote={"path": "slides/s1.pdf", "page": 1, "question": "Q1"}), "items[1].quote: unknown field"),
     (practice(quote="slides/s1.pdf p.1"), "items[1].quote"),
-    (practice(compare={"path": "slides/s1.pdf", "page": -1}), "items[1].compare.page"),
-    (practice(compare={"path": "slides/s1.pdf", "page": 1, "question": "Q" * 41}), "items[1].compare.question"),
-    (practice(compare={"path": "slides/s1.pdf", "page": 1, "x": 1}), "items[1].compare: unknown field"),
+    (practice(compare={"path": "slides/s1.pdf", "page": 1}), "items[1]: unknown field"),
     ("not an object", "items[1]"),
 ])
 def test_bad_items_exit_2_naming_the_field(home, cdir, item, needle):
@@ -419,7 +419,7 @@ def test_writes_nothing(home, root, cdir):
     (cdir / "INDEX.md").write_text((cdir / "INDEX.md").read_text().replace("## Registry\n", "## registry\n\n"))
     before = snapshot(root)
     ok(home, gate(practice(), real(), real(source="past-papers/photo.jpg", page=1),
-                  practice(verdicts=["wrong", "wrong"], compare=COMPARE),
+                  practice(verdicts=["wrong", "correct"]),
                   practice(verdicts=["wrong", "wrong"])))
     fails(home, gate(real(source="slides/s1.pdf", page=1)))
     assert snapshot(root) == before
