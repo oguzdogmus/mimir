@@ -26,7 +26,7 @@ Every entry and row has at least one source, each one of:
 * ``prior-term:<path>``: a path with a registry row in the prior course's
   INDEX.md; allowed only when this fingerprint's ``prior_term:`` line says
   ``same professor`` (assumed or not) and ``<course>/.state/prior-term`` is a
-  symlink resolving to that prior course's ``.state/``;
+  symlink (or Windows junction) resolving to that prior course's ``.state/``;
 * ``debrief YYYY-MM-DD``: what the student reported after an exam.
 
 Computed markers: ``(tentative)`` when no source has ``text`` fidelity and
@@ -85,7 +85,10 @@ retake -- link a retaken course to its prior term, decide the professor.
     (``workspace.build_course``). ``<course>/.state/prior-term`` becomes a
     RELATIVE symlink to the prior ``.state/`` (so ``workspace.py relocate``
     keeps it valid); an existing link to that same target is kept, anything
-    else there exits 2. The prior professor is the prior fingerprint's
+    else there exits 2. On Windows without the symlink privilege it becomes a
+    directory junction instead, which holds an absolute path: a junction left
+    dangling by a relocate is replaced, one resolving to the prior ``.state/``
+    is kept. The prior professor is the prior fingerprint's
     ``professor:`` (blank or ``unknown`` = unknown). An input ``professor``
     of ``unknown`` counts as ``""``. Decision: ``""`` with a link and a
     decision already recorded for this prior course keeps that decision and
@@ -267,7 +270,7 @@ def source_context(root: Path, course_dir: Path, fp_text: str | None) -> tuple[d
     if parsed and parsed[2]:
         link = course_dir / ".state" / _LINK
         prior_state = root / parsed[0] / parsed[1] / ".state"
-        if link.is_symlink() and link.resolve() == prior_state.resolve():
+        if _is_link(link) and link.resolve() == prior_state.resolve():
             prior_index = root / parsed[0] / parsed[1] / "INDEX.md"
             prior = {"index": prior_index, "rows": ingest.registry(prior_index)}
         else:
@@ -374,11 +377,39 @@ def _set_key(text: str, key: str, value: str, after: tuple[str, ...]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _is_junction(path: Path) -> bool:
+    """A Windows directory junction: the prior-term link when symlinks need a privilege."""
+    try:
+        return getattr(os.lstat(path), "st_reparse_tag", 0) == 0xA0000003  # IO_REPARSE_TAG_MOUNT_POINT
+    except OSError:
+        return False
+
+
+def _is_link(path: Path) -> bool:
+    return path.is_symlink() or _is_junction(path)
+
+
+def _remove_link(link: Path) -> None:
+    os.rmdir(link) if _is_junction(link) else link.unlink()  # rmdir drops a junction, never its target
+
+
+def _make_link(target: str, link: Path, prior_state: Path) -> None:
+    """The relative symlink ``link`` -> ``target``; on Windows without the symlink
+    privilege, a junction to ``prior_state`` instead (junctions hold absolute paths)."""
+    try:
+        os.symlink(target, link, target_is_directory=True)
+    except OSError as exc:
+        if getattr(exc, "winerror", None) != 1314:  # ERROR_PRIVILEGE_NOT_HELD
+            raise
+        import _winapi
+        _winapi.CreateJunction(str(prior_state.resolve()), str(link))
+
+
 def _rollback(link: Path | None, created: list[str]) -> None:
     """Undo a failed retake: the new link, then everything build_course created (newest first)."""
     if link is not None:
         try:
-            link.unlink()
+            _remove_link(link)
         except OSError:
             pass
     for path in reversed(created):
@@ -425,8 +456,10 @@ def cmd_retake(data: dict) -> dict:
         raise InputError(f"the prior course has no .state/ folder at {prior_state}")
     link = course_dir / ".state" / _LINK
     target = os.path.relpath(prior_state, link.parent)
-    linked = link.is_symlink() and os.readlink(link) == target
-    if not linked and (link.exists() or link.is_symlink()):
+    linked = (link.is_symlink() and os.readlink(link) == target) or \
+        (_is_junction(link) and link.resolve() == prior_state.resolve())
+    stale = not linked and _is_junction(link) and not link.exists()  # left dangling by a relocate
+    if not linked and not stale and (link.exists() or link.is_symlink()):
         raise InputError(f"{link} already exists and is not a link to {prior_state}; nothing was changed")
     fp = course_dir / ".state" / "fingerprint.md"
     if fp.is_symlink():
@@ -461,8 +494,10 @@ def cmd_retake(data: dict) -> dict:
     made_link = False
     try:
         workspace.build_course(root, term, course, created)
+        if stale:
+            _remove_link(link)
         if not linked:
-            os.symlink(target, link, target_is_directory=True)
+            _make_link(target, link, prior_state)
             made_link = True
         if text != ingest.read_text(fp):
             ingest._write_atomic(fp, text)
