@@ -638,7 +638,7 @@ def test_symlinked_fingerprint_refused(root, home, prior, tmp_path, cmd):
     before = snapshot(root)
     fails(home, cmd, write(NEW) if cmd == "write" else retake("Dr. Ayse Kaya"), "is a symlink")
     assert snapshot(root) == before and real.read_text() == "outside\n"
-    assert os.readlink(path) == str(real)
+    assert path.is_symlink() and os.path.samefile(path, real)
 
 
 @pytest.mark.parametrize("prior_term, needle", [("2027-spring", "same term"),     # equal

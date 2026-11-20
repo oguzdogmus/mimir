@@ -511,9 +511,13 @@ def cmd_relocate(data: dict) -> dict:
     target.parent.mkdir(parents=True, exist_ok=True)
     result = {"from": str(current), "root": str(target),
               "line": f"Moved the learning folder from {current} to {target}."}
+    if target_existed and os.name == "nt":
+        target.rmdir()  # Windows rename never replaces a directory, even an empty one
     try:
         os.rename(current, target)  # POSIX rename may replace an empty directory
     except OSError as exc:
+        if target_existed and not target.exists():
+            target.mkdir()
         if exc.errno != errno.EXDEV:
             raise
     else:

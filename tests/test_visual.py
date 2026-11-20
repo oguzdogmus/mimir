@@ -386,7 +386,7 @@ def test_bad_sheet_payload(home, cdir, payload, needle):
 
 def test_name_at_the_limit(home, cdir):
     out = ok(home, "sheet", sheet({"text": "a"}, name="a" * 60))
-    assert out["path"].endswith("/" + "a" * 60 + ".html")
+    assert Path(out["path"]).name == "a" * 60 + ".html"
 
 
 # --- svg -----------------------------------------------------------------------------
@@ -699,7 +699,7 @@ def test_stdlib_plus_own_scripts_only():
 
 
 def test_vendored_katex_is_the_subset():
-    files = sorted(str(p.relative_to(KATEX)) for p in KATEX.rglob("*") if p.is_file())
+    files = sorted(p.relative_to(KATEX).as_posix() for p in KATEX.rglob("*") if p.is_file())
     fonts = [f for f in files if f.startswith("fonts/")]
     assert all(f.endswith(".woff2") for f in fonts) and len(fonts) == 20
     assert sorted(set(files) - set(fonts)) == ["LICENSE", "VERSION", "contrib/auto-render.min.js",

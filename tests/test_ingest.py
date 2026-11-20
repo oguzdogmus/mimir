@@ -413,7 +413,7 @@ def test_nested_zips_depth_limit(root, home):
         (inbox / name).unlink()
     make_zip(inbox / "l1.zip", {"a.pdf": text_pdf(), "l2.zip": level2})
     out = ok(home, "scan", {})
-    rel = sorted(str(Path(i["path"]).relative_to(inbox)) for i in out["items"])
+    rel = sorted(Path(i["path"]).relative_to(inbox).as_posix() for i in out["items"])
     assert rel == ["l1/a.pdf", "l1/l2/b.pdf", "l1/l2/l3/c.pdf"]
     assert out["skipped"] == [{"path": str(inbox / "l1/l2/l3/l4.zip"),
                                "reason": "nested archive deeper than 3 levels"}]
@@ -501,6 +501,7 @@ def test_index_upsert_and_escaping(root, home):
     assert topics(index) == ["| a\\|b | past-papers/a.pdf#page=2 |", "| a\\|b | past-papers/a.pdf#page=1 |"]
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows file names cannot contain |")
 def test_index_escapes_pipe_in_filename(root, home):
     paper = file_into(home, root, "a|b.pdf", text_pdf(1), "notes")
     ok(home, "index", index_payload({"path": str(paper)}))

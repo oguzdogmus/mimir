@@ -17,6 +17,7 @@ import pytest
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 WS = ROOT_DIR / "scripts" / "workspace.py"
+FS_ROOT = os.path.abspath(os.sep)  # "/" on POSIX, the current drive's root (e.g. "D:\\") on Windows
 TEMPLATES = ROOT_DIR / "assets" / "templates"
 
 _spec = importlib.util.spec_from_file_location("workspace", WS)
@@ -556,7 +557,7 @@ def test_init_with_explicit_root_repairs_bad_pointer(home, tmp_path):
     assert not pointer(home).exists()
 
 
-@pytest.mark.parametrize("value", ["~", "/", "~/.config", "~/.config/mimir", "~/.config/mimir/root"])
+@pytest.mark.parametrize("value", ["~", FS_ROOT, "~/.config", "~/.config/mimir", "~/.config/mimir/root"])
 def test_unsafe_roots_refused(home, value):
     fails(home, "init", {"root": value}, "not allowed")
     assert not pointer(home).exists()
@@ -568,7 +569,7 @@ def test_unsafe_root_alias_refused(home, tmp_path):
     fails(home, "init", {"root": str(alias)}, "not allowed")
     ok(home, "init", {})
     before = snapshot(home / "learning")
-    for value in ["~", "/", "~/.config", str(alias)]:
+    for value in ["~", FS_ROOT, "~/.config", str(alias)]:
         fails(home, "relocate", {"to": value}, "not allowed")
     assert snapshot(home / "learning") == before
     assert not pointer(home).exists()

@@ -316,7 +316,7 @@ def test_study_asks_exam_time_within_two_days_and_whether_today_is_still_ahead()
 
 def test_past_questions_checks_an_exam_today_and_passes_the_class_choice():
     exam_today = "Is your <name> today still ahead?"
-    holders = [str(p.relative_to(ROOT_DIR)) for p in MARKDOWN if exam_today in p.read_text(encoding="utf-8")]
+    holders = [p.relative_to(ROOT_DIR).as_posix() for p in MARKDOWN if exam_today in p.read_text(encoding="utf-8")]
     assert holders == ["skills/mimir-core-rules/SKILL.md"], holders  # defined once, reused
     past = _read("skills/mimir-past-questions/SKILL.md")
     assert "`ask_exam_ahead`" in past and "Exam today" in past and "Mode and dates" in past
@@ -503,7 +503,7 @@ def test_setup_offers_the_sampler_once_with_a_skip_before_setup_is_done():
 
 def test_only_setup_runs_sampler_events():
     for path in MARKDOWN:
-        rel = str(path.relative_to(ROOT_DIR))
+        rel = path.relative_to(ROOT_DIR).as_posix()
         text = path.read_text(encoding="utf-8")
         if rel not in (SETUP, SAMPLER):
             assert '"event": "sampler' not in text, rel
@@ -594,7 +594,7 @@ def test_whats_new_line_is_said_once_at_session_start_and_setup_marks_it_seen():
     # Every first session marks it seen, said or not, so a new lazy-setup user never hears it later.
     assert "either way" in start[start.index("`whats_new`"):start.index('{"event": "whats-new-seen"}')]
     for path in MARKDOWN:
-        rel = str(path.relative_to(ROOT_DIR))
+        rel = path.relative_to(ROOT_DIR).as_posix()
         text = path.read_text(encoding="utf-8")
         assert "sessions run until you say" not in text, rel  # the line comes from session.py, verbatim
         if rel not in (SETUP, "skills/mimir-study/references/session.md"):
