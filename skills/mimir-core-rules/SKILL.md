@@ -20,9 +20,9 @@ The checker always runs in the foreground: the turn waits for its reply, and it 
 - Claude Code: `Agent` with `subagent_type` `mimir:verifier` and `run_in_background: false`.
 - Codex: `spawn_agent` with `fork_turns` none and a message holding the body of `<mimir>/helpers/verifier.md` plus the batch, then `wait_agent`.
 - Antigravity: `define_subagent` from the body of `<mimir>/helpers/verifier.md`, then `invoke_subagent` with the batch.
-- Only when none of these exists, and no other native subagent tool either: the same-context check, a fresh separate pass following the helper body. Tell the student once per session: "Answer checks are running in this same context; an independent checker is unavailable." Record `checker: self` in the session log.
+- Only when none of these exists, and no other native subagent tool either: the same-context check, a fresh separate pass following the helper body over the same pack, its reply starting with the pack token like the checker's. Tell the student once per session: "Answer checks are running in this same context; an independent checker is unavailable." Settle it with `checker: self`; those answers still count toward mastery.
 
-Independent checks record `checker: independent` with the host and tool used. A failed dispatch is ambiguous, never a successful independent check.
+The batch is one line naming the evidence pack (`verified-items.md`, The check). An independent check is settled with `checker: independent`. A failed dispatch is settled with `dispatch_failed`, never as a successful check.
 
 ## Resolve the course
 Use this block wherever a skill resolves a course; keep the caller's action word and declaration timing.
@@ -94,18 +94,18 @@ The labels:
 
 Which shown questions carry one:
 - Every real question (`text` or `ocr`) and every item built on a `(tentative)` fingerprint line (with "from a photo/scan, may be off") opens with its label, every time it is shown.
-- **Plain practice item**: gate label `[practice, not from a real paper]`, decision `show`, built on no `(tentative)` line. It gets no label of its own. Instead, before the first one shown, say once per session: "Practice questions here are generated, not from a real paper, unless labelled otherwise."
+- **Plain practice item**: label `[practice, not from a real paper]`, decision `show`, built on no `(tentative)` line. It gets no label of its own. Instead, before the first one shown, say once per session: "Practice questions here are generated, not from a real paper, unless labelled otherwise."
 - Never present a generated question as real.
-- Real and practice question labels come from `<mimir>/scripts/verify.py gate`, copied verbatim; never write one yourself. The forecast label is used as listed above.
-- Every answer key (quiz, drill, step-reveal) passes `verify.py gate` and the checker (Checker dispatch) before the student sees it, one batch per question set plus at most one recheck batch (`<mimir>/skills/mimir-core-rules/references/verified-items.md`). A practice question may be shown while its check runs in the same turn; its key, worked answer and hint wait for a `correct` verdict, and a real question waits for its check. Only items whose final decision is `show` reach the student; anything else is not shown and is declared dropped or withdrawn.
+- Real and practice question labels come from `<mimir>/scripts/verify.py submit`, copied verbatim; never write one yourself. A real label needs the question's wording on the cited page, which `submit` checks. The forecast label is used as listed above.
+- Every answer key (quiz, drill, step-reveal) passes `verify.py submit`, the checker (Checker dispatch) and `verify.py settle` before the student sees it, one batch per question set plus at most one recheck batch (`<mimir>/skills/mimir-core-rules/references/verified-items.md`). A practice question, or a real question once `submit` has labelled it, may be shown while its check runs in the same turn; its key, worked answer and hint wait for a `correct` verdict. Only items whose decision is `show` reach the student; anything else is not shown and is declared dropped or withdrawn.
 - Wait line: "Checking my answers before you study them." Say it once per session, the first time a check runs while the student has nothing new to read in that turn; never with a time estimate.
 
 ## Mastery evidence
 - Status is `unseen`, `gap`, `shaky`, or `mastered`. No evidence, no entry: every non-unseen line carries evidence and a date.
 - Mastery changes only through `session.py record`. Before recording an answer or override, read `<mimir>/skills/mimir-core-rules/references/recording.md` once per session and follow its contract. In an answer turn that read comes after the feedback text, never before it. Two distinct eligible unassisted items, separated by date or including a real past-paper question, are required.
 - Answers after a frustration override follow the Frustration rule below.
-- A gated item changes mastery only when its gate result has `counts_for_mastery` true. Evidence names the item and its label, dated with the `date` of `session.py now`.
-- Log the gate's `disagreements` lines verbatim under `## Verifier disagreements` in the session log.
+- A question changes mastery only when the check ledger holds a settled `correct` check for it; `session.py record` looks that up itself. Evidence names the item and its label, dated with the `date` of `session.py now`.
+- The checker's disagreements are logged once, at the session close, from `verify.py summary` (`session-close.md`).
 - Readiness claims cite `mastery.md` evidence. No flattery.
 
 ## Frustration rule

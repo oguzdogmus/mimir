@@ -105,8 +105,27 @@ def test_verification_dispatch_and_provenance_contract():
     helper = (ROOT_DIR / "helpers/verifier.md").read_text()
     assert "checker: self" in core and "checker: independent" in core
     assert "once per session" in core
-    assert "pdftext.py" in helper and "ambiguous" in helper
-    assert "Bash" in frontmatter(ROOT_DIR / "helpers/verifier.md")["tools"]
+    assert "ambiguous" in helper and "evidence pack" in helper and "Pack token" in helper
+    assert "Read the pack and the files it names, nothing else." in helper
+    # The pack carries the page text, so the checker needs no shell on Claude Code (#78).
+    assert frontmatter(ROOT_DIR / "helpers/verifier.md")["tools"] == "Read, Grep, Glob"
+    assert "<pack token>\nN | verdict | reason" in helper
+
+
+def test_nothing_refers_to_the_gate_a_typed_gate_object_or_the_fake_real_cell():
+    """#78: the check ledger replaced `verify.py gate`; labels are checked by script, so the
+    checker's fake-real cell is gone, and record reads the ledger instead of a typed gate."""
+    for path in MARKDOWN + [ROOT_DIR / "README.md"]:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not re.search(r"verify\.py\W+gate|\bgate\b|\bgated\b|fake.real|real_past_paper|"
+                                 r"counts_for_mastery", line, re.I), f"{path}:{n}: {line.strip()[:100]}"
+    flow = _read(VERIFIED)
+    for step in ("verify.py submit", "verify.py settle", "verify.py read", "verify.py concede"):
+        assert f"`{step}`" in flow or step.split()[1] in flow, step
+    assert "pasted unchanged" in flow and "Check the evidence pack at `<pack>`." in flow
+    assert "verify.py summary" in _read("skills/mimir-core-rules/references/session-close.md")
+    recording = _read(RECORDING)
+    assert '"gate"' not in recording and "settled `correct` check" in recording
 
 
 FORECAST = re.compile(r"delay_line|cost.of.delay|counterfactual|route_minutes|capacity_minutes|visual\.py delay"
@@ -646,7 +665,8 @@ def test_question_sets_cap_and_failed_check_lines():
     text = _read(VERIFIED)
     sets = text.split("## Question sets", 1)[1].split("\n## ", 1)[0]
     assert "at most 6 questions" in sets and "sets of one" in sets
-    assert "before any gate call or checker dispatch" in sets
+    assert "before any submit call or checker dispatch" in sets
+    assert "at least 8 words in a row" in sets
     assert "ends when its check has settled" in sets
     policy = text.split("## Check policy", 1)[1].split("\n## ", 1)[0]
     assert "before its check has finished" in policy and "never shown before" in policy
@@ -663,7 +683,7 @@ def test_every_question_flow_follows_the_set_rules_and_names_what_is_shown_at_on
     shown = {"skills/mimir-quiz/SKILL.md": "first question of the set",
              "skills/mimir-study/references/teaching.md": "explanation",
              "skills/mimir-study/references/urgent.md": "recipe of the first question type",
-             "skills/mimir-past-questions/SKILL.md": "wait line"}
+             "skills/mimir-past-questions/SKILL.md": "first real question"}
     for flow, needle in shown.items():
         assert "at once" in _read(flow) and needle in _read(flow), flow
     assert "first question of the set" in core_section("Knowledge gauge")

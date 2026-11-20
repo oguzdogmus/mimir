@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.0
+
+Scripts now own the answer-key check. Before, `verify.py gate` was stateless and `session.py record` trusted a `gate` object the tutor typed, so no script noticed a skipped checker ([#23](https://github.com/oguzdogmus/mimir/issues/23)). Tracked in [#78](https://github.com/oguzdogmus/mimir/issues/78); design in [the design doc](docs/trust-every-session-design.md), sections 5 to 7.
+
+### Major changes
+
+- **Check ledger.** Every prepared question goes into one script-owned file per session in `<course>/.state/checks/`, with its full text, key, hint, sources, label, verdicts with reasons and checker kind. It is kept after the session. A question earns mastery credit only with a settled `correct` check there.
+- **Evidence pack.** The checker reads one pack per question set: the questions and keys, the text of every cited PDF page, small text and Markdown sources whole (longer ones by path), the paths of scans and the Notation section of the course fingerprint. This closes [#2](https://github.com/oguzdogmus/mimir/issues/2): in 24 of 73 real runs the checker had opened no source. On Claude Code the checker loses shell access and keeps Read, Grep and Glob.
+- **Pack token.** A checker reply must start with the pack's token; without it the batch stays unsettled. A tutor that skips the checker can no longer settle a batch by accident. The ledger stops forgetting, not lying: the README states this trust boundary.
+- **Real-paper labels by script.** A real question must carry at least 8 words in a row from the cited page (or the page after it); only then does it get `[real: <file>, p.<N>]`. A page with no text layer keeps the cautious scan label. A real question can now be shown at once, like a practice question, before its check finishes. The checker's fake-real cell is gone ([#23](https://github.com/oguzdogmus/mimir/issues/23) finding 3).
+- **Escapes and catches.** A key the student challenged and the tutor conceded is recorded as an escape, and `verify.py summary` counts questions checked, catches and escapes for the keep-or-drop review of the check after the exam season.
+
+### Script changes
+
+- `verify.py gate` is removed. New: `verify.py submit` (a question set as full text: labels, ledger, evidence pack), `settle` (the checker's reply, pasted unchanged, with `checker` `independent` or `self`, or `dispatch_failed`), `read` (one prepared question), `concede` (an escape) and `summary` (counts and disagreement lines).
+- `session.py record` no longer accepts `gate` or `real_past_paper`. It looks the question up in the session's ledger by `item`; the label and the real-paper flag come from there. Frustration overrides need no ledger entry.
+- The checker (`helpers/verifier.md`) takes the path of a pack and replies with the token line, then `N | verdict | reason` per question.
+
+### Updating
+
+Update or reinstall Mimir through your agent's plugin manager. Saved progress carries over. Session logs of earlier versions keep their disagreement lines; the ledger starts with the first session on 0.5.0.
+
 ## 0.4.1
 
 Less waiting between questions. Measured on real study sessions, the checker was never the slow part: the tutor's own steps before the student had anything to read were. This release changes how sessions run, not the script contracts, except where listed. Tracked in [#77](https://github.com/oguzdogmus/mimir/issues/77); design in [the design doc](docs/trust-every-session-design.md), sections 1 to 4 and 9.
