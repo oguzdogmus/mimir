@@ -957,7 +957,7 @@ def test_debrief_due_writes_nothing(home, root):
 
 def test_stdlib_only_and_only_now_reads_the_clock():
     tree = ast.parse(SS.read_text(encoding="utf-8"))
-    local = {"workspace", "plan", "ingest"}
+    local = {"workspace", "plan", "ingest", "verify"}
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module and node.module != "__future__":
             assert node.module.split(".")[0] in sys.stdlib_module_names | local
@@ -1291,11 +1291,168 @@ def test_practice_only_session_accounting(home, root, monkeypatch, kind):
         assert result["cram"]["actual_minutes"] == 30
 
 
+REC_LOG = "2026-10-17-0900"
+
+
+def record_course(home: Path, **kw) -> Path:
+    """A course with this session's log, as a study or quiz session creates it at its start."""
+    cdir = course(home, **kw)
+    log(cdir, REC_LOG, f"## Session\nstarted: {NOW}\nclass: Standard (calm)\n")
+    return cdir
+
+
+def results(cdir: Path) -> list[str]:
+    """The lines of the log's ``## Results`` sections, in order."""
+    out, inside = [], False
+    for line in (cdir / ".state" / "logs" / f"{REC_LOG}.md").read_text(encoding="utf-8").splitlines():
+        if line.startswith("#"):
+            inside = line == "## Results"
+        elif inside and line.strip():
+            out.append(line)
+    return out
+
+
+VF = SCRIPTS / "verify.py"
+IG = SCRIPTS / "ingest.py"
+PRACTICE = "[practice, not from a real paper]"
+SCAN = "[real, from photo/scan, wording may be off]"
+
+
+def checked(home: Path, *items: str, verdict: str = "correct", session: str = "s1", topic: str = "Heaps",
+            real: bool = False, course: str = "CS201 Theory") -> None:
+    """Check ``items`` through the check ledger (verify.py submit, then settle with ``verdict``), as a
+    question set's check leaves them. A real item cites a past-paper photo, so its label needs no text."""
+    if real:
+        cdir = Path(_ok(WS, home, "course", {"term": TERM, "course": course})["course_dir"])
+        photo = cdir / "past-papers" / "photo.jpg"
+        if not photo.exists():
+            photo.parent.mkdir(exist_ok=True)
+            photo.write_bytes(b"\xff\xd8\xff\xe0 jpeg")
+            _ok(IG, home, "index", {"term": TERM, "course": course, "files": [{"path": str(photo)}]})
+    question = {"topic": topic, "origin": "real", "source": "past-papers/photo.jpg", "page": 1} if real else \
+        {"topic": topic, "origin": "practice"}
+    sub = _ok(VF, home, "submit", {"term": TERM, "course": course, "session": session, "questions": [
+        {"item": item, "question": f"Question {item}?", "key": f"Key {item}.", **question} for item in items]})
+    token = next(line.split(":", 1)[1].strip() for line in Path(sub["pack"]).read_text().splitlines()
+                 if line.startswith("Pack token:"))
+    lines = [token] + [f"{n} | {verdict} | reason" for n in range(1, len(items) + 1)]
+    _ok(VF, home, "settle", {"term": TERM, "course": course, "session": session, "batch": sub["batch"],
+                             "checker": "independent", "reply": "\n".join(lines)})
+
+
+def attempt(**kw) -> dict:
+    return {**dict(term=TERM, course="CS201 Theory", topic="Heaps", item="heaps-practice-1", log=REC_LOG,
+                   outcome="unassisted", session="s1", date="2026-10-17"), **kw}
+
+
+def test_record_writes_one_results_line_in_the_session_log(home, root):
+    cdir = record_course(home)
+    checked(home, "heaps-practice-1")
+    out = ok(home, "record", attempt())
+    assert out["recorded"] is True
+    assert results(cdir) == ["- heaps-practice-1 [practice, not from a real paper] (Heaps): unassisted solve"]
+    text = (cdir / ".state/logs" / f"{REC_LOG}.md").read_text(encoding="utf-8")
+    assert text.startswith(f"## Session\nstarted: {NOW}\nclass: Standard (calm)\n")
+    assert text.count("## Results") == 1
+
+
+def test_a_retried_record_and_a_duplicate_write_no_second_line(home, root):
+    cdir = record_course(home)
+    checked(home, "heaps-practice-1")
+    ok(home, "record", attempt(outcome="wrong"))
+    for _ in range(2):
+        assert ok(home, "record", attempt(outcome="wrong"))["duplicate"] is True
+    ok(home, "record", attempt(outcome="unassisted"))
+    assert ok(home, "record", attempt(outcome="unassisted"))["duplicate"] is True
+    assert results(cdir) == ["- heaps-practice-1 [practice, not from a real paper] (Heaps): wrong",
+                             "- heaps-practice-1 [practice, not from a real paper] (Heaps): assisted solve"]
+
+
+def test_record_keeps_one_results_section_per_session(home, root):
+    """A later section (topic timings) does not split the results: new lines join the existing section."""
+    cdir = record_course(home)
+    checked(home, "heaps-practice-1", "heaps-practice-2")
+    path = cdir / ".state/logs" / f"{REC_LOG}.md"
+    ok(home, "record", attempt())
+    path.write_text(path.read_text() + "\n## Topic timings\n| topic | started | ended |\n|---|---|---|\n")
+    ok(home, "record", attempt(item="heaps-practice-2", outcome="assisted"))
+    text = path.read_text()
+    assert text.count("## Results") == 1 and text.index("## Results") < text.index("## Topic timings")
+    assert results(cdir)[1] == "- heaps-practice-2 [practice, not from a real paper] (Heaps): assisted solve"
+
+
+def test_record_starts_a_new_results_section_for_a_later_session_in_the_same_log(home, root):
+    cdir = record_course(home)
+    checked(home, "heaps-practice-1")
+    checked(home, "heaps-practice-2", session="s2")
+    path = cdir / ".state/logs" / f"{REC_LOG}.md"
+    ok(home, "record", attempt())
+    path.write_text(path.read_text() + f"ended: {NOW}\n\n## Quiz\nstarted: 2026-10-17T09:30:00+03:00\n")
+    ok(home, "record", attempt(session="s2", item="heaps-practice-2"))
+    text = path.read_text()
+    assert text.count("## Results") == 2 and text.rindex("## Results") > text.index("## Quiz")
+
+
+def test_record_logs_overrides_and_answers_after_one(home, root):
+    """A frustration override needs no ledger entry; the answers after it still need their check."""
+    cdir = record_course(home)
+    checked(home, "heaps-practice-2")
+    ok(home, "record", attempt(item="topic:Heaps", outcome="assisted", override=True))
+    assert ok(home, "record", attempt(item="heaps-practice-2"))["recorded"] is False
+    ok(home, "record", attempt(item="heaps-practice-2"))  # a retry adds no second line
+    assert results(cdir) == [
+        "- Heaps frustration override: answer given",
+        "- heaps-practice-2 [practice, not from a real paper] (Heaps): after frustration override, not counted"]
+
+
+@pytest.mark.parametrize("how", ["never submitted", "waiting for its check", "retry", "dropped",
+                                 "other session"])
+def test_record_gives_no_mastery_credit_without_a_settled_correct_check(home, root, how):
+    cdir = record_course(home)
+    if how == "waiting for its check":
+        _ok(VF, home, "submit", {"term": TERM, "course": "CS201 Theory", "session": "s1", "questions": [
+            {"item": "heaps-practice-1", "topic": "Heaps", "origin": "practice", "question": "q", "key": "k"}]})
+    elif how in ("retry", "dropped"):
+        checked(home, "heaps-practice-1", verdict="wrong")
+        if how == "dropped":
+            checked(home, "heaps-practice-1", verdict="ambiguous")
+    elif how == "other session":
+        checked(home, "heaps-practice-1", session="s2")
+    out = ok(home, "record", attempt())
+    assert out["recorded"] is False and out["line"] == "Attempt does not count: the item has no correct check."
+    assert results(cdir) == []
+    assert ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"] == []
+
+
+def test_record_takes_the_real_paper_flag_and_label_from_the_ledger(home, root):
+    """Two unassisted solves on one day master a topic only when one is a real past-paper question,
+    and the ledger, not the tutor, says which question is real."""
+    cdir = record_course(home)
+    checked(home, "a", "b")
+    checked(home, "photo.jpg:p1:q1", real=True)
+    ok(home, "record", attempt(item="a"))
+    assert ok(home, "record", attempt(item="b"))["status"] == "shaky"
+    assert ok(home, "record", attempt(item="photo.jpg:p1:q1"))["status"] == "mastered"
+    assert results(cdir)[-1] == f"- photo.jpg:p1:q1 {SCAN} (Heaps): unassisted solve"
+    fails(home, "record", attempt(item="c", real_past_paper=True), "unknown field 'real_past_paper'")
+
+
+@pytest.mark.parametrize("change,needle", [
+    ({"log": None}, "log"), ({"log": "notes"}, "log"), ({"log": "2026-10-17-1000"}, "not found"),
+])
+def test_record_needs_this_sessions_log(home, root, change, needle):
+    record_course(home)
+    payload = attempt(**change)
+    if change["log"] is None:
+        del payload["log"]
+    fails(home, "record", payload, needle)
+
+
 def test_record_requires_distinct_items_and_day(home, root):
-    course(home)
-    payload = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-                   gate={"decision": "show", "counts_for_mastery": True},
-                   outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17")
+    record_course(home)
+    checked(home, "a", "b")
+    checked(home, "c", session="s2")
+    payload = attempt(item="a")
     assert ok(home, "record", payload)["status"] == "shaky"
     assert ok(home, "record", payload)["duplicate"] is True
     assert ok(home, "record", {**payload, "item": "b"})["status"] == "shaky"
@@ -1305,10 +1462,9 @@ def test_record_requires_distinct_items_and_day(home, root):
 def test_record_first_miss_once_then_right_after_guidance_as_assisted(home, root):
     """Standard retries: the first wrong answer on an item records once, repeated
     misses on it record nothing, and the later right answer records as assisted."""
-    course(home)
-    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "show", "counts_for_mastery": True},
-             outcome="wrong", real_past_paper=False, session="s1", date="2026-10-17")
+    record_course(home)
+    checked(home, "a")
+    p = attempt(item="a", outcome="wrong")
     assert ok(home, "record", p)["status"] == "gap"
     for _ in range(2):
         again = ok(home, "record", p)
@@ -1323,10 +1479,10 @@ def test_record_first_miss_once_then_right_after_guidance_as_assisted(home, root
 
 
 def test_record_right_after_a_miss_on_the_same_item_never_counts_unassisted(home, root):
-    course(home)
-    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "show", "counts_for_mastery": True},
-             outcome="wrong", real_past_paper=False, session="s1", date="2026-10-17")
+    record_course(home)
+    checked(home, "a")
+    checked(home, "a", session="s2")
+    p = attempt(item="a", outcome="wrong")
     ok(home, "record", p)
     assert ok(home, "record", {**p, "outcome": "unassisted"})["recorded"] is True
     row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
@@ -1339,29 +1495,33 @@ def test_record_right_after_a_miss_on_the_same_item_never_counts_unassisted(home
 
 
 @pytest.mark.parametrize("change,status,recorded", [
-    ({"item": "b", "real_past_paper": True}, "mastered", True),
-    ({"item": "a", "real_past_paper": True, "session": "s2"}, "shaky", True),
+    ({"item": "real"}, "mastered", True),
+    ({"item": "a", "session": "s2"}, "shaky", True),  # the same item again, real this time
     ({"item": "b", "outcome": "assisted"}, "shaky", True),
     ({"item": "b", "outcome": "wrong"}, "gap", True),
-    ({"item": "b", "gate": {"decision": "flagged", "counts_for_mastery": False}}, "shaky", False),
-    ({"item": "b", "gate": {"decision": "drop", "counts_for_mastery": True}}, "shaky", False),
+    ({"item": "pending"}, "shaky", False),
+    ({"item": "caught"}, "shaky", False),
 ])
 def test_record_boundaries(home, root, change, status, recorded):
-    course(home)
-    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "show", "counts_for_mastery": True},
-             outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17")
+    cdir = record_course(home)
+    checked(home, "a", "b")
+    checked(home, "real", real=True)
+    checked(home, "a", session="s2", real=True)
+    checked(home, "caught", verdict="wrong")
+    _ok(VF, home, "submit", {"term": TERM, "course": "CS201 Theory", "session": "s1", "questions": [
+        {"item": "pending", "topic": "Heaps", "origin": "practice", "question": "q", "key": "k"}]})
+    p = attempt(item="a")
     ok(home, "record", p)
     r = ok(home, "record", {**p, **change})
     assert (r["status"], r["recorded"]) == (status, recorded)
 
 
 def test_record_override_legacy_and_recent(home, root):
-    c = course(home, mastery=[("Heaps", "mastered", "2026-10-01", 2, 5)])
+    c = record_course(home, mastery=[("Heaps", "mastered", "2026-10-01", 2, 5)])
     original = (c / ".state/mastery.md").read_text()
-    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "show", "counts_for_mastery": True},
-             outcome="wrong", real_past_paper=True, session="s1", date="2026-10-17")
+    checked(home, "a", "b", real=True)
+    checked(home, "b", "c", session="s2", real=True)
+    p = attempt(item="a", outcome="wrong")
     assert ok(home, "record", p)["status"] == "shaky"
     ok(home, "record", {**p, "override": True})
     assert not ok(home, "record", {**p, "item": "b", "outcome": "unassisted"})["recorded"]
@@ -1377,32 +1537,24 @@ def test_record_override_legacy_and_recent(home, root):
 @pytest.mark.parametrize("change,field", [
     ({"date": "2026-02-30"}, "date"), ({"outcome": "correct"}, "outcome"),
     ({"item": ""}, "item"), ({"session": "\n"}, "session"),
-    ({"real_past_paper": 1}, "real_past_paper"),
-    ({"gate": {"decision": "show", "counts_for_mastery": 1}}, "gate"),
+    ({"override": 1}, "override"),
+    ({"gate": {"decision": "show", "counts_for_mastery": True}}, "unknown field 'gate'"),
 ])
 def test_record_invalid(home, root, change, field):
-    course(home)
-    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "show", "counts_for_mastery": True},
-             outcome="unassisted", real_past_paper=False, session="s1", date="2026-10-17")
-    fails(home, "record", {**p, **change}, field)
+    record_course(home)
+    fails(home, "record", {**attempt(item="a"), **change}, field)
 
 
 def test_record_initialization_and_legacy_evidence(home, root):
-    course(home, mastery=[("Heaps", "shaky", "2026-10-01", 0, 1)])
+    record_course(home, mastery=[("Heaps", "shaky", "2026-10-01", 0, 1)])
     init = dict(term=TERM, course="CS201 Theory", topic="Graphs", initialize=True)
     assert ok(home, "record", init)["status"] == "unseen"
     assert ok(home, "record", init)["duplicate"]
-    p = dict(term=TERM, course="CS201 Theory", topic="Heaps", item="a",
-             gate={"decision": "flagged", "counts_for_mastery": False},
-             outcome="assisted", real_past_paper=False, session="s1", date="2026-10-17", override=True)
-    assert not ok(home, "record", p)["recorded"]
-    assert not ok(home, "record", {**p, "gate": {"decision": "drop", "counts_for_mastery": False}})["recorded"]
-    ok(home, "record", {**p, "gate": {"decision": "show", "counts_for_mastery": True}})
+    p = attempt(item="explain:heaps", outcome="assisted", override=True)
+    assert ok(home, "record", p)["recorded"]  # an override needs no ledger entry
     result = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))
     assert "2026-10-01: ev" in result["topics"][0]["evidence"]
-    assert ok(home, "record", {**p, "session": "s2", "explanation_only": True,
-                              "gate": {"decision": "drop", "counts_for_mastery": False}})["recorded"]
+    assert ok(home, "record", {**p, "session": "s2", "explanation_only": True})["recorded"]
 
 
 def test_start_class_ignores_route_size_and_topic_times(home, root):
@@ -1652,9 +1804,9 @@ def test_gauge_answers_record_unassisted_and_leave_teaching_settings_alone(home,
     """One right gauge answer never marks a topic mastered, and the gauge is no preference evidence."""
     cdir = course(home, mastery=TWO_LEFT)
     log(cdir, GAUGE_LOG, session_log(NOW))
-    answer = dict(term=TERM, course="CS201 Theory", topic="Sorting", item="gauge:sorting:1",
-                  gate={"decision": "show", "counts_for_mastery": True},
-                  outcome="unassisted", real_past_paper=False, session=GAUGE_LOG, date="2026-10-17")
+    checked(home, "gauge:sorting:1", session=GAUGE_LOG, topic="Sorting")
+    answer = dict(term=TERM, course="CS201 Theory", topic="Sorting", item="gauge:sorting:1", log=GAUGE_LOG,
+                  outcome="unassisted", session=GAUGE_LOG, date="2026-10-17")
     assert ok(home, "record", answer)["status"] == "shaky"
     ok(home, "gauge", gauge_args(cdir))
     assert not (root / ".state" / session.PREFS_FILE).exists()

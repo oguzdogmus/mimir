@@ -357,12 +357,29 @@ progress -- what Mimir believes the student knows. Read-only; never calls plan.p
     ``courses`` as ``start``'s, every other field null.
 
 record -- persist an eligible answer or a frustration override.
-    Required: term, course, topic, item (stable identity), gate (the verifier
-    result), outcome (unassisted|assisted|wrong), real_past_paper (boolean),
-    session (unique identity), date (YYYY-MM-DD). Optional override and
-    explanation_only booleans distinguish control events from item attempts.
+    Required: term, course, topic, item (stable identity: the ``item`` the
+    question had in ``verify.py submit``), outcome (unassisted|assisted|wrong),
+    session (unique identity, the same as in ``verify.py submit``), date
+    (YYYY-MM-DD), log (this session's log name from ``session.py now``; the
+    log must exist). Optional override and explanation_only booleans
+    distinguish control events from item attempts.
+    An answer is looked up in the session's check ledger (``verify.py``) by its
+    item: only a question whose check settled ``correct`` earns mastery credit;
+    any other (not in the ledger, waiting for its check, retry or dropped)
+    returns "Attempt does not count: the item has no correct check." and
+    records nothing. The label and the real-paper flag come from the ledger
+    (a real question counts as a real past-paper solve). A frustration
+    override (with or without explanation_only) needs no ledger entry.
     Per session, item and event, the first wrong answer records once (later
     misses return duplicate) and a right answer after it records as assisted.
+    Each recorded answer adds one line under ``## Results`` in the log's last
+    session block (from its last ``started:`` line; the section is created at
+    the end when that block has none): ``- <item> <label> (<topic>):
+    <unassisted solve|assisted solve|wrong>``, ``- <topic> frustration
+    override: answer given`` for an override, and ``- <item> <label>
+    (<topic>): after frustration override, not counted`` for an answer the
+    override blocks. A duplicate, a retried call and an item without a correct
+    check write no line.
     Alternatively {term, course, topic, initialize: true} adds an unseen topic.
     Returns status, recorded, duplicate and line. See the shared recording
     reference for examples and audit D2/D5 for exact transition semantics.
@@ -521,6 +538,7 @@ from pathlib import Path
 
 import ingest
 import plan
+import verify
 import workspace
 from workspace import InputError, _check_keys, _has_control, _short, parse_segment, parse_term
 
@@ -1813,8 +1831,28 @@ def _initial_record(row: dict) -> dict:
             "blocked_session": "legacy" if row["frustration_override"] else None}
 
 
+def _log_result(path: Path, line: str) -> None:
+    """Add ``line`` to the ``## Results`` section of the log's last session block (from its last
+    ``started:`` line), once: an equal line already in that block is not written again. The line
+    joins that block's existing section, else a new section is appended at the end."""
+    lines = _text(path).splitlines()
+    begin = max((i for i, row in enumerate(lines) if row.startswith("started:")), default=0)
+    if line in lines[begin:]:
+        return
+    heading = next((i for i in range(begin, len(lines)) if lines[i].rstrip() == "## Results"), None)
+    if heading is None:
+        lines += ([""] if lines and lines[-1].strip() else []) + ["## Results", line]
+    else:
+        end = next((i for i in range(heading + 1, len(lines)) if lines[i].startswith("#")), len(lines))
+        while end > heading + 1 and not lines[end - 1].strip():
+            end -= 1
+        lines[end:end] = [line]
+    ingest._write_atomic(path, "\n".join(lines) + "\n")
+
+
 def cmd_record(data: dict) -> dict:
-    """Record an idempotent attempt; retain legacy text and atomic authoritative state."""
+    """Record an idempotent attempt and its line in the session log; retain legacy text and atomic
+    authoritative state."""
     if data.get("initialize") is True:
         _check_keys(data, {"term", "course", "topic", "initialize"})
         term, course = parse_term(data), parse_segment(data, "course")
@@ -1838,8 +1876,8 @@ def cmd_record(data: dict) -> dict:
         _save_record(path, text, state)
         return {"status": "unseen", "recorded": True, "duplicate": False,
                 "line": "Topic initialized."}
-    _check_keys(data, {"term", "course", "topic", "item", "gate", "outcome",
-                       "real_past_paper", "session", "date", "override", "explanation_only"})
+    _check_keys(data, {"term", "course", "topic", "item", "outcome", "log",
+                       "session", "date", "override", "explanation_only"})
     term, course = parse_term(data), parse_segment(data, "course")
     for field in ("topic", "item", "session", "date"):
         value = data.get(field)
@@ -1850,16 +1888,10 @@ def cmd_record(data: dict) -> dict:
         raise InputError("date must be YYYY-MM-DD")
     if data.get("outcome") not in ("unassisted", "assisted", "wrong"):
         raise InputError("outcome must be unassisted, assisted or wrong")
-    for field in ("real_past_paper", "override", "explanation_only"):
+    for field in ("override", "explanation_only"):
         if type(data.get(field, False)) is not bool:
             raise InputError(f"{field} must be boolean")
-    if "real_past_paper" not in data:
-        raise InputError("real_past_paper is required")
-    gate = data.get("gate")
-    if not isinstance(gate, dict) or gate.get("decision") not in ("show", "flagged", "drop", "verify"):
-        raise InputError("gate must contain a valid decision")
-    if type(gate.get("counts_for_mastery")) is not bool:
-        raise InputError("gate.counts_for_mastery must be boolean")
+    _, log_path = _session_log(data)
     folder = workspace.course_folder(ingest._workspace_root(), term, course)
     if not (folder / "INDEX.md").is_file():
         raise InputError("course has no INDEX.md")
@@ -1887,10 +1919,13 @@ def cmd_record(data: dict) -> dict:
         outcome = "assisted"
     identity = base + [kind]
     override = data.get("override", False)
-    explanation = override and data.get("explanation_only", False) and gate["decision"] == "drop"
-    if not explanation and (gate["decision"] != "show" or not gate["counts_for_mastery"]):
-        return {**result, "line": "Attempt does not count: item is flagged or not shown."}
+    checked = verify.ledger_question(folder, data["session"], data["item"])
+    if not override and (checked is None or checked["decision"] != "show"):
+        return {**result, "line": "Attempt does not count: the item has no correct check."}
+    label = checked["label"] if checked else ""
+    shown = f'- {data["item"]} {label}'.rstrip() + f' ({data["topic"]})'
     if entry["blocked_session"] == data["session"] and not override:
+        _log_result(log_path, f"{shown}: after frustration override, not counted")
         return {**result, "line": "After frustration override, not counted."}
     if entry.get("last_date") and data["date"] < entry["last_date"]:
         raise InputError("date precedes the latest recorded attempt")
@@ -1903,7 +1938,7 @@ def cmd_record(data: dict) -> dict:
         entry["solves"] = []
         evidence = "frustration override: answer given"
     else:
-        evidence = f'{data["item"]} {gate.get("label", "")}: {outcome}'.strip()
+        evidence = f'{data["item"]} {label}: {outcome}'.strip()
         if outcome == "wrong":
             row["status"] = "shaky" if row["status"] == "mastered" else "gap"
             entry["solves"] = []
@@ -1915,7 +1950,7 @@ def cmd_record(data: dict) -> dict:
             row["unassisted"] += 1
             entry["blocked_session"] = None
             row["frustration_override"] = ""
-            solve = {"item": data["item"], "date": data["date"], "real": data["real_past_paper"]}
+            solve = {"item": data["item"], "date": data["date"], "real": checked["real"]}
             entry["solves"].append(solve)
             qualifies = any(a["item"] != b["item"] and
                             (a["date"] != b["date"] or a["real"] or b["real"])
@@ -1925,6 +1960,8 @@ def cmd_record(data: dict) -> dict:
     row.update(evidence="; ".join(f'{e["date"]}: {e["evidence"]}' for e in entry["recent"]),
                evidence_date=data["date"], last_check=data["date"])
     state[key] = entry
+    _log_result(log_path, f'- {data["topic"]} frustration override: answer given' if override else
+                f'{shown}: {outcome if outcome == "wrong" else outcome + " solve"}')
     _save_record(path, text, state)
     return {"status": row["status"], "duplicate": False, "recorded": True,
             "line": f'{row["name"]}: {row["status"]}.'}
