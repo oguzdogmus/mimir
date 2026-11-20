@@ -259,10 +259,13 @@ def report_row(label: str, s: dict) -> str:
     conv, gen = s["by_kind"]["convention"], s["by_kind"]["general"]
     cost = f"${s['cost_usd_per_question']:.4f}" if s["cost_usd_per_question"] is not None else "–"
     u = s["usage_per_question"]
-    tokens = sum(v for k, v in u.items() if "output" not in k and "thinking" not in k)
+    # Input read, cached or not: Claude Code and Antigravity count cache reads apart from input_tokens;
+    # Codex's cached_input_tokens is part of input_tokens. output_tokens includes reasoning on every host.
+    tokens_in = sum(u.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens",
+                                          "cache_read_tokens"))
     return (f"| {label} | {s['caught']}/{s['planted']} ({s['catch_rate']}%) | {gen['caught']}/{gen['planted']} | "
             f"{conv['caught']}/{conv['planted']} | {s['rejected']}/{s['clean']} | {s['unsettled']} | "
-            f"{s['seconds_per_question']} s | {tokens:,} in / {sum(v for k, v in u.items() if 'output' in k or 'thinking' in k):,} out | {cost} |")
+            f"{s['seconds_per_question']} s | {tokens_in:,} in / {u.get('output_tokens', 0):,} out | {cost} |")
 
 
 def main(argv: list[str] | None = None) -> int:

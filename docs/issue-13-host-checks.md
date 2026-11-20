@@ -65,3 +65,17 @@ not complete protocol-level isolation from every possible delegation tool.
 The copy-denial test used real kernel permissions after dropping
 CAP_DAC_OVERRIDE in Antigravity's user namespace. It is distinct from host
 tool permission enforcement and from the unit tests' injected failures.
+
+## Turn shape: one look by eye per host (#79)
+
+The turn shape of #77 (feedback and the first question of a set written before the tool calls that follow them) helps only where a host shows text before those calls finish (`docs/trust-every-session-design.md` §2, §8). If a host holds the text back, the flow stays the same and the README speed claim leaves that host out.
+
+The JSON streams of the #79 acceptance runs (`docs/acceptance-79.md`) prove the event order: on Antigravity a finished reply step with the quiz declaration and Item 1 came before `verify.py submit`; on Codex the `agent_message` with the declaration and Item 1 came before the submit command, and each answer turn's feedback before `session.py record`. What each window draws, and when, needs a person at the screen. Ask a quiz of 3 questions in each host's own interface, from the GitHub install, and answer the first question.
+
+| Host | Does the feedback text appear before the turn ends? | Can the student type while the turn is still running? | Date, version, tester |
+|---|---|---|---|
+| Claude Code | pending (maintainer) | pending (maintainer) | |
+| Codex | pending (maintainer) | pending (maintainer) | |
+| Antigravity | pending (maintainer) | pending (maintainer) | |
+
+For context: on Claude Code the stream shows short verbatim lines before tool calls, but in the #77 and #79 runs the generated question or explanation was written only after the checks (check K, `docs/acceptance-77.md`), so a set-start turn there shows the question late whatever the window does.

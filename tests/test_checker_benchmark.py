@@ -137,3 +137,14 @@ def test_report_row_shows_catch_rates_by_kind_and_the_cost_per_question():
          "usage_per_question": {"input_tokens": 10, "cache_read_input_tokens": 990, "output_tokens": 50}}
     assert bench.report_row("claude-sonnet", s) == ("| claude-sonnet | 30/40 (75.0%) | 24/28 | 6/12 | 1/20 | 0 | 4.2 s "
                                                      "| 1,000 in / 50 out | $0.0123 |")
+
+
+def test_report_row_counts_each_hosts_tokens_once():
+    base = {"caught": 40, "planted": 40, "catch_rate": 100.0, "rejected": 0, "clean": 20, "unsettled": 0,
+            "by_kind": {"general": {"planted": 28, "caught": 28}, "convention": {"planted": 12, "caught": 12}},
+            "seconds_per_question": 5.5, "cost_usd_per_question": None}
+    codex = {"input_tokens": 15426, "cached_input_tokens": 12271, "output_tokens": 64, "reasoning_output_tokens": 2}
+    agy = {"input_tokens": 2069, "output_tokens": 1094, "thinking_tokens": 1052, "cache_read_tokens": 1631,
+           "total_tokens": 3163}
+    assert "| 15,426 in / 64 out | – |" in bench.report_row("codex", {**base, "usage_per_question": codex})
+    assert "| 3,700 in / 1,094 out | – |" in bench.report_row("agy", {**base, "usage_per_question": agy})
