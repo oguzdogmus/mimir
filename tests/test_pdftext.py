@@ -106,9 +106,21 @@ def test_non_pdf_files_are_refused(root, no_poppler):
 
 
 @pytest.mark.skipif(shutil.which("pdftotext") is None, reason="poppler not installed")
-def test_pdftotext_is_preferred_when_installed(root):
+def test_pdftotext_is_preferred_when_installed(root, monkeypatch):
+    calls, real_run = [], subprocess.run  # what pdftotext returned, for the failure message
+
+    def run(*args, **kwargs):
+        try:
+            proc = real_run(*args, **kwargs)
+        except BaseException as exc:
+            calls.append(repr(exc))
+            raise
+        calls.append((proc.args, proc.returncode, proc.stdout[:80], proc.stderr[:300]))
+        return proc
+
+    monkeypatch.setattr(pdftext.subprocess, "run", run)
     out = pdftext.cmd_pages({"path": str(course_pdf(root, text_pdf(2))), "first": 1, "last": 2})
-    assert out["engine"] == "pdftotext"
+    assert out["engine"] == "pdftotext", calls
     assert [t["text"] for t in out["text"]] == ["Pumping lemma", "Pumping lemma"]
 
 
