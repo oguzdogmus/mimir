@@ -69,6 +69,8 @@ def test_a_background_dispatch_fails_m_whether_asked_for_or_started_so():
     assert set(failures([text("Item 1"), checker(run_in_background=True)])) == {"M"}
     started = {"type": "system", "subtype": "task_started", "tool_use_id": "c1", "is_background": True}
     assert set(failures([text("Item 1"), checker("c1"), started])) == {"M"}
+    host_key = {"type": "system", "subtype": "task_started", "tool_use_id": "c1", "is_backgrounded": True}
+    assert set(failures([text("Item 1"), checker("c1"), host_key])) == {"M"}  # Claude Code's own field name
     foreground = {**started, "is_background": False}
     assert failures([text("Item 1"), checker("c1", run_in_background=False), foreground]) == {}
 

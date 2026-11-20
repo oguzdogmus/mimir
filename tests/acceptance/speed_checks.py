@@ -18,7 +18,8 @@ a subagent, which carry a ``parent_tool_use_id``, are skipped). Per turn:
 * **L** at most 2 checker dispatches in a turn (one batch per question set
   plus at most one recheck batch), and at most 6 items in any gate call.
 * **M** no checker dispatch in the background: neither ``run_in_background``
-  true on the ``Agent`` call nor ``is_background`` true when its task starts.
+  true on the ``Agent`` call nor ``is_backgrounded`` (or ``is_background``) true
+  when its task starts.
 
 A checker dispatch is an ``Agent`` (or ``Task``) call with ``subagent_type``
 ``mimir:verifier``. Prints one line per finding and a ``J K L M`` summary;
@@ -41,7 +42,7 @@ def steps(events: list[dict]) -> tuple[list[tuple], set[str]]:
     and the ids of tool calls whose task started in the background."""
     out, background = [], set()
     for ev in events:
-        if ev.get("type") == "system" and ev.get("subtype") == "task_started" and ev.get("is_background"):
+        if ev.get("type") == "system" and ev.get("subtype") == "task_started" and (ev.get("is_background") or ev.get("is_backgrounded")):
             background.add(ev.get("tool_use_id"))
         if ev.get("type") != "assistant" or ev.get("parent_tool_use_id"):
             continue
