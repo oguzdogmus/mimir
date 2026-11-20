@@ -358,16 +358,27 @@ def test_the_anchor_is_compared_ignoring_case_punctuation_and_unicode_form(home,
     assert ok(home, submit(real(question=worded.replace("of ﬁve", "of"))))["questions"][0]["label"].startswith("[real:")
 
 
+ACROSS = "the n is not regular continued from the previous page"  # 5 words end p.3, 5 start p.4
+
+
 def test_a_question_that_crosses_the_page_break_matches_on_the_page_after(home, cdir):
+    assert ok(home, submit(real(question=ACROSS)))["questions"][0]["label"] == "[real: past-papers/2024-final.pdf, p.3]"
+
+
+def test_a_question_wholly_on_the_page_after_does_not_confirm_the_cited_page(home, root, cdir):
+    before = snapshot(root)
     after = "Prove it: for every n at least zero show your full argument clearly."
-    assert ok(home, submit(real(question=after)))["questions"][0]["label"] == "[real: past-papers/2024-final.pdf, p.3]"
-    across = "the language of strings a to the n b to the n is not regular continued from the previous page"
-    assert ok(home, submit(real(item="x", question=across)))["questions"][0]["label"].startswith("[real:")
+    fails(home, submit(real(question=after)), "questions[1].question: the question is on p.4 of "
+          "past-papers/2024-final.pdf, not p.3; cite p.4")
+    assert snapshot(root) == before
+    assert ok(home, submit(real(page=4, question=after)))["questions"][0]["label"] == \
+        "[real: past-papers/2024-final.pdf, p.4]"
 
 
 def test_a_real_question_not_on_the_cited_page_is_refused_and_nothing_is_written(home, root, cdir):
     before = snapshot(root)
-    err = fails(home, submit(practice(), real(page=1)), "questions[2].question: the question is not on p.1 or p.2")
+    err = fails(home, submit(practice(), real(page=1)), "questions[2].question: the question does not start on p.1 "
+                "of past-papers/2024-final.pdf")
     assert "longest shared run" in err and "make the question practice" in err
     paraphrase = "Show with the pumping lemma that a^n b^n is not a regular language."
     fails(home, submit(real(question=paraphrase)), "8 needed")
@@ -377,7 +388,7 @@ def test_a_real_question_not_on_the_cited_page_is_refused_and_nothing_is_written
 
 
 def test_the_last_page_has_no_page_after_it(home, cdir):
-    fails(home, submit(real(page=4, question=Q2)), "not on p.4 or p.5")
+    fails(home, submit(real(page=4, question=Q2)), "does not start on p.4 of past-papers/2024-final.pdf (")
     assert ok(home, submit(real(page=4, question="for every n at least zero show your full argument")))
 
 
@@ -460,8 +471,7 @@ def test_the_pack_holds_questions_keys_page_text_markdown_scans_notation_and_the
 def test_the_pack_includes_the_page_after_only_when_the_anchor_needed_it(home, cdir):
     text = Path(ok(home, submit(real()))["pack"]).read_text()
     assert PAPER[3].decode() not in text
-    after = real(question="Prove it: for every n at least zero show your full argument clearly.")
-    text = Path(ok(home, submit({**after, "item": "y"}))["pack"]).read_text()
+    text = Path(ok(home, submit(real(item="y", question=ACROSS)))["pack"]).read_text()
     assert PAPER[2].decode() in text and PAPER[3].decode() in text
 
 

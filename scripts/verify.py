@@ -55,9 +55,10 @@ Question
     photo/scan, wording may be off]`` plus ``original`` ``{"path": <absolute
     file path>, "page": <page>}`` to show beside it. No label check.
   - else the question must carry an anchor: at least MIN_ANCHOR_WORDS (8)
-    words in a row copied from the paper. They are searched on the cited page
-    and the page after it (a question may cross a page break), or in the whole
-    file of a ``.md``, ``.txt`` or ``.tex`` paper. Words are compared after
+    words in a row copied from the paper. They must start on the cited page and
+    may run onto the page after it (a question may cross a page break); a
+    match wholly on the page after is refused, naming that page to cite. A
+    ``.md``, ``.txt`` or ``.tex`` paper is searched whole. Words are compared after
     Unicode NFKC normalisation and case folding, ignoring punctuation. Found:
     ``[real: <source>, p.<page>]``. Not found: the whole call is refused,
     naming the longest shared run; correct the citation or make the question
@@ -356,9 +357,11 @@ def words(text: str) -> list[str]:
     return re.findall(r"[^\W_]+", unicodedata.normalize("NFKC", text).casefold())
 
 
-def longest_shared_run(question: list[str], page: list[str]) -> int:
+def longest_shared_run(question: list[str], page: list[str], starts: int | None = None) -> int:
+    """Longest run of words shared by ``question`` and ``page``; with ``starts``, only runs that
+    begin before word ``starts`` of ``page`` count."""
     positions: dict[str, list[int]] = {}
-    for i, word in enumerate(page):
+    for i, word in enumerate(page[:starts]):
         positions.setdefault(word, []).append(i)
     longest = 0
     for i, word in enumerate(question):
@@ -436,20 +439,24 @@ def _real_label(rel: str, page: int, fidelity: str, question: str, files: _Files
         if text is None:
             return _OCR_LABEL, original, []
         found, extra = longest_shared_run(asked, words(text)), []
-        place = rel
+        place = f"is not on {rel}"
     else:
-        here = files.page(rel, page)
-        if not here or not words(here):
+        here = words(files.page(rel, page) or "")
+        if not here:
             return _OCR_LABEL, original, []
-        found, extra = longest_shared_run(asked, words(here)), []
+        found, extra = longest_shared_run(asked, here), []
         nxt = files.page(rel, page + 1) if (pages is None or page < pages) and found < MIN_ANCHOR_WORDS else None
         if nxt:
-            across = longest_shared_run(asked, words(here) + words(nxt))
+            # The anchor may run onto the next page, but it must start on the cited one.
+            across = longest_shared_run(asked, here + words(nxt), starts=len(here))
             if across > found:
                 found, extra = across, [(rel, page + 1)]
-        place = f"p.{page} or p.{page + 1} of {rel}"
+            if found < MIN_ANCHOR_WORDS and longest_shared_run(asked, words(nxt)) >= MIN_ANCHOR_WORDS:
+                raise InputError(f"{where}: the question is on p.{page + 1} of {rel}, not p.{page}; "
+                                 f"cite p.{page + 1}")
+        place = f"does not start on p.{page} of {rel}"
     if found < MIN_ANCHOR_WORDS:
-        raise InputError(f"{where}: the question is not on {place} (longest shared run {found} words, "
+        raise InputError(f"{where}: the question {place} (longest shared run {found} words, "
                          f"{MIN_ANCHOR_WORDS} needed); copy the paper's wording, correct the citation or "
                          "make the question practice")
     return f"[real: {rel}, p.{page}]", None, extra
