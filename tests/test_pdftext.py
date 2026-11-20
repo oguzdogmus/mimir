@@ -114,7 +114,7 @@ def test_pdftotext_is_preferred_when_installed(root):
 
 def test_cli_prints_one_json_object(root, home):
     path = course_pdf(root, text_pdf(1))
-    env = {**os.environ, "HOME": str(home)}
+    env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home)}
     proc = subprocess.run([sys.executable, str(PT), "pages"], input=json.dumps({"path": str(path), "first": 1}).encode(),
                           capture_output=True, env=env)
     assert proc.returncode == 0 and proc.stderr == b""
@@ -126,7 +126,7 @@ def test_cli_prints_one_json_object(root, home):
 
 
 def cli(home: Path, payload: dict, poppler: bool = True) -> subprocess.CompletedProcess:
-    env = {**os.environ, "HOME": str(home)}
+    env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home)}
     if not poppler:
         env["PATH"] = str(home / "no-bin")  # no pdftotext: the built-in reader runs
     return subprocess.run([sys.executable, str(PT), "pages"], input=json.dumps(payload).encode(),

@@ -35,6 +35,7 @@ def home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))  # for in-process calls
+    monkeypatch.setenv("USERPROFILE", str(home))  # Windows ignores HOME
     return home
 
 
@@ -46,7 +47,7 @@ def root(home):
 
 def _run(script: Path, home: Path, cmd: str, payload) -> subprocess.CompletedProcess:
     stdin = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
-    env = {**os.environ, "HOME": str(home)}
+    env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home)}
     return subprocess.run([sys.executable, str(script), cmd], input=stdin, capture_output=True, env=env)
 
 
@@ -621,7 +622,7 @@ def test_bad_json_exits_2(root, home, cmd, raw):
 @pytest.mark.parametrize("argv", [["unzip"], [], ["scan", "extra"]])
 def test_usage_errors_are_one_line(home, argv):
     proc = subprocess.run([sys.executable, str(ING), *argv], input=b"{}", capture_output=True,
-                          env={**os.environ, "HOME": str(home)})
+                          env={**os.environ, "HOME": str(home), "USERPROFILE": str(home)})
     assert proc.returncode == 2 and proc.stdout == b""
     err = proc.stderr.decode()
     assert err.startswith("ingest.py: ") and err.count("\n") == 1, err
@@ -696,22 +697,42 @@ def test_unreadable_entries_are_skipped_and_scan_continues(root, home):  # fix 1
         "locked": "unreadable (Permission denied)", "secret.pdf": "unreadable (Permission denied)"}
 
 
+def _make_unsafe(create) -> bool:
+    """Run ``create``; False when this file system refuses the name (macOS refuses
+    non-UTF-8 bytes, Windows refuses control characters)."""
+    try:
+        create()
+    except (OSError, ValueError, UnicodeError):
+        return False
+    return True
+
+
 def test_unsafe_file_names_skipped(root, home):  # fix 2
     inbox = root / "_inbox"
-    (inbox / "a\nEOF\nrm -rf ~.pdf").write_bytes(text_pdf())
-    with open(os.fsencode(inbox) + b"/bad\xff.pdf", "wb") as handle:
-        handle.write(text_pdf())
-    (inbox / "dir\tname").mkdir()
-    (inbox / "dir\tname" / "x.pdf").write_bytes(text_pdf())
-    make_zip(inbox / "z\x01.zip", {"a.pdf": text_pdf()})
+    made = []
+
+    def bad_bytes():
+        with open(os.fsencode(inbox) + b"/bad\xff.pdf", "wb") as handle:
+            handle.write(text_pdf())
+
+    def bad_dir():
+        (inbox / "dir\tname").mkdir()
+        (inbox / "dir\tname" / "x.pdf").write_bytes(text_pdf())
+
+    for shown, create in [("a\\x0aEOF\\x0arm -rf ~.pdf",
+                           lambda: (inbox / "a\nEOF\nrm -rf ~.pdf").write_bytes(text_pdf())),
+                          ("bad\\xff.pdf", bad_bytes), ("dir\\x09name", bad_dir),
+                          ("z\\x01.zip", lambda: make_zip(inbox / "z\x01.zip", {"a.pdf": text_pdf()}))]:
+        if _make_unsafe(create):
+            made.append(shown)
+    assert len(made) == 4 or sys.platform != "linux"  # Linux accepts every one of these names
     (inbox / "good.pdf").write_bytes(text_pdf())
     proc = run(home, "scan", {})
     assert proc.returncode == 0, proc.stderr.decode()  # no UnicodeEncodeError
     out = json.loads(proc.stdout)
     assert [Path(i["path"]).name for i in out["items"]] == ["good.pdf"]
-    assert sorted(Path(s["path"]).name for s in out["skipped"]) == [
-        "a\\x0aEOF\\x0arm -rf ~.pdf", "bad\\xff.pdf", "dir\\x09name", "z\\x01.zip"]
-    assert {s["reason"] for s in out["skipped"]} == {"unsafe file name"}
+    assert sorted(Path(s["path"]).name for s in out["skipped"]) == sorted(made)
+    assert all(s["reason"] == "unsafe file name" for s in out["skipped"])
     assert not (inbox / "z\x01").exists() and out["unpacked"] == []
 
 
@@ -748,13 +769,23 @@ def test_index_refuses_symlinked_term_or_course(root, home, tmp_path, which):  #
 
 
 def test_deep_tree_no_recursion_error(root, home):  # fix 4
+    # Deeper than the recursion limit allows, yet within macOS's 1024-byte path limit:
+    # a recursive walk would raise RecursionError here.
     inbox = root / "_inbox"
     deep = inbox
-    for _ in range(1200):  # one level at a time: Path.mkdir(parents=True) itself recurses
+    for _ in range(300):  # one level at a time: Path.mkdir(parents=True) itself recurses
         deep = deep / "d"
         deep.mkdir()
     (deep / "x.pdf").write_bytes(text_pdf(1))
-    [item] = ok(home, "scan", {})["items"]
+    frame, depth = sys._getframe(), 0
+    while frame:
+        frame, depth = frame.f_back, depth + 1
+    limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(depth + 100)
+    try:
+        [item] = ingest.cmd_scan({})["items"]
+    finally:
+        sys.setrecursionlimit(limit)
     assert item["path"] == str(deep / "x.pdf")
 
 
@@ -863,6 +894,7 @@ def test_index_temp_file_unique_and_cleaned(root, home, monkeypatch):  # fix 8
     assert sorted(p.name for p in course_dir.iterdir()) == listing  # temp file removed
     monkeypatch.undo()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))  # Windows ignores HOME
     ingest.cmd_index(index_payload({"path": str(paper)}))
     assert (course_dir / ".INDEX.md.tmp").read_text() == "not mine"
     assert sorted(p.name for p in course_dir.iterdir()) == listing

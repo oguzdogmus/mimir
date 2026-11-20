@@ -29,7 +29,7 @@ def _tmp(tmp_path, monkeypatch):
 
 
 def _run(args, tmp_path):
-    env = {"PATH": "/usr/bin:/bin", "TMPDIR": str(tmp_path), "HOME": str(tmp_path)}
+    env = {"PATH": "/usr/bin:/bin", "TMPDIR": str(tmp_path), "HOME": str(tmp_path), "USERPROFILE": str(tmp_path)}
     return subprocess.run([sys.executable, str(RC), *args], capture_output=True, text=True, env=env, timeout=30)
 
 

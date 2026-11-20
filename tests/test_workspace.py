@@ -35,12 +35,13 @@ def home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))  # for in-process calls
+    monkeypatch.setenv("USERPROFILE", str(home))  # Windows ignores HOME
     return home
 
 
 def run(home: Path, cmd: str, payload) -> subprocess.CompletedProcess:
     stdin = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
-    env = {**os.environ, "HOME": str(home)}
+    env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home)}
     return subprocess.run([sys.executable, str(WS), cmd], input=stdin, capture_output=True, env=env)
 
 
@@ -475,7 +476,7 @@ def test_unknown_fields_rejected(home):
 @pytest.mark.parametrize("argv", [["unzip"], [], ["root", "extra"]])
 def test_usage_errors_are_one_line(home, argv):
     proc = subprocess.run([sys.executable, str(WS), *argv], input=b"{}", capture_output=True,
-                          env={**os.environ, "HOME": str(home)})
+                          env={**os.environ, "HOME": str(home), "USERPROFILE": str(home)})
     assert proc.returncode == 2 and proc.stdout == b""
     err = proc.stderr.decode()
     assert err.startswith("workspace.py: ") and err.count("\n") == 1, err
