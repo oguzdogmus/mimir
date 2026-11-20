@@ -2,7 +2,7 @@ name: tests
 
 on:
   push:
-    branches: [main, impl/80-test-matrix]  # TEMP: drop before merge
+    branches: [main]
   pull_request:
 
 permissions:
