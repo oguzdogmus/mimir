@@ -639,7 +639,7 @@ def test_feedback_and_the_next_question_share_one_turn_with_text_before_tools():
     assert "nothing is written after `record`" in turn
     # Live runs (Claude Code, Sonnet and Opus) lost text written before tool calls: the set's
     # first question is written again once its check settles, so it is never lost.
-    assert "first question written again in full" in turn and 'never point to a question "above"' in turn
+    assert "written again in full: the set's first question" in turn and "explanation or recipe" in turn and 'never point to a question "above"' in turn
 
 
 def test_question_sets_cap_and_failed_check_lines():
