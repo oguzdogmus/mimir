@@ -84,8 +84,11 @@ The independent helper that checks a question's answer key against the course so
 _Avoid_: Verifier, grader
 
 **Question set**:
-The questions prepared and checked together as one batch, at most six.
+The questions prepared and checked together, at most six. Not called a batch or a round.
 _Avoid_: Batch, round
+
+**Checker batch**:
+One checker call: the questions of one question set (or of its recheck) read from one evidence pack and settled together. The name belongs to the call, never to the set.
 
 **Check ledger**:
 The record of every prepared question and the outcome of its check, kept per session. A question earns mastery credit only when the ledger shows a settled check.
