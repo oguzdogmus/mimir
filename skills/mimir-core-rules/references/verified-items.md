@@ -14,7 +14,7 @@ A question set is the group of questions prepared and checked together as one ch
 
 - A set holds at most 6 questions. A longer quiz runs as several sets. An Urgent set of up to 3 question types, with a worked item and a check item each, fits the cap.
 - Per question keep: `topic`, `origin` (`practice`, or `real` with `source`, `page` and `question`), optional `quote` `{path, page}`, the question with its marks, a complete worked answer key and one hint.
-- When the set's first question is a practice question, write it to the student at once, before any gate call or checker dispatch. Prepare the other questions after that text, in the same turn; the whole set goes to the checker as one batch.
+- When the set's first question is a practice question, write it to the student at once, before any gate call or checker dispatch. "Write" means visible reply text the student reads (a chat message), never your own reasoning or a note that you are preparing or checking questions: the question itself, in full, in the reply, then the tool calls. Prepare the other questions after that text, in the same turn; the whole set goes to the checker as one batch.
 - A fresh question after a miss, and a replacement for a withdrawn question, are sets of one.
 - The turn that starts a set ends when its check has settled. Nothing else from the set is shown before that.
 
@@ -24,7 +24,7 @@ Feedback on an answer and the next question share one turn, in this order:
 
 1. Text that needs no tool call: feedback on the answer, the key, and the next question when it is already checked or is a practice question that starts a new set.
 2. Tool calls: `session.py record` for the answer and, when a new set starts, the calls that prepare and check it. Calls that do not depend on each other go in one step.
-3. Text after the tool calls only for what depended on them: a question that had to wait for its check, the dropped line or a withdrawal line. Inside a set, nothing is written after `record`.
+3. Text after the tool calls only for what depended on them: a question that had to wait for its check, the dropped line or a withdrawal line. Inside a set, nothing is written after `record`. Never report a check's result ("all keys passed", "the check came back clean") or repeat a question already written.
 
 ## The check
 
