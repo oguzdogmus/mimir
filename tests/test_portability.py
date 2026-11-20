@@ -100,6 +100,13 @@ def test_no_shell_date_commands():
             assert not SHELL_DATE.search(line), f"{path}:{n}: {line.strip()[:80]}"
 
 
+def test_python_command_fallback_for_windows():
+    """A standard Windows Python install ships `python` and `py`, not `python3`."""
+    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text(encoding="utf-8")
+    paths = core.split("## Paths, commands and helpers", 1)[1].split("\n## ", 1)[0]
+    assert "`python3` is missing" in paths and "`python`" in paths and "`py -3`" in paths
+
+
 def test_verification_dispatch_and_provenance_contract():
     core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text()
     helper = (ROOT_DIR / "helpers/verifier.md").read_text()
