@@ -96,7 +96,7 @@ def build_fixture(out: Path, data: dict) -> tuple[dict, Path]:
     if proc.returncode != 0:
         raise RuntimeError(f"make_fixture.py failed: {proc.stderr.strip()}")
     made = json.loads(proc.stdout)
-    course_dir, env = Path(made["course_dir"]), {**os.environ, "HOME": made["home"]}
+    course_dir, env = Path(made["course_dir"]), {**os.environ, "HOME": made["home"], "USERPROFILE": made["home"]}
     index = course_dir / "INDEX.md"
     rows = []
     for rel, text in data["files"].items():
@@ -237,7 +237,7 @@ def host_checker(host: str, codex_home: Path | None = None, **opts) -> Callable[
 
     def check(pack: Path) -> dict:
         root = pack.parents[4]
-        env = {**os.environ, "HOME": str(root.parent / "home")}
+        env = {**os.environ, "HOME": str(root.parent / "home"), "USERPROFILE": str(root.parent / "home")}
         if host == "claude":
             with lock:  # packs are checked in parallel; the home is made once
                 lean_claude_home(root.parent / "home")

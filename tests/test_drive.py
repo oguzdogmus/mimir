@@ -3,6 +3,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent / "acceptance"))
 import drive  # noqa: E402
 
@@ -87,6 +89,7 @@ def test_agy_cmd_starts_print_mode_with_the_plugin_dir_and_resumes_by_conversati
     assert later[later.index("--conversation") + 1] == CONV
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the stand-in agy is a POSIX script")
 def test_an_antigravity_turn_runs_in_the_fixture_with_the_installed_home_and_keeps_the_transcript(tmp_path, monkeypatch):
     """main() with a stand-in ``agy`` that prints one turn's events and records how it was called."""
     run = tmp_path / "run"
@@ -113,7 +116,7 @@ def test_an_antigravity_turn_runs_in_the_fixture_with_the_installed_home_and_kee
                     f"open({str(tmp_path / 'call.json')!r}, 'w'))\n"
                     f"print({chr(10).join(json.dumps(e) for e in events)!r})\n")
     fake.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}:{__import__('os').environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_dir}{__import__('os').pathsep}{__import__('os').environ['PATH']}")
     plugin = agy_home / ".gemini" / "config" / "plugins" / "mimir"
     monkeypatch.setattr(sys, "argv", ["drive.py", "--run", str(run), "--host", "antigravity", "--plugin", str(plugin),
                                       "--agy-home", str(agy_home), "Let's study CS301."])

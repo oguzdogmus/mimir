@@ -195,7 +195,7 @@ def main() -> None:
     home, learning = run / "home", run / "learning"
     if not (home / ".config" / "mimir" / "root").is_file():
         sys.exit(f"drive: {run} is not a make_fixture.py folder")
-    env = {**os.environ, "HOME": str(home)}
+    env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home)}
     if args.host == "claude":
         lean_claude_home(home)
         args.model = args.model or "sonnet"

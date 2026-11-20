@@ -100,7 +100,7 @@ def main() -> None:
 
     home, root = out / "home", out / "learning"
     write(home / ".config" / "mimir" / "root", f"{root}\n")
-    env = {**os.environ, "HOME": str(home)}
+    env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home)}  # Windows ignores HOME
 
     now = run("session.py", "now", {}, env)
     today = dt.date.fromisoformat(now["date"])
