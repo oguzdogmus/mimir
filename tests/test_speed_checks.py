@@ -15,10 +15,19 @@ def tool(name, tid="t", **inp):
     return {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name, "id": tid, "input": inp}]}}
 
 
-def gate(n=1):
-    items = [{"topic": "CFG", "origin": "practice"}] * n
-    return tool("Bash", command="python3 /p/scripts/verify.py gate <<'EOF'\n"
-                + json.dumps({"term": "2026-Fall", "course": "CS301", "items": items}) + "\nEOF")
+def submit(n=1):
+    """A ``verify.py submit`` call with ``n`` questions (the gate of the speed slice)."""
+    questions = [{"item": f"quiz:{i}", "topic": "CFG", "origin": "practice", "question": "q", "key": "k"}
+                 for i in range(n)]
+    return tool("Bash", command="python3 /p/scripts/verify.py submit <<'EOF'\n"
+                + json.dumps({"term": "2026-Fall", "course": "CS301", "session": "s", "questions": questions})
+                + "\nEOF")
+
+
+def settle(**extra):
+    return tool("Bash", command="python3 /p/scripts/verify.py settle <<'EOF'\n"
+                + json.dumps({"batch": 1, "checker": "independent", "reply": "t\n1 | correct | ok", **extra})
+                + "\nEOF")
 
 
 RECORD = tool("Bash", command="python3 /p/scripts/session.py record <<'EOF'\n{}\nEOF")
@@ -47,22 +56,22 @@ def test_a_turn_without_record_is_not_an_answer_turn():
 
 
 def test_a_set_start_with_its_first_question_before_the_checks_passes_and_quotes_it():
-    found = speed_checks.check_turn([text("Item 1: describe S → aSc | b."), gate(5), checker(run_in_background=False),
-                                     gate(5)])
+    found = speed_checks.check_turn([text("Item 1: describe S → aSc | b."), submit(5), checker(run_in_background=False),
+                                     settle()])
     assert found["K_ok"] == ["Item 1: describe S → aSc | b."]
-    assert not any(found[c] for c in "JKLM")
+    assert not any(found[c] for c in "JKLMN")
 
 
 def test_a_gate_or_dispatch_before_any_text_fails_k():
-    assert set(failures([gate(), checker(run_in_background=False), gate(), text("Item 1: ...")])) == {"K"}
+    assert set(failures([submit(), checker(run_in_background=False), settle(), text("Item 1: ...")])) == {"K"}
     assert set(failures([checker(run_in_background=False), text("Item 1: ...")])) == {"K"}
 
 
 def test_a_set_and_one_recheck_pass_but_a_third_dispatch_or_a_seventh_item_fails_l():
-    ok = [text("Item 1"), gate(3), checker("a"), gate(3), checker("b"), gate(3)]
+    ok = [text("Item 1"), submit(3), checker("a"), settle(), submit(1), checker("b"), settle()]
     assert failures(ok) == {}
     assert set(failures(ok + [checker("c")])) == {"L"}
-    assert set(failures([text("Item 1"), gate(7)])) == {"L"}
+    assert set(failures([text("Item 1"), submit(7)])) == {"L"}
 
 
 def test_a_background_dispatch_fails_m_whether_asked_for_or_started_so():
@@ -83,9 +92,21 @@ def test_subagent_steps_do_not_count_as_the_tutors():
 def test_cli_reads_a_run_folder_and_exits_1_on_a_failure(tmp_path, capsys):
     events = tmp_path / "events"
     events.mkdir()
-    (events / "turn-1.jsonl").write_text("\n".join(json.dumps(e) for e in [text("Item 1"), gate(), checker()]))
+    (events / "turn-1.jsonl").write_text("\n".join(json.dumps(e) for e in [text("Item 1"), submit(), checker(), settle()]))
     (events / "turn-2.jsonl").write_text("not json\n" + json.dumps(RECORD) + "\n" + json.dumps(text("Right.")))
     assert speed_checks.main([str(tmp_path)]) == 1
     out = capsys.readouterr().out.splitlines()
-    assert out[-1] == "J FAIL K PASS L PASS M PASS"
+    assert out[-1] == "J FAIL K PASS L PASS M PASS N PASS"
     assert "turn-2 J FAIL" in out[-2]
+
+
+def test_a_batch_settled_without_a_checker_call_fails_n():
+    """#23: a host ran the gate, skipped the checker and typed correct verdicts."""
+    assert set(failures([text("Item 1"), submit(2), settle()])) == {"N"}
+    assert set(failures([text("Item 1"), submit(1), checker("a"), settle(), submit(1), settle()])) == {"N"}
+    assert set(failures([text("Item 1"), submit(1), settle(checker="self")])) == {"N"}
+
+
+def test_a_settle_after_its_checker_or_a_failed_dispatch_passes_n():
+    assert failures([text("Item 1"), submit(2), checker("a"), settle()]) == {}
+    assert failures([text("Item 1"), submit(2), checker("a"), settle(dispatch_failed=True)]) == {}
