@@ -3,8 +3,8 @@
 
 Dev-only, standard library, Python 3.11+. Not part of CI. Usage::
 
-    python3 tests/acceptance/drive.py --run DIR --host claude|codex --plugin PLUGIN_DIR \
-        [--codex-home CODEX_HOME] "student message"
+    python3 tests/acceptance/drive.py --run DIR --host claude|codex|antigravity --plugin PLUGIN_DIR \
+        [--codex-home CODEX_HOME] [--agy-home AGY_HOME] "student message"
 
 DIR is a folder from ``make_fixture.py``. The first call starts a new host
 session in ``DIR/learning`` with ``HOME=DIR/home``; later calls resume it (the
@@ -12,8 +12,11 @@ session id is kept in ``DIR/session_id``). Claude Code runs lean, with
 ``--plugin-dir PLUGIN_DIR`` and nothing else: no MCP connectors, no user
 settings, plugins, skills or hooks (a fresh ``~/.claude`` with only the
 login), on ``--model`` (default sonnet); Codex runs with ``CODEX_HOME`` (a home where
-Mimir is installed from PLUGIN_DIR). Both run without permission prompts, so
-use them only on a fixture folder.
+Mimir is installed from PLUGIN_DIR); Antigravity runs ``agy -p`` with
+``--add-dir PLUGIN_DIR`` (the installed plugin folder) and ``DIR/home/.gemini``
+linked to ``AGY_HOME/.gemini`` (a home where Mimir is installed with ``agy
+plugin install``). All three run without permission prompts, so use them only
+on a fixture folder.
 
 Each turn appends the student message, the tool calls (one line each) and
 the tutor's reply to ``DIR/transcript.md``, saves the raw host events as
@@ -29,6 +32,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from speed_checks import antigravity_steps, from_verifier
+
 TIMEOUT = 1800
 
 
@@ -36,6 +41,17 @@ def short(value: object, limit: int = 160) -> str:
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
     text = " ".join(text.split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def lean_claude_home(home: Path) -> None:
+    """A fresh ``home/.claude`` holding only the login, so none of the user's own
+    skills, plugins, hooks or memory load into the host."""
+    (home / ".claude").mkdir(exist_ok=True)
+    creds = home / ".claude" / ".credentials.json"
+    if not creds.exists():
+        creds.symlink_to(Path.home() / ".claude" / ".credentials.json")
+    if not (home / ".claude.json").exists() and (Path.home() / ".claude.json").exists():
+        (home / ".claude.json").write_bytes((Path.home() / ".claude.json").read_bytes())
 
 
 def claude_cmd(args, session: str | None) -> list[str]:
@@ -54,6 +70,46 @@ def codex_cmd(args, session: str | None) -> list[str]:
     if session:
         base += ["resume", session]
     return base + ["--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "--json", args.message]
+
+
+def agy_cmd(args, session: str | None) -> list[str]:
+    # The plugin folder is added to the workspace, as the README's launch command does.
+    cmd = ["agy", "-p", "--add-dir", str(args.plugin), "--dangerously-skip-permissions",
+           "--output-format", "stream-json"]
+    if args.model:
+        cmd += ["--model", args.model]
+    if session:
+        cmd += ["--conversation", session]
+    return cmd + [args.message]
+
+
+def parse_antigravity(lines: list[dict]) -> tuple[str | None, list[str], str]:
+    session, tools, texts = None, [], []
+    for ev in lines:
+        session = ev.get("conversation_id") or (ev.get("result") or {}).get("conversation_id") or session
+    for step in antigravity_steps(lines):
+        if step[0] == "text":
+            texts.append(step[1])
+            continue
+        _, name, inp, _ = step
+        if name == "run_command":
+            tools.append(f"run_command: {short(inp['command'])}")
+        elif name == "define_subagent":
+            tools.append(f"define_subagent name={inp.get('name')} from_verifier={from_verifier(inp.get('system_prompt', ''))} "
+                         f"write={inp.get('enable_write_tools')} mcp={inp.get('enable_mcp_tools')} "
+                         f"subagents={inp.get('enable_subagent_tools')}")
+        elif name == "invoke_subagent":
+            tools.append(f"invoke_subagent type={inp.get('TypeName')}: {short(inp.get('prompt', ''))}")
+        else:
+            tools.append(f"{name}: {short(inp)}")
+    for ev in lines:
+        if ev.get("event") == "result":
+            r = ev.get("result") or {}
+            u = r.get("usage") or {}
+            tools.append(f"usage: input={u.get('input_tokens', 0)} cache_read={u.get('cache_read_tokens', 0)} "
+                         f"out={u.get('output_tokens', 0)} thinking={u.get('thinking_tokens', 0)} "
+                         f"seconds={r.get('duration_seconds')}")
+    return session, tools, "\n\n".join(texts)
 
 
 def parse_claude(lines: list[dict]) -> tuple[str | None, list[str], str]:
@@ -122,10 +178,11 @@ def codex_spawns(codex_home: Path, session: str, seen: int) -> tuple[list[str], 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--run", required=True, type=Path)
-    ap.add_argument("--host", required=True, choices=["claude", "codex"])
+    ap.add_argument("--host", required=True, choices=["claude", "codex", "antigravity"])
     ap.add_argument("--plugin", required=True, type=Path)
     ap.add_argument("--codex-home", type=Path)
-    ap.add_argument("--model", default="sonnet", help="Claude Code host model (default sonnet; opus costs more)")
+    ap.add_argument("--agy-home", type=Path, help="Antigravity: a HOME whose .gemini has Mimir installed")
+    ap.add_argument("--model", help="host model (Claude Code default sonnet, opus costs more; others: the host default)")
     ap.add_argument("message")
     args = ap.parse_args()
     run = args.run.resolve()
@@ -134,22 +191,24 @@ def main() -> None:
         sys.exit(f"drive: {run} is not a make_fixture.py folder")
     env = {**os.environ, "HOME": str(home)}
     if args.host == "claude":
-        # A fresh ~/.claude holding only the login, so none of the user's own
-        # skills, plugins, hooks or memory load into the host.
-        (home / ".claude").mkdir(exist_ok=True)
-        creds = home / ".claude" / ".credentials.json"
-        if not creds.exists():
-            creds.symlink_to(Path.home() / ".claude" / ".credentials.json")
-        if not (home / ".claude.json").exists() and (Path.home() / ".claude.json").exists():
-            (home / ".claude.json").write_bytes((Path.home() / ".claude.json").read_bytes())
-    else:
+        lean_claude_home(home)
+        args.model = args.model or "sonnet"
+    elif args.host == "codex":
         if not args.codex_home:
             sys.exit("drive: --codex-home is required for codex")
         env["CODEX_HOME"] = str(args.codex_home.resolve())
+    else:
+        # Antigravity keeps its config, plugins and conversations in ~/.gemini: link the
+        # installed home's, so the fixture's HOME (and its learning-root pointer) stays.
+        if not args.agy_home or not (args.agy_home / ".gemini").is_dir():
+            sys.exit("drive: --agy-home must be a HOME with Mimir installed (agy plugin install)")
+        gemini = home / ".gemini"
+        if not gemini.exists():
+            gemini.symlink_to((args.agy_home / ".gemini").resolve())
 
     id_file = run / "session_id"
     session = id_file.read_text().strip() if id_file.exists() else None
-    cmd = claude_cmd(args, session) if args.host == "claude" else codex_cmd(args, session)
+    cmd = {"claude": claude_cmd, "codex": codex_cmd, "antigravity": agy_cmd}[args.host](args, session)
     proc = subprocess.run(cmd, cwd=learning, env=env, capture_output=True, text=True, timeout=TIMEOUT, check=False)
 
     events_dir = run / "events"
@@ -162,7 +221,8 @@ def main() -> None:
             lines.append(json.loads(raw))
         except json.JSONDecodeError:
             continue
-    new_session, tools, reply = (parse_claude if args.host == "claude" else parse_codex)(lines)
+    parse = {"claude": parse_claude, "codex": parse_codex, "antigravity": parse_antigravity}[args.host]
+    new_session, tools, reply = parse(lines)
     if new_session and not session:
         id_file.write_text(new_session + "\n")
     if args.host == "codex" and (session or new_session):

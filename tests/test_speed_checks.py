@@ -110,3 +110,50 @@ def test_a_batch_settled_without_a_checker_call_fails_n():
 def test_a_settle_after_its_checker_or_a_failed_dispatch_passes_n():
     assert failures([text("Item 1"), submit(2), checker("a"), settle()]) == {}
     assert failures([text("Item 1"), submit(2), checker("a"), settle(dispatch_failed=True)]) == {}
+
+
+# --- Antigravity (#79): agy stream-json events -------------------------------------------
+
+from test_drive import INIT, define, invoke, result, run_command, say  # noqa: E402
+
+AGY_SUBMIT = "python3 /p/scripts/verify.py submit <<'EOF'\n{\"questions\": [{\"item\": \"quiz:1\"}]}\nEOF"
+AGY_SETTLE = "python3 /p/scripts/verify.py settle <<'EOF'\n{\"batch\": 1}\nEOF"
+AGY_RECORD = "python3 /p/scripts/session.py record <<'EOF'\n{}\nEOF"
+
+
+def agy_failures(events, verifier_types=None):
+    found = speed_checks.check_turn(events, set() if verifier_types is None else verifier_types)
+    found.pop("K_ok", None)
+    return {k: v for k, v in found.items() if v}
+
+
+def test_antigravity_a_checker_defined_from_the_helper_and_invoked_before_settle_passes():
+    events = [INIT, *say(1, "Item 1: describe S → aSc | b."), *run_command(2, AGY_SUBMIT), *define(3), *invoke(4),
+              *run_command(5, AGY_SETTLE), result()]
+    assert agy_failures(events) == {}
+
+
+def test_antigravity_settling_with_no_subagent_call_fails_n():
+    """#23 on Antigravity: gate 2 right after gate 1, with no tool calls in between."""
+    events = [INIT, *say(1, "Item 1"), *run_command(2, AGY_SUBMIT), *run_command(3, AGY_SETTLE), result()]
+    assert set(agy_failures(events)) == {"N"}
+
+
+def test_antigravity_a_subagent_not_defined_from_the_helper_is_no_checker():
+    events = [INIT, *say(1, "Item 1"), *run_command(2, AGY_SUBMIT), *define(3, "checker", "Check these keys."),
+              *invoke(4, "checker"), *run_command(5, AGY_SETTLE), result()]
+    assert set(agy_failures(events)) == {"N"}
+
+
+def test_antigravity_a_checker_defined_in_an_earlier_turn_still_counts():
+    types = set()
+    assert agy_failures([INIT, *say(1, "Item 1"), *run_command(2, AGY_SUBMIT), *define(3), *invoke(4),
+                         *run_command(5, AGY_SETTLE)], types) == {}
+    later = [INIT, *say(1, "Right. Item 2: ..."), *run_command(2, AGY_RECORD), *run_command(3, AGY_SUBMIT),
+             *invoke(4), *run_command(5, AGY_SETTLE)]
+    assert agy_failures(later, types) == {}
+
+
+def test_antigravity_an_answer_turn_that_records_first_fails_j():
+    events = [INIT, *run_command(1, AGY_RECORD), *say(2, "Right.")]
+    assert set(agy_failures(events)) == {"J"}

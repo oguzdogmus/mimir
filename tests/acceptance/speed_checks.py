@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Count the speed rules of #77 and the checker rule of #78 in a Claude Code acceptance run.
+"""Count the speed rules of #77 and the checker rule of #78 in a Claude Code or Antigravity acceptance run.
 
 Dev-only, standard library, Python 3.11+. Not part of CI. Usage::
 
@@ -26,7 +26,11 @@ a subagent, which carry a ``parent_tool_use_id``, are skipped). Per turn:
   checker call (#23).
 
 A checker dispatch is an ``Agent`` (or ``Task``) call with ``subagent_type``
-``mimir:verifier``. Prints one line per finding and a ``J K L M N`` summary;
+``mimir:verifier`` on Claude Code, and on Antigravity (#79) an ``invoke_subagent``
+call of a type that a ``define_subagent`` call of the session defined with the
+whole body of ``helpers/verifier.md`` as its system prompt. Antigravity starts no
+checker in the background (its subagent replies arrive inside the turn), so M
+passes there by construction. Prints one line per finding and a ``J K L M N`` summary;
 exits 0 when every check passes, else 1.
 """
 
@@ -43,7 +47,10 @@ MAX_DISPATCHES = 2
 
 def steps(events: list[dict]) -> tuple[list[tuple], set[str]]:
     """The tutor's own steps in order, ``("text", str)`` or ``("tool", name, input, id)``,
-    and the ids of tool calls whose task started in the background."""
+    and the ids of tool calls whose task started in the background. Antigravity events
+    (they carry an ``event`` key) go through ``antigravity_steps``; its subagents run apart."""
+    if any("event" in ev for ev in events):
+        return antigravity_steps(events), set()
     out, background = [], set()
     for ev in events:
         if ev.get("type") == "system" and ev.get("subtype") == "task_started" and (ev.get("is_background") or ev.get("is_backgrounded")):
@@ -58,8 +65,62 @@ def steps(events: list[dict]) -> tuple[list[tuple], set[str]]:
     return out, background
 
 
+VERIFIER_BODY = (Path(__file__).resolve().parents[2] / "helpers" / "verifier.md").read_text(encoding="utf-8").split("---", 2)[2]
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+def from_verifier(prompt: str) -> str:
+    """``yes`` when a subagent's system prompt holds the whole body of ``helpers/verifier.md``,
+    ``partial`` when it holds only its opening sentence, else ``no``."""
+    flat = _flat(prompt)
+    if _flat(VERIFIER_BODY) in flat:
+        return "yes"
+    return "partial" if _flat(VERIFIER_BODY.strip().splitlines()[0]) in flat else "no"
+
+
+def antigravity_steps(events: list[dict]) -> list[tuple]:
+    """Antigravity ``agy --output-format stream-json`` events as the tutor's steps in order:
+    ``("text", str)`` per finished reply step and ``("tool", name, input, id)`` per finished tool
+    step. A ``run_command`` input carries ``command``; a ``define_subagent`` input is its parsed
+    definition; an ``invoke_subagent`` input carries ``TypeName`` and ``prompt``."""
+    out, texts, params = [], {}, {}
+    for ev in events:
+        update = ev.get("step_update") if ev.get("event") == "step_update" else None
+        if not update:
+            continue
+        index, kind = update.get("step_index"), update.get("step_type")
+        info = update.get("tool_info") or {}
+        if info.get("parameters"):
+            params.setdefault(index, {}).update(info["parameters"])
+        if kind == "agent_response":
+            texts[index] = texts.get(index, "") + update.get("text_delta", "")
+        if update.get("state") != "DONE":
+            continue
+        if kind == "agent_response" and texts.get(index, "").strip():
+            out.append(("text", texts[index].strip()))
+        elif kind in ("tool", "subagent"):
+            name = update.get("tool_name") or info.get("name")
+            inp = dict(params.get(index, {}))
+            if name == "run_command":
+                inp["command"] = inp.get("CommandLine", "")
+            elif name == "define_subagent":
+                try:
+                    inp = json.loads(inp.get("definition", "{}"))
+                except json.JSONDecodeError:
+                    inp = {}
+            elif name == "invoke_subagent":
+                child = ((update.get("subagent_info") or {}).get("subagents") or [{}])[0]
+                inp.setdefault("TypeName", child.get("type_name"))
+                inp["prompt"] = child.get("initial_prompt", "")
+            out.append(("tool", name, inp, index))
+    return out
+
+
 def _command(step: tuple) -> str:
-    return step[2].get("command", "") if step[0] == "tool" and step[1] == "Bash" else ""
+    return step[2].get("command", "") if step[0] == "tool" and step[1] in ("Bash", "run_command") else ""
 
 
 def is_submit(step: tuple) -> bool:
@@ -75,8 +136,14 @@ def is_record(step: tuple) -> bool:
     return bool(re.search(r"session\.py\"?\s+record\b", _command(step)))
 
 
-def is_dispatch(step: tuple) -> bool:
-    return step[0] == "tool" and step[1] in ("Agent", "Task") and step[2].get("subagent_type") == "mimir:verifier"
+def is_dispatch(step: tuple, verifier_types: set[str] = frozenset()) -> bool:
+    """Claude Code: ``Agent`` with ``mimir:verifier``. Antigravity: ``invoke_subagent`` of a type
+    whose ``define_subagent`` system prompt held the body of ``helpers/verifier.md``."""
+    if step[0] != "tool":
+        return False
+    if step[1] == "invoke_subagent":
+        return step[2].get("TypeName") in verifier_types
+    return step[1] in ("Agent", "Task") and step[2].get("subagent_type") == "mimir:verifier"
 
 
 def submit_questions(step: tuple) -> int:
@@ -90,16 +157,22 @@ def submit_questions(step: tuple) -> int:
         return len(re.findall(r'"item"\s*:', command))
 
 
-def check_turn(events: list[dict]) -> dict[str, list[str]]:
-    """Findings per check (``J``, ``K``, ``L``, ``M``) for one turn; an empty list is a pass.
-    ``K`` also carries ``ok:`` lines quoting the text before each turn's first submit call."""
+def check_turn(events: list[dict], verifier_types: set[str] | None = None) -> dict[str, list[str]]:
+    """Findings per check (``J`` to ``N``) for one turn; an empty list is a pass.
+    ``K`` also carries ``ok:`` lines quoting the text before each turn's first submit call.
+    ``verifier_types`` holds the Antigravity checker types defined so far in the session; a
+    ``define_subagent`` from the helper body in this turn adds its name."""
     seq, background = steps(events)
+    verifier_types = set() if verifier_types is None else verifier_types
+    for s in seq:
+        if s[0] == "tool" and s[1] == "define_subagent" and from_verifier(s[2].get("system_prompt", "")) == "yes":
+            verifier_types.add(s[2].get("name"))
     found: dict[str, list[str]] = {"J": [], "K": [], "L": [], "M": [], "N": []}
     tools = [i for i, s in enumerate(seq) if s[0] == "tool"]
     if any(is_record(s) for s in seq) and tools and tools[0] == 0:
         found["J"].append(f"answer turn starts with a tool call ({seq[0][1]}) before any text")
     submits = [i for i, s in enumerate(seq) if is_submit(s)]
-    dispatches = [i for i, s in enumerate(seq) if is_dispatch(s)]
+    dispatches = [i for i, s in enumerate(seq) if is_dispatch(s, verifier_types)]
     if submits or dispatches:
         first = min(submits + dispatches)
         texts = [s[1] for s in seq[:first] if s[0] == "text"]
@@ -139,9 +212,9 @@ def main(argv: list[str]) -> int:
     turns = sorted((Path(argv[0]) / "events").glob("turn-*.jsonl"), key=lambda p: int(p.stem.split("-")[1]))
     if not turns:
         sys.exit(f"speed_checks: no events in {argv[0]}")
-    failed = set()
+    failed, verifier_types = set(), set()
     for path in turns:
-        found = check_turn(load(path))
+        found = check_turn(load(path), verifier_types)
         for line in found.pop("K_ok", []):
             print(f"{path.stem} K ok, text before the submit: {line}")
         for check, lines in found.items():
