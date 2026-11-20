@@ -24,7 +24,7 @@ Feedback on an answer and the next question share one turn, in this order:
 
 1. Text that needs no tool call: feedback on the answer, the key, and the next question when it is already checked or is a practice question that starts a new set.
 2. Tool calls: `session.py record` for the answer and, when a new set starts, the calls that prepare and check it. Calls that do not depend on each other go in one step.
-3. Text after the tool calls only for what depended on them: a question that had to wait for its check, the dropped line or a withdrawal line. Inside a set, nothing is written after `record`. Never report a check's or `record`'s result ("all keys passed", "recorded as a solo solve", "the topic is now shaky") or repeat or point to a question already written: the turn simply ends. If the set's first question is not in your reply text yet (only in your thinking), write it now, in full: late is better than unseen.
+3. Text after the tool calls only for what depended on them: a question that had to wait for its check, the dropped line or a withdrawal line. Inside a set, nothing is written after `record`. Never report a check's or `record`'s result ("all keys passed", "recorded as a solo solve", "the topic is now shaky") and never point to a question "above". The one repeat: a turn that started a set ends, once its check settles, with that set's first question written again in full (when it was not withdrawn or dropped). On some hosts text written before tool calls is lost, so this keeps the question on screen; say nothing about the repeat.
 
 ## The check
 
