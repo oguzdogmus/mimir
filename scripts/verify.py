@@ -86,8 +86,9 @@ submit -- check a question set, issue its labels, write it to the ledger and
     session's batches from 1; ``n`` numbers the questions of the batch from 1
     in input order. ``original`` appears only with the photo/scan label. A
     question already in the ledger may come again only after its check said
-    ``retry``, and only once (VERIFIER_RETRIES), with the fix; anything else
-    about it is refused (waiting for its check, already correct, or dropped).
+    ``retry``: once (VERIFIER_RETRIES) with the fix after a checker verdict,
+    and again after each failed dispatch; anything else about it is refused
+    (waiting for its check, already correct, or dropped).
     A refused call writes nothing.
 
     The evidence pack is the one file the checker reads for the batch: the
@@ -109,19 +110,21 @@ settle -- read the checker's reply for a batch and decide each question.
           "show": ["quiz:1"], "retry": [], "dropped": [],
           "line": "Batch 1 settled: 1 to show."}
     ``checker`` is ``independent`` (a subagent checked the pack) or ``self``
-    (a same-context check from the pack). The reply starts with the batch's
-    pack token on a line of its own (backticks and asterisks around it are
+    (a same-context check from the pack). The reply must hold a line with
+    just the batch's pack token (backticks and asterisks around it are
     ignored); a reply without that line is refused and the batch stays
-    unsettled. Text before the token line (a checker's working) is ignored.
-    After it, one line per question, ``N | verdict | reason``: the first line
-    for each ``N`` counts, the verdict is one of ``correct``, ``wrong``,
-    ``ambiguous``, ``source-conflict`` (case ignored); a missing line or an
-    unknown verdict word reads as ``ambiguous``. Instead of ``reply``,
-    ``"dispatch_failed": true`` settles a batch whose checker could not run:
-    every question reads as ``ambiguous``. Decision: ``correct`` is ``show``;
-    a first non-correct verdict is ``retry`` (submit the fixed question again
-    under the same item); a non-correct verdict on the recheck is
-    ``dropped``. A batch settles once.
+    unsettled. Text before the token line (a checker's working) is ignored;
+    only the lines after it count: one per question, ``N | verdict |
+    reason``. The first line for each ``N`` counts, the verdict is one of
+    ``correct``, ``wrong``, ``ambiguous``, ``source-conflict`` (case
+    ignored); a missing line or an unknown verdict word reads as
+    ``ambiguous``. Instead of ``reply``, ``"dispatch_failed": true`` settles
+    a batch whose checker could not run: every question reads as
+    ``ambiguous`` with decision ``retry``, and the failed dispatch does not
+    use up its recheck (submit it again unchanged). Decision: ``correct`` is
+    ``show``; a first non-correct verdict from a checker that ran is
+    ``retry`` (submit the fixed question again under the same item); a
+    non-correct verdict on the recheck is ``dropped``. A batch settles once.
 
 read -- one prepared question, for a tutor that no longer has it.
     in : {"term": ..., "course": ..., "session": "s-0930", "item": "quiz:1"}
@@ -147,12 +150,14 @@ summary -- the check counts of one session, or of every session of a course.
                              said wrong: step 3 should be 2n+1"],
           "line": "Checks: 5 questions in 1 session, 1 catch, 0 escapes."}
     ``checked``: questions with a settled check. ``catches``: questions with
-    a non-correct verdict from a checker reply line (a missing line or a
-    failed dispatch is no catch). ``escapes``: conceded questions.
-    ``disagreements``: one line per caught question, dated by its first
-    non-correct verdict: ``fixed`` (later correct), ``dropped``, or ``not
-    rechecked`` (never submitted again, e.g. withdrawn). Without ``session``
-    every ledger of the course counts; a session without a ledger counts 0.
+    a non-correct verdict from a checker reply line that led to a fixed key
+    (later correct) or a dropped question; a missing line or a failed
+    dispatch is no catch. ``escapes``: conceded questions.
+    ``disagreements``: one line per question with a non-correct verdict from
+    a reply line, dated by its first one: ``fixed`` or ``dropped`` (the
+    catches), or ``not rechecked (no catch)`` (never settled again, e.g.
+    withdrawn; nothing was fixed or dropped). Without ``session`` every
+    ledger of the course counts; a session without a ledger counts 0.
 
 Exit codes: invalid input, a refused operation, a usage error or a filesystem
 error exits 2 with one line on stderr (``verify.py: <message>``) and nothing
@@ -311,13 +316,17 @@ def _save(path: Path, ledger: dict) -> None:
 
 
 def _decision(entry: dict) -> str:
-    """``pending``, ``show``, ``retry`` or ``dropped`` for a ledger question."""
-    verdict = entry["checks"][-1]["verdict"]
-    if verdict is None:
+    """``pending``, ``show``, ``retry`` or ``dropped`` for a ledger question. A failed dispatch checked
+    nothing, so it neither shows the question nor uses up its recheck."""
+    last = entry["checks"][-1]
+    if last["verdict"] is None:
         return "pending"
-    if verdict == "correct":
+    if last["from"] == "failed":
+        return "retry"
+    if last["verdict"] == "correct":
         return "show"
-    return "retry" if len(entry["checks"]) <= VERIFIER_RETRIES else "dropped"
+    ran = [c for c in entry["checks"] if c["from"] != "failed"]
+    return "retry" if len(ran) <= VERIFIER_RETRIES else "dropped"
 
 
 def ledger_question(course_dir: Path, session: str, item: str) -> dict | None:
@@ -632,7 +641,7 @@ def cmd_submit(data: dict) -> dict:
 
 
 def _reply_lines(reply: str, token: str, batch: int) -> dict[int, tuple[str, str]]:
-    """{N: (verdict word, reason)} from a checker reply that starts with ``token``."""
+    """{N: (verdict word, reason)} from the lines after the reply's line holding just ``token``."""
     lines = reply.replace("\r\n", "\n").split("\n")
     first = next((i for i, line in enumerate(lines) if line.strip().strip("`*").strip() == token), None)
     if first is None:
@@ -743,9 +752,11 @@ def _counts(ledger: dict) -> tuple[int, int, int, list[str]]:
         caught = next((c for c in settled if c["verdict"] != "correct" and c["from"] == "reply"), None)
         if caught is None:
             continue
-        catches += 1
-        outcome = {"show": "fixed", "dropped": "dropped"}.get(_decision(entry), "not rechecked")
-        lines.append(f"- {caught['date']} item {item} ({caught['topic']}): {outcome}, checker said "
+        # A catch led to a fixed key or a dropped question; a question never rechecked is neither.
+        outcome = {"show": "fixed", "dropped": "dropped"}.get(_decision(entry))
+        catches += outcome is not None
+        lines.append(f"- {caught['date']} item {item} ({caught['topic']}): {outcome or 'not rechecked (no catch)'}, "
+                     f"checker said "
                      f"{caught['verdict']}" + (f": {caught['reason']}" if caught["reason"] else ""))
     return checked, catches, escapes, lines
 

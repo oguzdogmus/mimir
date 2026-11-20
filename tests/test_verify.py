@@ -315,6 +315,19 @@ def test_a_failed_dispatch_settles_every_question_as_ambiguous(home, cdir):
     assert got["retry"] == ["quiz:1", "quiz:2"] and not Path(out["pack"]).exists()
 
 
+def test_a_failed_dispatch_does_not_use_up_the_recheck(home, cdir):
+    ok(home, submit(practice()))
+    assert ok(home, settle(1, None, dispatch_failed=True), "settle")["retry"] == ["quiz:1"]
+    assert verify.ledger_question(cdir, SESSION, "quiz:1")["decision"] == "retry"  # still never shown
+    again = ok(home, submit(practice()))
+    assert ok(home, settle(2, reply(again["pack"], "1 | wrong | step 2")), "settle")["retry"] == ["quiz:1"]
+    fixed = ok(home, submit(practice(key="Yes: every level is full except the last, filled left to right.")))
+    assert ok(home, settle(3, reply(fixed["pack"], "1 | correct | ok")), "settle")["show"] == ["quiz:1"]
+    out = ok(home, {"term": TERM, "course": COURSE, "session": SESSION}, "summary")
+    assert (out["catches"], len(out["disagreements"])) == (1, 1) and "fixed, checker said wrong" in \
+        out["disagreements"][0]
+
+
 def test_a_batch_settles_once(home, cdir):
     out = ok(home, submit(practice()))
     ok(home, settle(1, reply(out["pack"], "1 | correct | ok")), "settle")
@@ -613,8 +626,8 @@ def test_only_a_shown_key_can_be_conceded(home, cdir):
 
 
 def test_summary_counts_checked_catches_escapes_and_lists_disagreements(home, cdir):
-    """Five questions: one fixed after a catch, one dropped after two, one never rechecked, one missing
-    line (no catch), one conceded escape."""
+    """Five questions: one fixed after a catch, one dropped after two, one never rechecked (a disagreement
+    but no catch: nothing was fixed or dropped), one missing line (no catch), one conceded escape."""
     q = [practice(f"quiz:{i}") for i in range(1, 6)]
     first = ok(home, submit(*q))
     before = datetime.date.today().isoformat()
@@ -627,18 +640,20 @@ def test_summary_counts_checked_catches_escapes_and_lists_disagreements(home, cd
     ok(home, submit(practice("quiz:6")))  # pending: not checked yet
     days = {before, datetime.date.today().isoformat()}
     out = ok(home, {"term": TERM, "course": COURSE, "session": SESSION}, "summary")
-    assert (out["sessions"], out["checked"], out["catches"], out["escapes"]) == (1, 5, 3, 1)
+    assert (out["sessions"], out["checked"], out["catches"], out["escapes"]) == (1, 5, 2, 1)
     assert any(out["disagreements"] == [
         f"- {d} item quiz:1 (Heaps): fixed, checker said wrong: step 3 should be 2n+1",
         f"- {d} item quiz:2 (Heaps): dropped, checker said ambiguous: two readings",
-        f"- {d} item quiz:3 (Heaps): not rechecked, checker said source-conflict: the slides say otherwise"]
+        f"- {d} item quiz:3 (Heaps): not rechecked (no catch), checker said source-conflict: "
+        "the slides say otherwise"]
         for d in days)
-    assert out["line"] == "Checks: 5 questions in 1 session, 3 catches, 1 escape."
+    assert out["line"] == "Checks: 5 questions in 1 session, 2 catches, 1 escape."
 
 
 def test_summary_over_every_session_of_the_course(home, cdir):
     checked(home, practice())
     checked(home, practice(), session="s2", verdicts=("wrong",))
+    checked(home, practice(), session="s2", verdicts=("correct",))
     out = ok(home, {"term": TERM, "course": COURSE}, "summary")
     assert (out["sessions"], out["checked"], out["catches"], out["escapes"]) == (2, 2, 1, 0)
     assert len(out["disagreements"]) == 1

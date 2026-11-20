@@ -1,6 +1,6 @@
 # Trust every session — design
 
-Status: design agreed in conversation on 2026-11-12 and 2026-11-19 (27 questions over three rounds) and approved by the maintainer on 2026-11-19. Nothing is implemented. The work is split into issues (see Slices). Command and field names below are working names; the issue for each slice settles the exact contract.
+Status: design agreed in conversation on 2026-11-12 and 2026-11-19 (27 questions over three rounds) and approved by the maintainer on 2026-11-19. Implemented on the `trust-every-session` branch (issues #77 to #80 and #3, see Slices). Command and field names below are working names; the issue for each slice and the script docstrings settle the exact contract.
 
 ## Goal
 
@@ -88,7 +88,7 @@ A question set is the group of questions prepared and checked together as one ba
 
 ## 4. Failed checks
 
-Each question gets at most one recheck.
+Each question gets at most one recheck. A checker dispatch that fails checked nothing: it does not use up the recheck, and the question stays unshown until a checker settles it.
 
 A question the student has not seen yet: the tutor fixes the key or the question and it is rechecked once. If the verdict is still not `correct`, the question is dropped and the existing line is said once: "Dropped K question(s) my checker could not confirm."
 
@@ -119,7 +119,7 @@ Full text, not hashes, for four reasons:
 
 **Trust boundary.** The ledger stops forgetting, not lying. Tutor and checker share one shell, so no script can tell who calls it. A tutor that invents a checker reply stays invisible to the scripts. Only the acceptance transcripts prove that a real checker ran on a host.
 
-**Pack token.** In #23 both hosts ran the gate, skipped the checker and typed `correct` verdicts. `settle` alone would accept that. So `submit` writes a short random token into the pack, the checker's reply must start with it, and `settle` refuses a reply without it. A tutor that skips the checker cannot settle the batch unless it opens the pack to copy the token. That turns an omission into a deliberate act. It does not stop a lie.
+**Pack token.** In #23 both hosts ran the gate, skipped the checker and typed `correct` verdicts. `settle` alone would accept that. So `submit` writes a short random token into the pack, the checker's reply must hold a line with just the token, and `settle` refuses a reply without one. Text before that line (the checker's working) is ignored; only the verdict lines after it count. A tutor that skips the checker cannot settle the batch unless it opens the pack to copy the token. That turns an omission into a deliberate act. It does not stop a lie.
 
 ## 6. Real-paper labels
 
