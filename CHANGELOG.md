@@ -19,7 +19,9 @@ Less waiting between questions. Measured on real study sessions, the checker was
 
 ### Validation
 
-VALIDATION
+- **1,407 automated tests** pass.
+- Live acceptance on Claude Code (Sonnet 5.5), a study run and a quiz run: [results](docs/acceptance-77.md). Feedback now comes before every tool call in answer turns, the checker always runs in the foreground with one batch per set, and `record` writes every log line. On Claude Code the first question of a set (and a Standard explanation) is not shown before its check: the tutor drafts it in its thinking and the text is lost, so the turn ends by writing it again once the check settles. At a set start the student still waits for the check on this host.
+- The speed targets (answer to feedback at most 15 s, answer to next question at most 25 s, as medians) are measured on real sessions after release; see [the measurements](docs/measurements/trust-every-session.md).
 
 ### Updating
 

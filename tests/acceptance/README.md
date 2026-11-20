@@ -74,4 +74,4 @@ Checks C, F, G and I apply to the quiz run where they fit (I: the first line is 
 
 ## Results
 
-See `docs/acceptance-44.md`.
+See `docs/acceptance-44.md` (teaching levels) and `docs/acceptance-77.md` (speed checks).
