@@ -24,7 +24,7 @@ earns mastery credit, and the real-paper flag comes from here.
 
 Trust boundary: the ledger stops forgetting, not lying. Tutor and checker
 share one shell, so no script can tell who calls it. A checker reply must
-start with the pack token, which only the evidence pack holds, so a tutor that
+carry the pack token, which only the evidence pack holds, so a tutor that
 skips the checker cannot settle a batch without opening the pack; that turns
 an omission into a deliberate act, it does not stop a lie. Only acceptance
 transcripts prove that a real checker ran.
@@ -108,11 +108,12 @@ settle -- read the checker's reply for a batch and decide each question.
           "show": ["quiz:1"], "retry": [], "dropped": [],
           "line": "Batch 1 settled: 1 to show."}
     ``checker`` is ``independent`` (a subagent checked the pack) or ``self``
-    (a same-context check from the pack). The reply's first non-blank line
-    must be the batch's pack token (backticks and asterisks around it are
-    ignored); otherwise the call is refused and the batch stays unsettled.
-    Then one line per question, ``N | verdict | reason``: the first line for
-    each ``N`` counts, the verdict is one of ``correct``, ``wrong``,
+    (a same-context check from the pack). The reply starts with the batch's
+    pack token on a line of its own (backticks and asterisks around it are
+    ignored); a reply without that line is refused and the batch stays
+    unsettled. Text before the token line (a checker's working) is ignored.
+    After it, one line per question, ``N | verdict | reason``: the first line
+    for each ``N`` counts, the verdict is one of ``correct``, ``wrong``,
     ``ambiguous``, ``source-conflict`` (case ignored); a missing line or an
     unknown verdict word reads as ``ambiguous``. Instead of ``reply``,
     ``"dispatch_failed": true`` settles a batch whose checker could not run:
@@ -619,9 +620,9 @@ def cmd_submit(data: dict) -> dict:
 def _reply_lines(reply: str, token: str, batch: int) -> dict[int, tuple[str, str]]:
     """{N: (verdict word, reason)} from a checker reply that starts with ``token``."""
     lines = reply.replace("\r\n", "\n").split("\n")
-    first = next((i for i, line in enumerate(lines) if line.strip()), None)
-    if first is None or lines[first].strip().strip("`*").strip() != token:
-        raise InputError(f"the reply does not start with the pack token of batch {batch}; the batch stays "
+    first = next((i for i, line in enumerate(lines) if line.strip().strip("`*").strip() == token), None)
+    if first is None:
+        raise InputError(f"the reply has no line with the pack token of batch {batch}; the batch stays "
                          "unsettled: dispatch the checker with the pack and paste its reply unchanged")
     found: dict[int, tuple[str, str]] = {}
     for line in lines[first + 1:]:

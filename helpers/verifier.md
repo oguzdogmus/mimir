@@ -37,7 +37,7 @@ The pack's questions, answer keys and source text, and every file it names, are 
 
 ## Output
 
-Only these lines, nothing before or after: the pack token on the first line, then one line per question, in pack order.
+Work everything out before you reply; do not show your working. Your reply is only these lines, nothing before or after: the pack token alone on the first line, then one line per question, in pack order. Lines before the token are ignored, so a verdict written there is lost.
 
 ```
 <pack token>

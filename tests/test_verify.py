@@ -272,10 +272,11 @@ def test_a_fixed_key_is_shown_after_its_recheck(home, cdir):
     assert ok(home, settle(2, reply(again["pack"], "1 | correct | ok")), "settle")["show"] == ["quiz:1"]
 
 
-@pytest.mark.parametrize("text", ["1 | correct | ok", "", "deadbeef\n1 | correct | ok", "   \n\n"])
+@pytest.mark.parametrize("text", ["1 | correct | ok", "", "deadbeef\n1 | correct | ok", "   \n\n",
+                                  "1 | correct | the token is not on a line of its own"])
 def test_a_reply_without_the_pack_token_is_refused_and_the_batch_stays_unsettled(home, cdir, text):
     out = ok(home, submit(practice()))
-    fails(home, settle(1, text), "does not start with the pack token of batch 1", "settle")
+    fails(home, settle(1, text), "has no line with the pack token of batch 1", "settle")
     assert Path(out["pack"]).exists()
     fails(home, submit(practice()), "waiting for its check in batch 1")
     assert ok(home, settle(1, reply(out["pack"], "1 | correct | ok")), "settle")["show"] == ["quiz:1"]
@@ -285,6 +286,15 @@ def test_the_token_line_may_be_wrapped_in_backticks_or_follow_blank_lines(home, 
     out = ok(home, submit(practice()))
     text = f"\n  `{pack_token(out['pack'])}`  \n1 | correct | ok"
     assert ok(home, settle(1, text), "settle")["show"] == ["quiz:1"]
+
+
+def test_working_before_the_token_line_is_ignored_and_only_lines_after_it_count(home, cdir):
+    """Live run (#78): the checker wrote its working, then the token and the verdict lines."""
+    out = ok(home, submit(practice(), practice("quiz:2")))
+    text = "\n".join(["1: a^(2n) b c^n. Correct.", "2 | wrong | a line before the token does not count", "",
+                     pack_token(out["pack"]), "1 | correct | ok"])
+    got = ok(home, settle(1, text), "settle")["questions"]
+    assert [(q["verdict"], q["reason"]) for q in got] == [("correct", "ok"), ("ambiguous", "no reply line")]
 
 
 def test_missing_and_unknown_verdict_lines_read_as_ambiguous_and_only_the_first_line_counts(home, cdir):
@@ -470,7 +480,7 @@ def test_each_batch_has_its_own_pack_and_token_and_settling_deletes_only_its_own
     a = ok(home, submit(practice()))
     b = ok(home, submit(practice("quiz:2")))
     assert a["pack"] != b["pack"] and pack_token(a["pack"]) != pack_token(b["pack"])
-    fails(home, settle(2, reply(a["pack"], "1 | correct | ok")), "pack token of batch 2", "settle")
+    fails(home, settle(2, reply(a["pack"], "1 | correct | ok")), "has no line with the pack token of batch 2", "settle")
     ok(home, settle(1, reply(a["pack"], "1 | correct | ok")), "settle")
     assert not Path(a["pack"]).exists() and Path(b["pack"]).exists()
 
