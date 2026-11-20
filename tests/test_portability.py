@@ -5,7 +5,8 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SKILLS = sorted(d for d in (ROOT_DIR / "skills").iterdir() if (d / "SKILL.md").is_file())
-MARKDOWN = sorted((ROOT_DIR / "skills").rglob("*.md")) + sorted((ROOT_DIR / "helpers").glob("*.md"))
+MARKDOWN = (sorted((ROOT_DIR / "skills").rglob("*.md")) + sorted((ROOT_DIR / "reference").glob("*.md"))
+            + sorted((ROOT_DIR / "helpers").glob("*.md")))
 NAME = re.compile(r"^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
 
 
@@ -28,6 +29,32 @@ def test_no_claude_only_paths_or_command_names():
         assert "CLAUDE_PLUGIN_ROOT" not in text, path
         assert not re.search(r"/mimir:(?!mimir-)", text), path
         assert not re.search(r"`mimir:(?!verifier`|visual-builder`)", text), path
+
+
+INTERNAL = {"mimir-core-rules", "mimir-notation"}
+CORE_RULES_LINE = re.compile(r"^First read `([^`]+)`")
+
+
+def test_internal_rules_live_in_reference_not_skills():
+    """#3: Antigravity ignores `user-invocable: false`, so every folder under skills/
+    is a user command. Core rules and notation are plain files under reference/."""
+    assert not INTERNAL & {s.name for s in SKILLS}
+    assert len(SKILLS) == 10, [s.name for s in SKILLS]
+    for skill in SKILLS:
+        assert "user-invocable" not in frontmatter(skill / "SKILL.md"), skill.name
+    for name in ("core-rules.md", "notation.md", "recording.md", "session-close.md", "verified-items.md"):
+        text = (ROOT_DIR / "reference" / name).read_text(encoding="utf-8")
+        assert not text.startswith("---"), name  # plain file, no skill frontmatter
+
+
+def test_every_skill_first_loads_the_core_rules_by_a_path_that_resolves():
+    for skill in SKILLS:
+        body = (skill / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[2]
+        first = next(line for line in body.splitlines() if line.strip() and not line.startswith("#"))
+        match = CORE_RULES_LINE.match(first)
+        assert match, (skill.name, first[:80])
+        target = match.group(1)
+        assert (skill / target).resolve() == ROOT_DIR / "reference" / "core-rules.md", skill.name
 
 
 def test_every_mimir_path_exists():
@@ -102,13 +129,13 @@ def test_no_shell_date_commands():
 
 def test_python_command_fallback_for_windows():
     """A standard Windows Python install ships `python` and `py`, not `python3`."""
-    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text(encoding="utf-8")
+    core = (ROOT_DIR / "reference/core-rules.md").read_text(encoding="utf-8")
     paths = core.split("## Paths, commands and helpers", 1)[1].split("\n## ", 1)[0]
     assert "`python3` is missing" in paths and "`python`" in paths and "`py -3`" in paths
 
 
 def test_verification_dispatch_and_provenance_contract():
-    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text()
+    core = (ROOT_DIR / "reference/core-rules.md").read_text()
     helper = (ROOT_DIR / "helpers/verifier.md").read_text()
     assert "checker: self" in core and "checker: independent" in core
     assert "once per session" in core
@@ -130,7 +157,7 @@ def test_nothing_refers_to_the_gate_a_typed_gate_object_or_the_fake_real_cell():
     for step in ("verify.py submit", "verify.py settle", "verify.py read", "verify.py concede"):
         assert f"`{step}`" in flow or step.split()[1] in flow, step
     assert "pasted unchanged" in flow and "Check the evidence pack at `<pack>`." in flow
-    assert "verify.py summary" in _read("skills/mimir-core-rules/references/session-close.md")
+    assert "verify.py summary" in _read("reference/session-close.md")
     recording = _read(RECORDING)
     assert '"gate"' not in recording and "settled `correct` check" in recording
 
@@ -162,10 +189,10 @@ def test_no_episode_clock_or_automatic_close():
 
 
 def test_sessions_close_only_on_end_session_with_a_set_hand_off():
-    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text(encoding="utf-8")
+    core = (ROOT_DIR / "reference/core-rules.md").read_text(encoding="utf-8")
     assert "## Ending a session" in core and "**End-of-set hand-off**" in core
     assert '"end session"' in core
-    close = (ROOT_DIR / "skills/mimir-core-rules/references/session-close.md").read_text(encoding="utf-8")
+    close = (ROOT_DIR / "reference/session-close.md").read_text(encoding="utf-8")
     assert "session.py close" in close  # the script writes the one end stamp
     for flow in SESSION_FLOWS:
         text = (ROOT_DIR / flow).read_text(encoding="utf-8")
@@ -235,7 +262,7 @@ def test_standard_study_has_unlimited_retries_and_the_recording_rule():
     assert "only when the student asks" in session
     assert "`duplicate`" in session  # repeated misses add no log line either
     assert not re.search(r'"idk": show the key', session)  # "idk" gets guidance, not the key
-    recording = (ROOT_DIR / "skills/mimir-core-rules/references/recording.md").read_text(encoding="utf-8")
+    recording = (ROOT_DIR / "reference/recording.md").read_text(encoding="utf-8")
     assert "first wrong answer" in recording and "records as assisted" in recording
 
 
@@ -246,7 +273,7 @@ LABEL_FLOWS = ["skills/mimir-study/references/session.md", "skills/mimir-study/r
 
 
 def test_plain_practice_is_declared_once_and_other_items_keep_their_label():
-    core = (ROOT_DIR / "skills/mimir-core-rules/SKILL.md").read_text(encoding="utf-8")
+    core = (ROOT_DIR / "reference/core-rules.md").read_text(encoding="utf-8")
     labels = core.split("## Provenance labels", 1)[1].split("\n## ", 1)[0]
     assert "Every question shown carries exactly one label" not in labels
     assert "**Plain practice item**" in labels and "once per session" in labels
@@ -328,14 +355,14 @@ def test_study_asks_exam_time_within_two_days_and_whether_today_is_still_ahead()
         assert field in session, field
     assert "time unknown" in session  # the marker that stops a second re-ask
     assert "still ahead" in session
-    core = _read("skills/mimir-core-rules/SKILL.md")
+    core = _read("reference/core-rules.md")
     assert "within two days" in core and "still ahead" in core  # allowed admin questions
 
 
 def test_past_questions_checks_an_exam_today_and_passes_the_class_choice():
     exam_today = "Is your <name> today still ahead?"
     holders = [p.relative_to(ROOT_DIR).as_posix() for p in MARKDOWN if exam_today in p.read_text(encoding="utf-8")]
-    assert holders == ["skills/mimir-core-rules/SKILL.md"], holders  # defined once, reused
+    assert holders == ["reference/core-rules.md"], holders  # defined once, reused
     past = _read("skills/mimir-past-questions/SKILL.md")
     assert "`ask_exam_ahead`" in past and "Exam today" in past and "Mode and dates" in past
     assert past.index("Exam today") < past.index("5. Triage")  # before any drilling
@@ -359,7 +386,7 @@ def test_no_skill_writes_a_bare_date_from_parse_date():
 
 # The knowledge gauge (issue #39): rules and the Urgent offer live once in core
 # rules; study (Standard and Urgent) and past-question practice use them.
-CORE = "skills/mimir-core-rules/SKILL.md"
+CORE = "reference/core-rules.md"
 GAUGE_OFFER = "Quick gauge first? A few fresh questions, before any recipe, to see what you can already solve. Yes or no?"
 
 
@@ -399,7 +426,7 @@ def test_standard_session_runs_the_gauge_once_before_any_topic():
     assert "`gauge`" in gauge and "`done` false" in gauge and "`session.py gauge`" in gauge
     assert "core rules" in gauge
     assert episode.index("**Knowledge gauge**") < episode.index("Topic `T` is")
-    recording = _read("skills/mimir-core-rules/references/recording.md")
+    recording = _read("reference/recording.md")
     assert "gauge" in recording and "unassisted" in recording
 
 
@@ -409,7 +436,7 @@ def test_student_chooses_standard_or_urgent_through_session_start():
     for path in MARKDOWN + [ROOT_DIR / "README.md"]:
         text = path.read_text(encoding="utf-8")
         assert "never picks a mode" not in text and "only mode input" not in text, path
-    core = _read("skills/mimir-core-rules/SKILL.md")
+    core = _read("reference/core-rules.md")
     assert '"choice"' in core and '"lasting": true' in core
     assert "study normally" in core and "cram" in core and "until that exam passes" in core
     session = _read("skills/mimir-study/references/session.md")
@@ -424,7 +451,7 @@ def test_student_chooses_standard_or_urgent_through_session_start():
 # What an exam covers (issue #45): resolved once into in/out lists, confirmed by the
 # student, saved with the exam through session.py scope, then used unchanged.
 def test_exam_scope_is_confirmed_before_it_is_saved_through_session_scope():
-    core = _read("skills/mimir-core-rules/SKILL.md")
+    core = _read("reference/core-rules.md")
     assert "## Exam scope" in core
     assert "In scope:" in core and "Out:" in core and "confirm" in core
     assert "`session.py scope`" in core and "never a file edit" in core
@@ -621,8 +648,8 @@ def test_whats_new_line_is_said_once_at_session_start_and_setup_marks_it_seen():
 
 # --- speed slice (#77): show what is ready first, check behind the first question ----
 
-VERIFIED = "skills/mimir-core-rules/references/verified-items.md"
-RECORDING = "skills/mimir-core-rules/references/recording.md"
+VERIFIED = "reference/verified-items.md"
+RECORDING = "reference/recording.md"
 QUESTION_FLOWS = ["skills/mimir-study/references/session.md", "skills/mimir-study/references/teaching.md",
                   "skills/mimir-study/references/urgent.md", "skills/mimir-quiz/SKILL.md",
                   "skills/mimir-past-questions/SKILL.md"]

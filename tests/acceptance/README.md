@@ -56,7 +56,7 @@ Write `verdict.md` per run and `SUMMARY.md` per host round (rows: the nine runs;
 
 ## Speed checks (#77, Claude Code)
 
-Counted from each run's raw events by `python3 tests/acceptance/speed_checks.py <run dir>`, which prints one line per finding and a `J K L M N` summary (rules: `docs/trust-every-session-design.md` §9, `skills/mimir-core-rules/references/verified-items.md`). Copy its summary into `verdict.md`.
+Counted from each run's raw events by `python3 tests/acceptance/speed_checks.py <run dir>`, which prints one line per finding and a `J K L M N` summary (rules: `docs/trust-every-session-design.md` §9, `reference/verified-items.md`). Copy its summary into `verdict.md`.
 
 - **J** No tool call before the feedback text in an answer turn (a turn that calls `session.py record`).
 - **K** No `verify.py submit` call or checker dispatch before the text of a practice question that starts a set. The script fails a turn with no text before its first submit call or dispatch and quotes the last text before it; confirm by eye that this text is the set's first practice question (quiz, gauge, a recheck or try-first question), or the explanation (Standard), the recipe (Urgent) or the first real question after its submit (past questions).

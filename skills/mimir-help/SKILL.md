@@ -3,7 +3,7 @@ name: mimir-help
 description: Mimir command router. Names the one Mimir command that fits the student's situation, then stops. Use only when the student asks which Mimir command fits.
 ---
 
-First read `../mimir-core-rules/SKILL.md` (beside this skill's folder) unless it is already loaded; it defines `<mimir>`.
+First read `../../reference/core-rules.md` (Mimir's `reference/` folder sits beside `skills/`; follow a linked skill folder to its real path first) unless it is already loaded; it defines `<mimir>`.
 
 Reads at start: nothing. Later, only the `SKILL.md` of a command you name (below).
 
@@ -34,7 +34,7 @@ Match the student's situation to one command. Read that command's `SKILL.md`, th
 
 > Run `<command>`: <why, in one sentence>.
 
-`<command>` is the skill name written the way this tool invokes skills (core-rules), e.g. `/mimir:mimir-study` in Claude Code. Write the reply without the leading `>`.
+`<command>` is the skill name written the way this tool invokes skills (core rules), e.g. `/mimir:mimir-study` in Claude Code. Write the reply without the leading `>`.
 
 At most a two-step sequence, only when the first step is needed first, e.g. "Run `mimir-setup`, then `mimir-ingest`: …".
 
