@@ -45,6 +45,7 @@ def home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))  # Windows ignores HOME
     return home
 
 
@@ -100,7 +101,7 @@ def cdir(home, root):
 def _run(script: Path, home: Path, cmd: str, payload) -> subprocess.CompletedProcess:
     stdin = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
     return subprocess.run([sys.executable, str(script), cmd], input=stdin, capture_output=True,
-                          env={**os.environ, "HOME": str(home)})
+                          env={**os.environ, "HOME": str(home), "USERPROFILE": str(home)})
 
 
 def ok(home: Path, payload, cmd: str = "submit") -> dict:
@@ -559,7 +560,7 @@ def test_sessions_have_separate_ledgers(home, cdir):
 
 def test_labels_work_with_the_builtin_pdf_reader_too(home, cdir):
     proc = subprocess.run([sys.executable, str(VF), "submit"], input=json.dumps(submit(real())).encode(),
-                          capture_output=True, env={**os.environ, "HOME": str(home), "PATH": ""})
+                          capture_output=True, env={**os.environ, "HOME": str(home), "USERPROFILE": str(home), "PATH": ""})
     assert proc.returncode == 0, proc.stderr.decode()
     assert json.loads(proc.stdout)["questions"][0]["label"] == "[real: past-papers/2024-final.pdf, p.3]"
 
@@ -664,7 +665,7 @@ def test_bad_json_exits_2(home, cdir, raw):
 @pytest.mark.parametrize("argv", [["check"], [], ["gate"], ["submit", "extra"]])
 def test_usage_errors_are_one_line(home, argv):
     proc = subprocess.run([sys.executable, str(VF), *argv], input=b"{}", capture_output=True,
-                          env={**os.environ, "HOME": str(home)})
+                          env={**os.environ, "HOME": str(home), "USERPROFILE": str(home)})
     assert proc.returncode == 2 and proc.stdout == b""
     err = proc.stderr.decode()
     assert err.startswith("verify.py: ") and err.count("\n") == 1, err

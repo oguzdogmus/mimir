@@ -31,6 +31,7 @@ def home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))  # Windows ignores HOME
     return home
 
 
@@ -43,7 +44,7 @@ def root(home):
 def _run(script: Path, home: Path, cmd: str, payload) -> subprocess.CompletedProcess:
     stdin = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
     return subprocess.run([sys.executable, str(script), cmd], input=stdin, capture_output=True,
-                          env={**os.environ, "HOME": str(home)})
+                          env={**os.environ, "HOME": str(home), "USERPROFILE": str(home)})
 
 
 def _ok(script: Path, home: Path, cmd: str, payload) -> dict:
@@ -1094,6 +1095,7 @@ def test_progress_writes_nothing_and_skips_plan(home, root, monkeypatch):
     for name in ("delivery_class", "debrief"):
         monkeypatch.setattr(session.plan, name, boom)
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))  # Windows ignores HOME
     assert session.cmd_progress({"now": NOW})["course"] == "CS201 Theory"
 
 
@@ -1250,7 +1252,7 @@ def test_now_fixed_clock(monkeypatch, clock, now, day, log, last, term):
 def test_now_reads_the_local_clock_with_its_offset(home):
     for tz, offset in (("UTC0", "+00:00"), ("IST-5:30", "+05:30"), ("EST5", "-05:00")):
         proc = subprocess.run([sys.executable, str(SS), "now"], input=b"{}", capture_output=True, check=False,
-                              env={**os.environ, "HOME": str(home), "TZ": tz})
+                              env={**os.environ, "HOME": str(home), "USERPROFILE": str(home), "TZ": tz})
         assert proc.returncode == 0 and proc.stderr == b"", proc.stderr.decode()
         out = json.loads(proc.stdout)
         assert out["now"].endswith(offset), (tz, out["now"])

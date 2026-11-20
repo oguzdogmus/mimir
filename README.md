@@ -49,7 +49,7 @@ agy --add-dir "$(realpath ~/.gemini/config/plugins/mimir)"
 2. Drop course files (outline, slides, past papers) into `~/learning/_inbox/` and run `mimir-ingest`.
 3. Run `mimir-study` and tell it when your exam is.
 
-Each command is a skill. Type it like this:
+Each command is a skill, 10 in all (listed under [Commands](#commands)). The rules every skill follows are plain files in the plugin's `reference/` folder, not commands. Type a command like this:
 
 | Agent | Format | Example |
 |---|---|---|
@@ -121,7 +121,13 @@ Before you see an answer key, a second agent, the checker, checks it. Mimir's sc
 
 Tested with Claude Code, Codex and Antigravity. Cursor, Grok Build and Muse Code read the same skill format and may work, but are not tested yet.
 
-So far Mimir has only been tested on **CachyOS (Arch Linux)**. It uses only the Python standard library and each system's default file opener, so other Linux distributions and macOS should work. Windows is untested: the skills call `python3`, which a standard Windows Python install may not provide (it ships `py` and `python`), so WSL is the safer choice for now. If something breaks on your system or agent, please [open an issue](https://github.com/oguzdogmus/mimir/issues).
+So far live sessions have only been checked by hand on **CachyOS (Arch Linux)**. Mimir uses only the Python standard library and each system's default file opener, so other Linux distributions should work. On other systems:
+
+- Claude Code on Windows with Git Bash: the scripts are tested in CI; no session has been checked by hand.
+- Codex and Antigravity on Windows: through WSL only.
+- macOS: the scripts are tested in CI.
+
+If something breaks on your system or agent, please [open an issue](https://github.com/oguzdogmus/mimir/issues).
 
 ## Troubleshooting
 

@@ -18,10 +18,15 @@ Scripts now own the answer-key check. Before, `verify.py gate` was stateless and
 - `session.py record` no longer accepts `gate` or `real_past_paper`. It looks the question up in the session's ledger by `item`; the label and the real-paper flag come from there. Frustration overrides need no ledger entry.
 - The checker (`helpers/verifier.md`) takes the path of a pack and replies with the token line, then `N | verdict | reason` per question.
 
+### Layout
+
+- The core rules and the notation rules are no longer skills: they moved from `skills/` to plain files in `reference/` (`core-rules.md`, `notation.md`, and the shared `recording.md`, `session-close.md` and `verified-items.md`). Antigravity ignores `user-invocable: false` and listed them as `/mimir-core-rules` and `/mimir-notation` commands ([#3](https://github.com/oguzdogmus/mimir/issues/3)). Mimir now ships 10 skills, one per command, and each still reads the core rules first.
+
 ### Validation
 
 - The full test suite passes.
 - A live quiz run on Claude Code with a scripted student: the checker read only the evidence pack, its reply carried the pack token, `settle` and `record` worked from the ledger, and the new acceptance check N (no batch settled without a checker call) passed: [results](docs/acceptance-78.md). The first run found that the checker wrote its working before the token line; `settle` now ignores text before it.
+- Live study and quiz runs on Claude Code, Codex and Antigravity: the answer check ran as an independent helper on all three hosts, each with its own dispatch recipe, and the README now says per host how the checker is kept read-only: [results](docs/acceptance-79.md) ([#79](https://github.com/oguzdogmus/mimir/issues/79)). A checker benchmark of 60 questions with 40 planted errors found 95% to 100% of them on every host and setting tried, with no right key rejected: [numbers](docs/measurements/checker-benchmark.md).
 
 ### Updating
 

@@ -33,5 +33,5 @@ Then fill in that OS's row below, with the commit you ran (`git rev-parse --shor
 |---|---|---|---|---|---|---|
 | Linux | 2026-10-19 | 71ed3ae + story 15 | yes, both (exit 0) | passed: HTML in Firefox, SVG in Gwenview, platform text right | Claude Code run, eye check by the maintainer | CachyOS, KDE on Wayland, Python 3.14.8. SVG opens in the system SVG default (Gwenview), accepted by design. |
 | macOS | pending | pending | pending | pending | pending | |
-| Windows | pending | pending | pending | pending | pending | |
-| WSL | pending | pending | pending | pending | pending | |
+| Windows | not run | n/a | not run | not checked by hand | n/a | The by-eye check was not run by hand. The script tests pass in CI (`.github/workflows/tests.yml`). |
+| WSL | not run | n/a | not run | not checked by hand | n/a | The by-eye check was not run by hand. |

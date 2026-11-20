@@ -61,6 +61,7 @@ def home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))  # Windows ignores HOME
     return home
 
 
@@ -90,7 +91,7 @@ def cdir(home, root, tmp_path):
 
 
 def _env(home: Path, **extra) -> dict:
-    return {**os.environ, "HOME": str(home), **extra}
+    return {**os.environ, "HOME": str(home), "USERPROFILE": str(home), **extra}
 
 
 def _run(home: Path, cmd: str, payload, env: dict | None = None) -> subprocess.CompletedProcess:
@@ -385,7 +386,7 @@ def test_bad_sheet_payload(home, cdir, payload, needle):
 
 def test_name_at_the_limit(home, cdir):
     out = ok(home, "sheet", sheet({"text": "a"}, name="a" * 60))
-    assert out["path"].endswith("/" + "a" * 60 + ".html")
+    assert Path(out["path"]).name == "a" * 60 + ".html"
 
 
 # --- svg -----------------------------------------------------------------------------
@@ -551,7 +552,7 @@ def _fake_bin(tmp_path: Path, name: str, body: str) -> Path:
 def _clean_env(home: Path, path: str, **extra) -> dict:
     env = {k: v for k, v in os.environ.items()
            if k not in ("DISPLAY", "WAYLAND_DISPLAY", "WSL_DISTRO_NAME", "BROWSER")}
-    return {**env, "HOME": str(home), "PATH": path, **extra}
+    return {**env, "HOME": str(home), "USERPROFILE": str(home), "PATH": path, **extra}
 
 
 OPEN = {"term": TERM, "course": COURSE, "file": "demo.html"}
@@ -698,7 +699,7 @@ def test_stdlib_plus_own_scripts_only():
 
 
 def test_vendored_katex_is_the_subset():
-    files = sorted(str(p.relative_to(KATEX)) for p in KATEX.rglob("*") if p.is_file())
+    files = sorted(p.relative_to(KATEX).as_posix() for p in KATEX.rglob("*") if p.is_file())
     fonts = [f for f in files if f.startswith("fonts/")]
     assert all(f.endswith(".woff2") for f in fonts) and len(fonts) == 20
     assert sorted(set(files) - set(fonts)) == ["LICENSE", "VERSION", "contrib/auto-render.min.js",
