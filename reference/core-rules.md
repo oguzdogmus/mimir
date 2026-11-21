@@ -45,8 +45,8 @@ What an exam covers ("the midterm covers sessions 1–19") is saved with that ex
 
 ## Ending a session
 Study, quiz and past-question sessions, Standard and Urgent, run until the student asks to end: "end session" (or "stop", "I'm done"). Nothing else ends one: no timer, no finished set, route or drill list, no exam date.
-- **End-of-set hand-off**: when a question set, the drill list or the route runs out, say so and, in the same message, lead into the next set or offer choices (another set, a recheck, a weaker type or topic, or "end session"). Never go silent after a set, and never close by yourself.
-- Feedback on an answer and the next question share one turn: the text that needs no tool call first, then `session.py record` and any check calls, then only what had to wait for them (`<mimir>/reference/verified-items.md`, Turn shape). Pause only for a clarification or a continue-or-move-on choice.
+- **End-of-set hand-off**: when a question set, the drill list or the route runs out, say so and, in the same turn, lead into the next set or offer choices (another set, a recheck, a weaker type or topic, or "end session"). Never go silent after a set, and never close by yourself.
+- Feedback on an answer and the next question share one turn: the feedback text first, before any file read, checker definition or script call, then `session.py record` and any check calls, then the next question or hand-off, written once. The feedback is never written again (`<mimir>/reference/verified-items.md`, Turn shape). Pause only for a clarification or a continue-or-move-on choice.
 - The student reads only your reply text, never your thinking. A line, lesson or question that is only in your thinking was never said: write it in the reply. Never refer to a question "above" unless the reply shows it.
 - When the student asks to end, show no new item or key, log each shown item not yet answered as the skill says, then run the shared close (`<mimir>/reference/session-close.md`) once. `session.py close` writes the session's one end stamp; a repeated close changes nothing.
 

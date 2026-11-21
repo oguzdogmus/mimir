@@ -38,7 +38,7 @@ Less waiting between questions. Measured on real study sessions, the checker was
 
 ### Major changes
 
-- **What is ready comes first.** Feedback on an answer, its key and the next checked question are written before any tool call; `session.py record` and the checks run after them, in the same turn.
+- **What is ready comes first.** Feedback on an answer and its key are written before any tool call; `session.py record` and the checks run after them, and the next checked question follows once, in the same turn.
 - **Question sets.** Questions are prepared and checked in sets of at most 6, one checker batch per set. The first question of a set is shown at once when it is a practice question, and the set is checked behind it. Answer keys, worked answers and hints still wait for a `correct` verdict, and a real past-paper question still waits for its check. Standard study shows the explanation first, Urgent the first recipe.
 - **Failed checks.** Each question gets at most one recheck. A question not yet seen is fixed or dropped. A wrong key on a question already on screen is fixed quietly; a flawed question on screen is withdrawn in one line and replaced. The "flagged" state, its ⚠ line and the `compare` field are gone: in 428 real verdicts it was never reached.
 - **The checker runs in the foreground,** with one named recipe per host (Claude Code, Codex, Antigravity) before the same-context fallback.

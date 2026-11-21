@@ -689,7 +689,13 @@ def test_feedback_and_the_next_question_share_one_turn_with_text_before_tools():
     steps = [turn.index(f"\n{k}. ") for k in (1, 2, 3)]
     assert steps == sorted(steps)
     assert "needs no tool call" in turn and "`session.py record`" in turn
-    assert "nothing is written after `record`" in turn
+    # Hosts end a turn with a message after its last tool call: leaving nothing new to say made
+    # the tutor write its feedback twice, so the next question is what follows `record`.
+    assert "before any file read, checker definition or script call" in turn
+    assert "the next already checked question or the End-of-set hand-off" in turn
+    assert "The feedback and the key are never written again" in turn
+    for path in (VERIFIED, "skills/mimir-quiz/SKILL.md", "skills/mimir-past-questions/SKILL.md"):
+        assert "written after `record`" not in _read(path), path
     # Live runs (Claude Code, Sonnet and Opus) lost text written before tool calls: the set's
     # first question is written again once its check settles, so it is never lost.
     assert "written again in full: the set's first question" in turn and "explanation or recipe" in turn and 'never point to a question "above"' in turn

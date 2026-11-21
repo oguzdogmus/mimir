@@ -66,9 +66,11 @@ What the student can read while a set's check runs:
 
 The core rule "Feedback on an answer and the next question share one message" becomes "share one turn". The order inside an answer turn:
 
-1. Text that needs no tool call: feedback on the answer, the key, and the next question when it is already checked or is a practice question that starts a new set.
-2. Tool calls: `session.py record` for the answer and, when a new set starts, the calls that prepare and check it. Calls that do not depend on each other go in one step.
-3. Text after the tool calls only for what depended on them: a question that had to wait for its check, or a withdrawal line. Inside a set, nothing is written after `record`.
+1. Text that needs no tool call comes first, before any file read, checker definition or script call: feedback on the answer and the key, plus the first question of a new set when it is a practice question.
+2. Tool calls: `session.py record` for the answer, any reference file the turn still needs and, when a new set starts, the calls that prepare and check it. Calls that do not depend on each other go in one step.
+3. Text after the tool calls, each thing once: the next already checked question or the End-of-set hand-off, a question that had to wait for its check, or a withdrawal line. The feedback and the key are never written again.
+
+Changed on 2026-11-21 after live runs: the first version put the next checked question before `record` and allowed no text after it. Codex and Antigravity end a turn with a message after its last tool call, so they wrote the whole reply a second time.
 
 Further rules:
 

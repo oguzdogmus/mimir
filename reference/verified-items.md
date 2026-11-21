@@ -23,9 +23,9 @@ A question set is the group of questions prepared and checked together as one ba
 
 Feedback on an answer and the next question share one turn, in this order:
 
-1. Text that needs no tool call: feedback on the answer, the key, and the next question when it is already checked or is a practice question that starts a new set.
-2. Tool calls: `session.py record` for the answer and, when a new set starts, the calls that prepare and check it. Calls that do not depend on each other go in one step.
-3. Text after the tool calls only for what depended on them: a question that had to wait for its check, the dropped line or a withdrawal line. Inside a set, nothing is written after `record`. Never report a check's or `record`'s result ("all keys passed", "recorded as a solo solve", "the topic is now shaky") and never point to a question "above". The one repeat: a turn that started a set ends, once its check settles, with what the student was to read at once written again in full: the set's first question (when it was not withdrawn or dropped), or the explanation or recipe the calling skill shows at once. On some hosts text written before tool calls is lost, so this keeps it on screen; say nothing about the repeat.
+1. Text that needs no tool call comes first, before any file read, checker definition or script call of the turn: feedback on the answer and the key, plus the first question of a new set when it is a practice question.
+2. Tool calls: `session.py record` for the answer, any reference file the turn still needs and, when a new set starts, the calls that prepare and check it. Calls that do not depend on each other go in one step.
+3. Text after the tool calls, each thing once: the next already checked question or the End-of-set hand-off, a question that had to wait for its check, the dropped line or a withdrawal line. The feedback and the key are never written again. Never report a check's or `record`'s result ("all keys passed", "recorded as a solo solve", "the topic is now shaky") and never point to a question "above". The one repeat: a turn that started a set ends, once its check settles, with what the student was to read at once written again in full: the set's first question (when it was not withdrawn or dropped), or the explanation or recipe the calling skill shows at once. On some hosts text written before tool calls is lost, so this keeps it on screen; say nothing about the repeat.
 
 ## The check
 
