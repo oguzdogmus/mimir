@@ -124,8 +124,8 @@ Tested with Claude Code, Codex and Antigravity. Cursor, Grok Build and Muse Code
 So far live sessions have only been checked by hand on **CachyOS (Arch Linux)**. Mimir uses only the Python standard library and each system's default file opener, so other Linux distributions should work. On other systems:
 
 - Claude Code on Windows with Git Bash: the scripts are tested in CI; no session has been checked by hand.
-- Codex and Antigravity on Windows: through WSL only.
-- macOS: the scripts are tested in CI.
+- Codex and Antigravity on Windows: through WSL only; no session has been checked by hand.
+- macOS: the scripts are tested in CI; no session has been checked by hand.
 
 If something breaks on your system or agent, please [open an issue](https://github.com/oguzdogmus/mimir/issues).
 

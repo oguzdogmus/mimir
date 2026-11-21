@@ -179,7 +179,7 @@ The README states this per host.
 - **#23 finding 4.** Two Antigravity packaging leftovers are won't-fix and are written into the issue as such: the strict-mode warning on the root `AGENTS.md`, and the whole repository being copied on install. `RELEASE.md` gains the line that an Antigravity install is a snapshot and needs a reinstall after every change.
 - **Test matrix.** GitHub Actions runs the script tests on Linux, macOS and Windows. The repository has no CI today.
 - **Windows.** The script tests must pass on Windows; what fails gets fixed. Known gaps: `os.symlink` for the prior-term link, the `python3` command name, and the POSIX heredoc that every skill uses to pass JSON, which PowerShell does not run. Unknown until the first run: how many tests assume POSIX paths. The rules gain one sentence: use `python` or `py -3` when `python3` is missing. The README claims exactly this: Claude Code on Windows with Git Bash is tested in CI and not checked by hand; Codex and Antigravity on Windows are supported through WSL only.
-- **By-eye release checks.** The macOS row of `RELEASE.md` is filled later on a borrowed Mac. The Windows and WSL rows are marked as not checked by hand.
+- **By-eye release checks.** The macOS, Windows and WSL rows of `RELEASE.md` are marked as not checked by hand. The borrowed Mac planned for the macOS row is no longer available (2026-11-21).
 
 ## 9. Proof of speed
 
