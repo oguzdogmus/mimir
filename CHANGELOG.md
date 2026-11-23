@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.5.0
+
+Scripts now own the answer-key check. Before, `verify.py gate` was stateless and `session.py record` trusted a `gate` object the tutor typed, so no script noticed a skipped checker ([#23](https://github.com/oguzdogmus/mimir/issues/23)). Tracked in [#78](https://github.com/oguzdogmus/mimir/issues/78); design in [the design doc](docs/trust-every-session-design.md), sections 5 to 7.
+
+### Major changes
+
+- **Check ledger.** Every prepared question goes into one script-owned file per session in `<course>/.state/checks/`, with its full text, key, hint, sources, label, verdicts with reasons and checker kind. It is kept after the session. A question earns mastery credit only with a settled `correct` check there.
+- **Evidence pack.** The checker reads one pack per question set: the questions and keys, the text of every cited PDF page, small text and Markdown sources whole (longer ones by path), the paths of scans and the Notation section of the course fingerprint. This closes [#2](https://github.com/oguzdogmus/mimir/issues/2): in 24 of 73 real runs the checker had opened no source. On Claude Code the checker loses shell access and keeps Read, Grep and Glob.
+- **Pack token.** A checker reply must carry the pack's token on a line of its own, and only the verdict lines after it count; without it the batch stays unsettled. A tutor that skips the checker can no longer settle a batch by accident. The ledger stops forgetting, not lying: the README states this trust boundary.
+- **Real-paper labels by script.** A real question must carry at least 8 words in a row from the cited page (or the page after it); only then does it get `[real: <file>, p.<N>]`. A page with no text layer keeps the cautious scan label. A real question can now be shown at once, like a practice question, before its check finishes. The checker's fake-real cell is gone ([#23](https://github.com/oguzdogmus/mimir/issues/23) finding 3).
+- **Escapes and catches.** A key the student challenged and the tutor conceded is recorded as an escape, and `verify.py summary` counts questions checked, catches and escapes for the keep-or-drop review of the check after the exam season.
+
+### Script changes
+
+- `verify.py gate` is removed. New: `verify.py submit` (a question set as full text: labels, ledger, evidence pack), `settle` (the checker's reply, pasted unchanged, with `checker` `independent` or `self`, or `dispatch_failed`), `read` (one prepared question), `concede` (an escape) and `summary` (counts and disagreement lines).
+- `session.py record` no longer accepts `gate` or `real_past_paper`. It looks the question up in the session's ledger by `item`; the label and the real-paper flag come from there. Frustration overrides need no ledger entry.
+- The checker (`helpers/verifier.md`) takes the path of a pack and replies with the token line, then `N | verdict | reason` per question.
+
+### Layout
+
+- The core rules and the notation rules are no longer skills: they moved from `skills/` to plain files in `reference/` (`core-rules.md`, `notation.md`, and the shared `recording.md`, `session-close.md` and `verified-items.md`). Antigravity ignores `user-invocable: false` and listed them as `/mimir-core-rules` and `/mimir-notation` commands ([#3](https://github.com/oguzdogmus/mimir/issues/3)). Mimir now ships 10 skills, one per command, and each still reads the core rules first.
+
+### Validation
+
+- The full test suite passes.
+- A live quiz run on Claude Code with a scripted student: the checker read only the evidence pack, its reply carried the pack token, `settle` and `record` worked from the ledger, and the new acceptance check N (no batch settled without a checker call) passed: [results](docs/acceptance-78.md). The first run found that the checker wrote its working before the token line; `settle` now ignores text before it.
+- Live study and quiz runs on Claude Code, Codex and Antigravity: the answer check ran as an independent helper on all three hosts, each with its own dispatch recipe, and the README now says per host how the checker is kept read-only: [results](docs/acceptance-79.md) ([#79](https://github.com/oguzdogmus/mimir/issues/79)). A checker benchmark of 60 questions with 40 planted errors found 95% to 100% of them on every host and setting tried, with no right key rejected: [numbers](docs/measurements/checker-benchmark.md).
+
+### Updating
+
+Update or reinstall Mimir through your agent's plugin manager. Saved progress carries over. Session logs of earlier versions keep their disagreement lines; the ledger starts with the first session on 0.5.0.
+
+## 0.4.1
+
+Less waiting between questions. Measured on real study sessions, the checker was never the slow part: the tutor's own steps before the student had anything to read were. This release changes how sessions run, not the script contracts, except where listed. Tracked in [#77](https://github.com/oguzdogmus/mimir/issues/77); design in [the design doc](docs/trust-every-session-design.md), sections 1 to 4 and 9.
+
+### Major changes
+
+- **What is ready comes first.** Feedback on an answer and its key are written before any tool call; `session.py record` and the checks run after them, and the next checked question follows once, in the same turn.
+- **Question sets.** Questions are prepared and checked in sets of at most 6, one checker batch per set. The first question of a set is shown at once when it is a practice question, and the set is checked behind it. Answer keys, worked answers and hints still wait for a `correct` verdict, and a real past-paper question still waits for its check. Standard study shows the explanation first, Urgent the first recipe.
+- **Failed checks.** Each question gets at most one recheck. A question not yet seen is fixed or dropped. A wrong key on a question already on screen is fixed quietly; a flawed question on screen is withdrawn in one line and replaced. The "flagged" state, its ⚠ line and the `compare` field are gone: in 428 real verdicts it was never reached.
+- **The checker runs in the foreground,** with one named recipe per host (Claude Code, Codex, Antigravity) before the same-context fallback.
+- **Shorter wait line:** "Checking my answers before you study them.", once per session, only when there is nothing new to read ([#23](https://github.com/oguzdogmus/mimir/issues/23) finding 5).
+
+### Script changes
+
+- `verify.py gate` no longer returns `flagged` and no longer accepts `compare`; a question whose recheck fails is `dropped`. A key the checker caught and the tutor fixed adds a `fixed` disagreement line.
+- `session.py record` takes the session's `log` name and writes the outcome line under `## Results` itself, once: a retried call or a `duplicate` writes no second line. It no longer accepts `flagged` as a gate decision.
+
+### Validation
+
+- **1,407 automated tests** pass.
+- Live acceptance on Claude Code (Sonnet 5.5), a study run and a quiz run: [results](docs/acceptance-77.md). Feedback now comes before every tool call in answer turns, the checker always runs in the foreground with one batch per set, and `record` writes every log line. On Claude Code the first question of a set (and a Standard explanation) is not shown before its check: the tutor drafts it in its thinking and the text is lost, so the turn ends by writing it again once the check settles. At a set start the student still waits for the check on this host.
+- The speed targets (answer to feedback at most 15 s, answer to next question at most 25 s, as medians) are measured on real sessions after release; see [the measurements](docs/measurements/trust-every-session.md).
+
+### Updating
+
+Update or reinstall Mimir through your agent's plugin manager. Saved progress carries over.
+
 ## 0.4.0
 
 Study sessions are now led by the student: they run until the student says "end session", the student can choose how a session runs, and Mimir learns how each student likes to be taught. Tracked in [#30](https://github.com/oguzdogmus/mimir/issues/30); design in [the design doc](docs/teaching-preferences-design.md).

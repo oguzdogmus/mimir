@@ -4,7 +4,7 @@ description: One-time full Mimir setup. Picks the learning folder, the course an
 disable-model-invocation: true
 ---
 
-First read `../mimir-core-rules/SKILL.md` (beside this skill's folder) unless it is already loaded; it defines `<mimir>`.
+First read `../../reference/core-rules.md` (Mimir's `reference/` folder sits beside `skills/`; follow a linked skill folder to its real path first) unless it is already loaded; it defines `<mimir>`.
 
 Reads at start: `workspace.py root` output. Nothing else; `references/sampler.md` is read only in step 6, when the sampler runs.
 

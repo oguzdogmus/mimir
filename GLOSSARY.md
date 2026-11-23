@@ -78,3 +78,27 @@ In Urgent, the short exam-sufficient method for a question type, shown before an
 
 **Session**:
 One `started:` record in a course log. Preference evidence also requires different calendar days.
+
+**Checker**:
+The independent helper that checks a question's answer key against the course sources before the key reaches the student. When a host has none, the tutor makes a same-context check and tells the student.
+_Avoid_: Verifier, grader
+
+**Question set**:
+The questions prepared and checked together, at most six. Not called a batch or a round.
+_Avoid_: Batch, round
+
+**Checker batch**:
+One checker call: the questions of one question set (or of its recheck) read from one evidence pack and settled together. The name belongs to the call, never to the set.
+
+**Check ledger**:
+The record of every prepared question and the outcome of its check, kept per session. A question earns mastery credit only when the ledger shows a settled check.
+_Avoid_: Gate result
+
+**Evidence pack**:
+What the checker reads for one question set: the questions, their answer keys and the text of every cited source.
+
+**Catch**:
+A check verdict other than correct that led to a fixed answer key or a dropped question.
+
+**Escape**:
+A wrong answer key that reached the student, counted when the student challenges it and the tutor concedes.

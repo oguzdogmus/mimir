@@ -1,6 +1,6 @@
 # Mimir: A head start, literally
 
-**Version 0.4.0** · early release, features and file layout may still change ([roadmap](#roadmap), [changelog](CHANGELOG.md))
+**Version 0.5.0** · early release, features and file layout may still change ([roadmap](#roadmap), [changelog](CHANGELOG.md))
 
 Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude.com/claude-code), [Codex](https://developers.openai.com/codex) and [Antigravity](https://antigravity.google). It teaches you course material in your professor's style and remembers what you know across sessions.
 
@@ -49,7 +49,7 @@ agy --add-dir "$(realpath ~/.gemini/config/plugins/mimir)"
 2. Drop course files (outline, slides, past papers) into `~/learning/_inbox/` and run `mimir-ingest`.
 3. Run `mimir-study` and tell it when your exam is.
 
-Each command is a skill. Type it like this:
+Each command is a skill, 10 in all (listed under [Commands](#commands)). The rules every skill follows are plain files in the plugin's `reference/` folder, not commands. Type a command like this:
 
 | Agent | Format | Example |
 |---|---|---|
@@ -108,11 +108,26 @@ Restart your agent after updating. Installed copies do not follow edits to a loc
 
 Uninstalling leaves your learning folder untouched.
 
+## How answer keys are checked
+
+Before you see an answer key, a second agent, the checker, checks it. Mimir's scripts keep a check ledger for every session in the course's `.state/checks/`: each prepared question with its key, its label, the checker's verdict and reason. A question earns mastery credit only when the ledger shows a `correct` check for it.
+
+- **What the checker reads.** One evidence pack per question set, written by the scripts: the questions and keys, the text of every cited PDF page and small notes file, the paths of longer files and scans, and the professor's notation from the course fingerprint. It reads the pack and the files named in it, nothing else.
+- **Real-paper labels.** A question shown as `[real: <file>, p.<N>]` has at least 8 words in a row of its wording on that page of the paper, checked by a script. A question from a scan says `[real, from photo/scan, wording may be off]` and shows the original beside it.
+- **What the ledger proves, and what it does not.** The ledger stops forgetting, not lying. A checker reply must carry a token that only the evidence pack holds, so an agent that skips the checker cannot settle a check by accident. But the tutor and the checker share one shell, so no script can tell who called it, and an agent that invents a checker reply stays invisible to the scripts. Only the live acceptance runs show that a real checker ran.
+- **Read-only checker, per agent.** On Claude Code the agent enforces it: the checker has only Read, Grep and Glob, and no shell. On Codex it is a rule in the checker's instructions, because Codex cannot limit the tools of a helper it starts. On Antigravity it is a rule in the instructions too: Antigravity ties reading files outside its workspace to command access, and a helper given command access also gets write tools. When an agent has no helper at all, the tutor checks its own keys from the same pack and tells you once per session.
+
 ## Compatibility
 
 Tested with Claude Code, Codex and Antigravity. Cursor, Grok Build and Muse Code read the same skill format and may work, but are not tested yet.
 
-So far Mimir has only been tested on **CachyOS (Arch Linux)**. It uses only the Python standard library and each system's default file opener, so other Linux distributions and macOS should work. Windows is untested: the skills call `python3`, which a standard Windows Python install may not provide (it ships `py` and `python`), so WSL is the safer choice for now. If something breaks on your system or agent, please [open an issue](https://github.com/oguzdogmus/mimir/issues).
+So far live sessions have only been checked by hand on **CachyOS (Arch Linux)**. Mimir uses only the Python standard library and each system's default file opener, so other Linux distributions should work. On other systems:
+
+- Claude Code on Windows with Git Bash: the scripts are tested in CI; no session has been checked by hand.
+- Codex and Antigravity on Windows: through WSL only; no session has been checked by hand.
+- macOS: the scripts are tested in CI; no session has been checked by hand.
+
+If something breaks on your system or agent, please [open an issue](https://github.com/oguzdogmus/mimir/issues).
 
 ## Troubleshooting
 

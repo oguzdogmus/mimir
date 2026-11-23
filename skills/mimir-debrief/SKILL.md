@@ -3,7 +3,7 @@ name: mimir-debrief
 description: Run the Mimir post-exam debrief for a course in the student's learning folder - what was on the exam (recorded in the professor fingerprint, the forecast scored), which version of a disputed answer was right, the forecast for the next exam, and the cram bill as plain numbers. At most 3 questions, any one-word skip ends it. Use only after an exam, when the student is back from it or asks for the debrief.
 ---
 
-First read `../mimir-core-rules/SKILL.md` (beside this skill's folder) unless it is already loaded; it defines `<mimir>`.
+First read `../../reference/core-rules.md` (Mimir's `reference/` folder sits beside `skills/`; follow a linked skill folder to its real path first) unless it is already loaded; it defines `<mimir>`.
 
 Reads at start: script output (`session.py now`, `start`, `debrief`), or the study session's when entered from it. Course files only where a step says.
 

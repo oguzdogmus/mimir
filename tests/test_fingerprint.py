@@ -30,6 +30,7 @@ def home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))  # Windows ignores HOME
     return home
 
 
@@ -42,7 +43,7 @@ def root(home):
 def _run(script: Path, home: Path, cmd: str, payload) -> subprocess.CompletedProcess:
     stdin = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
     return subprocess.run([sys.executable, str(script), cmd], input=stdin, capture_output=True,
-                          env={**os.environ, "HOME": str(home)})
+                          env={**os.environ, "HOME": str(home), "USERPROFILE": str(home)})
 
 
 def ok(home: Path, cmd: str, payload) -> dict:
@@ -484,6 +485,52 @@ def test_retake_keeps_existing_link(root, home, prior):
     assert os.lstat(link).st_ino == before
 
 
+# Runs fingerprint.py with os.symlink failing the way it does on Windows for a user
+# without the symlink privilege (ERROR_PRIVILEGE_NOT_HELD).
+_NO_SYMLINK = """
+import os, runpy, sys
+def _no_privilege(*args, **kwargs):
+    raise OSError(None, "A required privilege is not held by the client", None, 1314)
+os.symlink = _no_privilege
+script = sys.argv[1]
+sys.path.insert(0, os.path.dirname(script))
+sys.argv = sys.argv[1:]
+runpy.run_path(script, run_name="__main__")
+"""
+
+
+def ok_without_symlinks(home: Path, payload) -> dict:
+    proc = subprocess.run([sys.executable, "-c", _NO_SYMLINK, str(FP), "retake"],
+                          input=json.dumps(payload).encode(), capture_output=True,
+                          env={**os.environ, "HOME": str(home), "USERPROFILE": str(home)})
+    assert proc.returncode == 0, proc.stderr.decode()
+    return json.loads(proc.stdout)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the symlink privilege and junctions exist only on Windows")
+def test_prior_term_link_without_symlink_privilege(root, home, prior, tmp_path):
+    out = ok_without_symlinks(home, retake("Dr. Ayse Kaya"))
+    new = root / NEW / COURSE
+    link = new / ".state" / "prior-term"
+    assert out["link"] == str(link) and out["same_professor"] is True and out["carry"] is True
+    assert not link.is_symlink() and (link / "fingerprint.md").is_file()
+    assert link.resolve() == (prior / ".state").resolve()
+    # a rerun keeps the link; prior-term sources validate through it
+    before = os.lstat(link).st_ino
+    ok_without_symlinks(home, retake("Dr. Ayse Kaya"))
+    assert os.lstat(link).st_ino == before
+    ok(home, "write", write(NEW, notation=[{"text": "Uses := for definitions",
+                                            "sources": ["prior-term:past-papers/text.pdf"]}]))
+    assert bullets(new) == ["- Uses := for definitions (source: prior-term:past-papers/text.pdf) (prior term)"]
+    # a junction holds an absolute path, so a relocate leaves it dangling; retake repairs it
+    target = tmp_path / "elsewhere" / "uni"
+    ws_ok(home, "relocate", {"to": str(target)})
+    moved = target / NEW / COURSE / ".state" / "prior-term"
+    ok_without_symlinks(home, retake(""))
+    assert (moved / "fingerprint.md").is_file()
+    assert moved.resolve() == (target / OLD / COURSE / ".state").resolve()
+
+
 # --- contract ----------------------------------------------------------------------
 
 @pytest.mark.parametrize("cmd", ["write", "retake"])
@@ -501,7 +548,7 @@ def test_bad_json_exits_2(root, home, cmd, raw):
 @pytest.mark.parametrize("argv", [["carry"], [], ["write", "extra"]])
 def test_usage_errors_are_one_line(home, argv):
     proc = subprocess.run([sys.executable, str(FP), *argv], input=b"{}", capture_output=True,
-                          env={**os.environ, "HOME": str(home)})
+                          env={**os.environ, "HOME": str(home), "USERPROFILE": str(home)})
     assert proc.returncode == 2 and proc.stdout == b""
     err = proc.stderr.decode()
     assert err.startswith("fingerprint.py: ") and err.count("\n") == 1, err
@@ -591,7 +638,7 @@ def test_symlinked_fingerprint_refused(root, home, prior, tmp_path, cmd):
     before = snapshot(root)
     fails(home, cmd, write(NEW) if cmd == "write" else retake("Dr. Ayse Kaya"), "is a symlink")
     assert snapshot(root) == before and real.read_text() == "outside\n"
-    assert os.readlink(path) == str(real)
+    assert path.is_symlink() and os.path.samefile(path, real)
 
 
 @pytest.mark.parametrize("prior_term, needle", [("2027-spring", "same term"),     # equal
