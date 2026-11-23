@@ -2,7 +2,7 @@
 
 2026-11-20. Live runs with a scripted student on all three hosts, on Linux (CachyOS), as [`tests/acceptance/README.md`](../tests/acceptance/README.md) says: one study run (support method-first, shortened to reach an independent check and a clean close) and one quiz run of 3 questions per host, each on a fresh fixture folder. The student was played by the implementing agent. J to N are counted from the raw host events by `tests/acceptance/speed_checks.py` on Claude Code and Antigravity; on Codex, whose `--json` stream lacks the subagent calls, G and the settle order were read from the session rollout. Raw runs are kept outside the repo under `~/.cache/mimir-acceptance/results/{claude,codex,agy}-79-r1/{study,quiz}`. These are fixture runs, not real student sessions.
 
-- Plugin: `2d94b42` (this branch, before the merge of #3), frozen as a worktree. **Not from the GitHub install**: the code is not on `main` yet. Codex used a clean `CODEX_HOME` with the login copied and Mimir added from a local marketplace (`codex plugin add mimir@mimir`, 12 skills); Antigravity used a clean HOME with `agy plugin install <local plugin>` (12 skills). See "To repeat after merge".
+- Plugin: `2d94b42` (this branch, before the merge of #3), frozen as a worktree. **Not from the GitHub install**: the code is not on `main` yet. Codex used a clean `CODEX_HOME` with the login copied and Mimir added from a local marketplace (`codex plugin add mimir@mimir`, 12 skills); Antigravity used a clean HOME with `agy plugin install <local plugin>` (12 skills). See "Repeat from the GitHub install".
 - Hosts: Claude Code 2.1.327 run lean on Sonnet 5.5; Codex CLI 0.166.0 on gpt-6.2-sol; Antigravity CLI `agy` 1.4.12 on its default model (gemini-4-neon-high), in print mode with `--dangerously-skip-permissions` and the installed plugin folder added with `--add-dir`.
 
 ## Results
@@ -34,14 +34,22 @@ Other checks:
 ## Findings
 
 1. **Antigravity's stream leaves out the checker definition.** agy 1.4.12 streams a `define_subagent` call with only its name and description; the system prompt and tool switches are only in the conversation's `brain/<id>/.system_generated/logs/transcript_full.jsonl`. `drive.py` now copies that file next to the run's events, and check G reads it. Two argument shapes exist (one JSON `definition`, or separate `Name`, `SystemPrompt` and `Enable*Tools` fields); both are read.
-2. **The Codex checker child loads the core rules.** In both Codex runs and in every Codex benchmark pack, the child's first command printed `skills/mimir-core-rules/SKILL.md`: the skill's description asks to be loaded before reading any Mimir `.state/` file, and the pack lives in `.state/checks/`. It read no course file the pack did not name. On Codex the checker's read-only rule is a prompt rule anyway (README). #3, merged into the integration branch after these runs, moves the core rules out of `skills/` into `reference/core-rules.md`, so this trigger should disappear; the repeat runs after the merge should confirm it. Not changed here.
+2. **The Codex checker child loads the core rules.** In both Codex runs and in every Codex benchmark pack, the child's first command printed `skills/mimir-core-rules/SKILL.md`: the skill's description asks to be loaded before reading any Mimir `.state/` file, and the pack lives in `.state/checks/`. It read no course file the pack did not name. On Codex the checker's read-only rule is a prompt rule anyway (README). #3, merged into the integration branch after these runs, moves the core rules out of `skills/` into `reference/core-rules.md`, and in the final repeat below neither Codex checker child read the core rules.
 3. **Antigravity is slow at a set start.** The quiz's first turn took about 185 s to the first question; the tutor also set a `schedule` timer of 120 s while it waited for the checker. Answer turns took 20 to 40 s in step time. agy's usage and seconds in the result event are totals for the conversation, so `transcript.md` shows running totals on Antigravity.
 4. **agy print mode needs the prompt last.** `agy -p` takes the next word as its prompt; with flags after it, agy refuses. Fixed in the driver and the benchmark.
 5. **No rule or README change was needed** from these runs: every host found its dispatch recipe in the core rules and used it.
 
-## To repeat after merge (from the GitHub install)
+## Repeat from the GitHub install
 
-The ticket asks for the Codex and Antigravity runs to start from the GitHub install, which closes #4. That can only happen once this branch is on `main`. After the merge, repeat on a clean home, with the README's commands:
+The ticket asks for the Codex and Antigravity runs to start from the GitHub install, which closes #4. These repeats are done, and #4 and #23 are closed.
+
+- **First repeat, 2026-11-21, on `283aef8`.** Codex and Antigravity study and quiz, installed from the GitHub branch into clean homes. The independent check passed on all four runs. The runs found two defects: the quiz wrote its answer-turn reply twice on both hosts, and the Antigravity study made tool calls before its text in two turns. Both were fixed in `470ef60`.
+- **Final repeat, 2026-11-21, on `cfd8870`.** The same four runs, from clean GitHub installs. `cfd8870` has the same file tree as the merge commit `0ef8596`. On Antigravity, both runs defined the checker from `helpers/verifier.md`, invoked it and settled its reply, and J to N pass. On Codex, both rollouts show `verify.py submit`, `spawn_agent` with `fork_turns` none, `wait_agent` and `verify.py settle`, in that order. Raw runs are under `~/.cache/mimir-acceptance/results/{codex,agy}-82-r2/{study,quiz}`.
+- **Install from `main`, 2026-11-23, at `0ef8596`.** The README's commands ran in clean homes on Codex CLI 0.166.0 and Antigravity CLI 1.5.14. Both installed Mimir 0.5.0 with 10 skills. This step ran no live session.
+
+Still open: the by-eye look at each host's window (`docs/issue-13-host-checks.md`). PR #82 also records one Antigravity quiz run where the set's first question appeared three times at the set start; the rule allows two.
+
+To run the install again on a clean home, with the README's commands:
 
 ```sh
 A=~/.cache/mimir-acceptance
@@ -51,7 +59,7 @@ CODEX_HOME="$A/codex-home-gh" codex plugin add mimir@mimir
 mkdir -p "$A/agy-home-gh" && HOME="$A/agy-home-gh" agy plugin install https://github.com/oguzdogmus/mimir
 ```
 
-Then the Codex study and quiz runs and the Antigravity study and quiz runs above (four runs), and confirm the skill count (10 once #3 is merged). The Claude Code runs need no repeat for #4; repeating them from `/plugin install` is optional.
+Then run the Codex and Antigravity study and quiz runs above (four runs) and confirm the skill count of 10. The Claude Code runs were not part of #4; repeating them from `/plugin install` is optional.
 
 ## Cost
 
