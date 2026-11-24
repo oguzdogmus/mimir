@@ -145,13 +145,13 @@ If that app doesn't expand slash commands either, run `mimir-setup` and `mimir-i
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/roadmap/mimir-roadmap-readme-dark.png">
-  <img src="assets/roadmap/mimir-roadmap-readme.png" alt="Mimir roadmap: shipped student-led study, adaptive teaching, and exam times and scope; next session reliability; planned clearer learning visuals and formatting; exploring textbook support, chapter connections, and safe migrations">
+  <img src="assets/roadmap/mimir-roadmap-readme.png" alt="Mimir roadmap: shipped student-led study in 0.4.0 and trust every session in 0.5.0, with independent answer checks on every agent and smoother installs; next clearer study pages, diagrams and question formatting; exploring textbook support, chapter connections, and safe migrations">
 </picture>
 
 Priorities come from hands-on testing and may change. There are no promised dates. Until 1.0, expect changes to how sessions run and to the folder layout. What changed in each version is in the [changelog](CHANGELOG.md).
 
 - **In 0.5.0: trust every session.** Answer keys are checked by an independent helper on Claude Code, Codex and Antigravity ([#23](https://github.com/oguzdogmus/mimir/issues/23), [#2](https://github.com/oguzdogmus/mimir/issues/2)), and installs are smoother ([#3](https://github.com/oguzdogmus/mimir/issues/3), [#4](https://github.com/oguzdogmus/mimir/issues/4)). Live runs covered Linux. macOS and Windows pass the script tests in CI, and macOS, Windows and WSL have not been checked by hand ([`RELEASE.md`](RELEASE.md)).
-- **Planned: make learning feel clearer.** Better-looking pages and diagrams, cleaner question and answer formatting in chat (especially the Claude mobile and desktop apps).
+- **Next: make learning feel clearer.** Better-looking pages and diagrams, cleaner question and answer formatting in chat (especially the Claude mobile and desktop apps).
 - **Exploring: bring the whole course.** Real textbook support (today ingest files a textbook, but sessions never read it), chapters linked to course topics, and safe migrations when the folder layout changes.
 
 ## Development
