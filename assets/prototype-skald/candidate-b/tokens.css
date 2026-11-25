@@ -1,0 +1,480 @@
+/*
+ * Skald, candidate B: "Saga editorial". PROTOTYPE (issue #87), throwaway.
+ * Design tokens and base rules injected under every Mimir page.
+ * Builders compose the body freely with the classes documented in guide.md.
+ */
+
+/* ---------- Fonts ---------- */
+@font-face {
+  font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("../fonts/fraunces-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("../fonts/fraunces-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("../fonts/inter-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("../fonts/inter-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---------- Tokens: light (warm paper, brown-black ink) ---------- */
+:root {
+  color-scheme: light;
+  --paper: #f4eee3;
+  --paper-glow: #faf6ee;
+  --paper-deep: #ebe2d1;
+  --ink: #261b15;
+  --ink-soft: #695a4c;
+  --ink-faint: #a99a88;
+  --rule: #d5c7b0;
+  --madder: #a3301c;          /* accent 1: madder red, the teaching pen */
+  --indigo: #2d3d6c;          /* accent 2: indigo, secondary emphasis */
+  --mark: var(--madder);
+  --mark-wash: rgba(163, 48, 28, .26);
+
+  /* figures */
+  --fig-ink: #2a2019;         /* the one neutral ink for formal notation */
+  --fig-soft: #8b7b69;        /* axes, grids, leader lines, ghosts */
+  --fig-paper: var(--paper);  /* knock-outs and halos */
+  --fig-curve: var(--madder); /* default curve colour in plots */
+  /* pigments and washes for depictions and Mimir's own sketches */
+  --pig-ochre: #b47a35;  --wash-ochre: #f0e0bd;
+  --pig-sage: #5f806a;   --wash-sage: #dde6da;
+  --pig-violet: #5a4889; --wash-violet: #e5def0;
+  --pig-sky: #3b6789;    --wash-sky: #dbe6ee;
+  /* conventional colours, only where the field uses them */
+  --arterial: #b3261e;   --venous: #2f4f9e;
+
+  /* type */
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-tex: "KaTeX_Main", "KaTeX_Math", "Times New Roman", serif;
+  --fs-small: .8125rem;
+  --fs-body: 1.0625rem;
+  --fs-lede: clamp(1.2rem, 1.05rem + .6vw, 1.42rem);
+  --fs-h3: clamp(1.15rem, 1.05rem + .4vw, 1.35rem);
+  --fs-h2: clamp(1.45rem, 1.2rem + 1vw, 1.95rem);
+  --fs-title: clamp(2.35rem, 1.5rem + 3.6vw, 4.4rem);
+  --fs-numeral: clamp(2.6rem, 1.8rem + 3.2vw, 5.2rem);
+  --lh-body: 1.62;
+
+  /* space (a 4-based scale) */
+  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem; --sp-5: 1.5rem;
+  --sp-6: 2rem; --sp-7: 3rem; --sp-8: 4.5rem;
+  --gutter: clamp(1.1rem, .6rem + 2vw, 2.5rem);
+
+  /* the folio grid: margin (numerals) | text | notes */
+  --col-margin: 6.5rem;
+  --col-text: 36rem;
+  --col-notes: 16rem;
+  --gap-margin: 2.25rem;
+  --gap-notes: 3rem;
+
+  /* motion */
+  --ease-ink: cubic-bezier(.22, .7, .18, 1);
+  --t-settle: .75s;
+  --t-draw: 1.15s;
+}
+
+/* ---------- Tokens: dark (lamplight on ink-dark paper) ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #17120e; --paper-glow: #2a2017; --paper-deep: #221a14;
+    --ink: #efe3cc; --ink-soft: #bba88e; --ink-faint: #6f6151; --rule: #3d3229;
+    --madder: #ea7a5e; --indigo: #a3b4ec;
+    --mark-wash: rgba(234, 122, 94, .3);
+    --fig-ink: #ebdfc8; --fig-soft: #9b8b77;
+    --pig-ochre: #d5a262; --wash-ochre: #3a2f1f;
+    --pig-sage: #8fb59b;  --wash-sage: #24302a;
+    --pig-violet: #ad9fe4; --wash-violet: #2b2638;
+    --pig-sky: #8db6d6;   --wash-sky: #1e2a33;
+    --arterial: #e3594c;  --venous: #7d9de3;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #17120e; --paper-glow: #2a2017; --paper-deep: #221a14;
+  --ink: #efe3cc; --ink-soft: #bba88e; --ink-faint: #6f6151; --rule: #3d3229;
+  --madder: #ea7a5e; --indigo: #a3b4ec;
+  --mark-wash: rgba(234, 122, 94, .3);
+  --fig-ink: #ebdfc8; --fig-soft: #9b8b77;
+  --pig-ochre: #d5a262; --wash-ochre: #3a2f1f;
+  --pig-sage: #8fb59b;  --wash-sage: #24302a;
+  --pig-violet: #ad9fe4; --wash-violet: #2b2638;
+  --pig-sky: #8db6d6;   --wash-sky: #1e2a33;
+  --arterial: #e3594c;  --venous: #7d9de3;
+}
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background-color: var(--paper);
+  background-image: radial-gradient(120% 60% at 50% -8%, var(--paper-glow), transparent 70%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font: 400 var(--fs-body)/var(--lh-body) var(--font-text);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
+}
+/* a faint paper grain */
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  opacity: .5; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .35 0 0 0 0 .25 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+:root[data-theme="dark"] body::before { mix-blend-mode: screen; opacity: .35; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body::before { mix-blend-mode: screen; opacity: .35; } }
+
+::selection { background: var(--mark-wash); }
+a { color: var(--indigo); text-decoration-thickness: 1px; text-underline-offset: .18em; }
+p { margin: 0 0 var(--sp-4); }
+strong, b { font-weight: 640; }
+em, i { font-style: italic; }
+
+h1, h2, h3 {
+  font-family: var(--font-display); color: var(--ink);
+  font-weight: 380; line-height: 1.06; letter-spacing: -.012em; margin: 0 0 var(--sp-4);
+  text-wrap: balance;
+}
+h1 { font-size: var(--fs-title); font-weight: 300; letter-spacing: -.028em; line-height: 1; }
+h2 { font-size: var(--fs-h2); }
+h3 { font-size: var(--fs-h3); font-weight: 520; }
+
+/* ---------- The folio grid ---------- */
+main {
+  --folio: [full-start] minmax(var(--gutter), 1fr)
+           [margin-start] var(--col-margin) [margin-end] var(--gap-margin)
+           [text-start] minmax(0, var(--col-text)) [text-end] var(--gap-notes)
+           [notes-start] var(--col-notes) [notes-end]
+           minmax(var(--gutter), 1fr) [full-end];
+  display: grid;
+  grid-template-columns: var(--folio);
+  align-content: start;
+  min-height: 100vh;
+  overflow-x: clip;
+  padding-top: clamp(1.5rem, .8rem + 2.6vw, 3.25rem);
+}
+main > * { grid-column: text; min-width: 0; }
+main > .wide   { grid-column: text-start / notes-end; }
+main > .full   { grid-column: margin-start / notes-end; }
+main > .aside  { grid-column: notes; }
+
+/* Masthead: kicker, title, standfirst */
+.masthead { grid-column: margin-start / notes-end; margin-bottom: var(--sp-4); }
+.masthead > * { max-width: 52rem; }
+.kicker {
+  display: flex; align-items: center; gap: var(--sp-3);
+  font: 560 var(--fs-small)/1.3 var(--font-text); letter-spacing: .015em;
+  color: var(--madder); margin: 0 0 var(--sp-4);
+}
+.kicker::before { content: ""; width: 2.25rem; height: 2px; background: currentColor; flex: none; }
+.lede {
+  font-family: var(--font-display); font-size: var(--fs-lede); font-weight: 360;
+  line-height: 1.45; color: var(--ink); max-width: 40rem;
+}
+.lede.dropcap::first-letter {
+  float: left; font-family: var(--font-display); font-weight: 600; font-style: normal;
+  font-size: 4.15em; line-height: .8; margin: .07em .09em -.05em -.02em;
+  color: var(--madder);
+}
+/* section break: double hairline with a centred lozenge */
+hr {
+  border: 0; height: 7px; margin: var(--sp-5) 0 var(--sp-6); overflow: visible; position: relative;
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+}
+hr::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 9px; height: 9px;
+  background: var(--paper); border: 1.5px solid var(--madder);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+main > hr { grid-column: margin-start / notes-end; }
+
+/* ---------- Steps: big numeral in the margin, body in the text column ---------- */
+.step {
+  grid-column: full;
+  display: grid; grid-template-columns: var(--folio);
+  align-items: start;
+  padding: var(--sp-5) 0 var(--sp-4);
+  scroll-margin: 6rem 0 7rem;
+}
+.step > * { grid-column: text; grid-row: 1; min-width: 0; }
+.step > .num { grid-column: margin; }
+.step > .aside, .step > .verdict { grid-column: notes; }
+.step > .verdict { align-self: end; margin: 0 0 var(--sp-6); }
+.step > .wide { grid-column: text-start / notes-end; grid-row: auto; }
+.num {
+  font-family: var(--font-display); font-weight: 250; font-size: var(--fs-numeral);
+  line-height: .78; letter-spacing: -.04em; color: var(--ink-faint);
+  text-align: right; font-variant-numeric: lining-nums;
+  transition: color .6s var(--ease-ink);
+}
+[data-latest] > .num, .num[data-latest] { color: var(--madder); }
+.body > :last-child { margin-bottom: 0; }
+.runin { font-family: var(--font-display); font-weight: 600; font-size: 1.08em; letter-spacing: -.005em; }
+
+/* Marginalia: notes, captions, answers */
+.aside {
+  font-size: var(--fs-small); line-height: 1.5; color: var(--ink-soft);
+  border-top: 2px solid var(--madder); padding-top: var(--sp-2);
+}
+.aside .label { display: block; font-weight: 600; color: var(--madder); letter-spacing: .02em; margin-bottom: var(--sp-1); }
+.verdict {
+  font-family: var(--font-display); font-size: var(--fs-h3); font-weight: 420; line-height: 1.35;
+  color: var(--ink); border-top: 2px solid var(--madder); border-bottom: 1px solid var(--rule);
+  padding: var(--sp-3) 0;
+}
+
+/* Spread: a figure beside a run of steps (figure sticks while steps change) */
+.spread {
+  grid-column: margin-start / notes-end;
+  display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: var(--sp-7); align-items: start;
+}
+.spread > figure { position: sticky; top: var(--sp-5); margin: 0; z-index: 1; }
+.spread > .run .step { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr); column-gap: var(--sp-3); padding: var(--sp-3) 0 var(--sp-4); border-top: 1px solid var(--rule); }
+.spread > .run .step > * { grid-column: 2; grid-row: auto; }
+.spread > .run .step > .num { grid-column: 1; grid-row: 1 / span 9; font-size: 2.9rem; text-align: left; }
+.spread > .run .step:first-child { border-top: 0; }
+
+/* ---------- Figures ---------- */
+figure { margin: var(--sp-5) 0; }
+figure svg, svg.fig { display: block; width: 100%; height: auto; overflow: visible; }
+.plate { background: var(--paper-deep); border-radius: 2px; padding: clamp(.75rem, .4rem + 1.5vw, 1.5rem); }
+figcaption, .caption {
+  font-size: var(--fs-small); line-height: 1.5; color: var(--ink-soft); margin-top: var(--sp-3);
+  padding-left: var(--sp-3); border-left: 2px solid var(--madder);
+}
+svg text { font-family: var(--font-display); fill: var(--fig-ink); font-weight: 420; }
+svg .tex, svg text.tex { font-family: var(--font-tex); font-weight: 400; }
+svg .tex-i { font-family: "KaTeX_Math", var(--font-tex); font-style: normal; }
+svg .label { font-family: var(--font-display); font-weight: 480; }
+svg .small { font-family: var(--font-text); font-weight: 500; fill: var(--fig-soft); }
+svg .ink { stroke: var(--fig-ink); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+svg .ink-fill { fill: var(--fig-ink); stroke: none; }
+svg .soft { stroke: var(--fig-soft); fill: none; }
+svg .soft-fill { fill: var(--fig-soft); }
+svg .curve { stroke: var(--fig-curve); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+svg .leader { stroke: var(--fig-soft); fill: none; stroke-width: 1.1; }
+svg .knock { fill: var(--fig-paper); }
+svg .halo { paint-order: stroke; stroke: var(--fig-paper); stroke-width: 5px; stroke-linejoin: round; }
+
+/* Tables: booktabs, no vertical rules */
+.table-wrap { overflow-x: auto; margin: var(--sp-4) 0; scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+table { border-collapse: collapse; font-variant-numeric: tabular-nums lining-nums; }
+table { border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
+th, td { padding: .55em .9em; text-align: center; }
+th { font: 600 var(--fs-small)/1.2 var(--font-text); color: var(--ink-soft); letter-spacing: .03em; text-align: left; }
+tr + tr > * { border-top: 1px solid var(--rule); }
+
+/* Small inline pieces */
+.sym {
+  display: inline-block; min-width: 1.45em; padding: 0 .3em; text-align: center;
+  font-family: var(--font-display); font-weight: 600; line-height: 1.35;
+  border: 1px solid var(--ink-faint); border-radius: 2px; background: var(--paper-deep);
+}
+.katex { font-size: 1.08em; }
+.katex-display { margin: var(--sp-4) 0; overflow-x: auto; overflow-y: hidden; padding: var(--sp-2) 0;
+  scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- The teaching highlight: the madder pen ---------- */
+span[data-highlight] { display: inline-block; margin: 0 .14em 0 .2em; }
+/* HTML targets: two imperfect ellipses, as if circled twice by hand. */
+[data-highlight-on]:not(svg, svg *) { position: relative; z-index: 0; }
+[data-highlight-on]:not(svg, svg *)::before,
+[data-highlight-on]:not(svg, svg *)::after {
+  content: ""; position: absolute; pointer-events: none; z-index: -1;
+  border: 2px solid var(--mark);
+}
+[data-highlight-on]:not(svg, svg *)::after {
+  inset: -.34em -.34em -.3em -.3em;
+  border-radius: 48% 52% 44% 56% / 58% 46% 54% 42%;
+  transform: rotate(-2.2deg);
+}
+[data-highlight-on]:not(svg, svg *)::before {
+  inset: -.24em -.24em -.4em -.4em; border-width: 1.25px;
+  border-top-color: transparent;
+  border-radius: 54% 46% 52% 48% / 44% 58% 42% 56%;
+  transform: rotate(3deg); opacity: .75;
+}
+/* SVG targets: draw the mark as its own element next to the target.
+   .mark-loop  a rough pen loop around a thing (state, point, label, layer)
+   .mark-swipe a broad translucent stroke under a line (edge, curve part)  */
+svg .mark-loop, svg .mark-swipe { display: none; pointer-events: none; }
+svg .mark-loop[data-highlight-on], svg .mark-swipe[data-highlight-on] { display: inline; }
+svg .mark-loop { fill: none; stroke: var(--mark); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+svg .mark-swipe { fill: none; stroke: var(--mark-wash); stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; }
+/* fallback for an SVG target without its own mark: a madder halo around it */
+svg [data-highlight-on]:not(.mark-loop, .mark-swipe) {
+  filter: drop-shadow(0 0 1px var(--mark)) drop-shadow(0 0 4px var(--mark-wash));
+}
+
+/* ---------- Step controls: the running foot of the page ---------- */
+:root { --cur: 0; --tot: 1; }
+:root[data-step-current="1"]{--cur:1} :root[data-step-current="2"]{--cur:2} :root[data-step-current="3"]{--cur:3}
+:root[data-step-current="4"]{--cur:4} :root[data-step-current="5"]{--cur:5} :root[data-step-current="6"]{--cur:6}
+:root[data-step-current="7"]{--cur:7} :root[data-step-current="8"]{--cur:8} :root[data-step-current="9"]{--cur:9}
+:root[data-step-current="10"]{--cur:10} :root[data-step-current="11"]{--cur:11} :root[data-step-current="12"]{--cur:12}
+:root[data-step-total="1"]{--tot:1} :root[data-step-total="2"]{--tot:2} :root[data-step-total="3"]{--tot:3}
+:root[data-step-total="4"]{--tot:4} :root[data-step-total="5"]{--tot:5} :root[data-step-total="6"]{--tot:6}
+:root[data-step-total="7"]{--tot:7} :root[data-step-total="8"]{--tot:8} :root[data-step-total="9"]{--tot:9}
+:root[data-step-total="10"]{--tot:10} :root[data-step-total="11"]{--tot:11} :root[data-step-total="12"]{--tot:12}
+
+#mimir-controls {
+  grid-column: margin-start / notes-end;
+  position: sticky; bottom: 0; z-index: 5;
+  display: flex; align-items: center; gap: var(--sp-4);
+  margin-top: var(--sp-7);
+  padding: var(--sp-3) 0 max(var(--sp-3), env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, transparent, var(--paper) 22%);
+  background-color: transparent;
+}
+#mimir-controls:empty { display: none; }
+#mimir-controls::before {           /* the double rule with the reading ribbon */
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px;
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  background: linear-gradient(var(--madder), var(--madder)) left center / calc(100% * var(--cur) / var(--tot)) 3px no-repeat;
+  transition: background-size .6s var(--ease-ink);
+}
+#mimir-controls::after { content: ""; position: absolute; inset: 5px -100vw 0; background: color-mix(in srgb, var(--paper) 86%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); z-index: -1; }
+#mimir-controls button {
+  font: 560 .95rem/1 var(--font-text); letter-spacing: .01em;
+  min-height: 2.9rem; padding: 0 1.15rem; border-radius: 2px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: .55rem;
+  transition: background-color .2s, color .2s, border-color .2s;
+}
+#mimir-back { background: transparent; color: var(--ink-soft); border: 1px solid transparent; }
+#mimir-back::before { content: ""; width: .9rem; height: .9rem; background: currentColor;
+  clip-path: polygon(100% 44%, 26% 44%, 50% 12%, 40% 4%, 4% 50%, 40% 96%, 50% 88%, 26% 56%, 100% 56%); }
+#mimir-back:hover:not(:disabled) { color: var(--ink); border-color: var(--rule); }
+#mimir-next { order: 3; margin-left: auto; background: var(--ink); color: var(--paper); border: 1px solid var(--ink); }
+#mimir-next::after { content: ""; width: .9rem; height: .9rem; background: currentColor;
+  clip-path: polygon(0 44%, 74% 44%, 50% 12%, 60% 4%, 96% 50%, 60% 96%, 50% 88%, 74% 56%, 0 56%); }
+#mimir-next:hover:not(:disabled) { background: var(--madder); border-color: var(--madder); }
+#mimir-controls button:disabled { opacity: .38; cursor: default; }
+#mimir-controls button:focus-visible { outline: 2px solid var(--madder); outline-offset: 3px; }
+#mimir-progress {
+  order: 2; font-family: var(--font-display); font-weight: 400; font-size: 1.15rem;
+  color: var(--ink-soft); letter-spacing: .04em; white-space: nowrap;
+}
+#mimir-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
+
+/* ---------- Narrower screens ---------- */
+@media (max-width: 1100px) {
+  :root { --col-margin: 4.5rem; --gap-margin: 1.5rem; --col-notes: 13rem; --gap-notes: 2rem; }
+}
+@media (max-width: 900px) {
+  main {
+    --folio: [full-start] var(--gutter) [margin-start] 2.6rem [margin-end] .9rem
+             [text-start] minmax(0, 1fr) [text-end notes-start] 0 [notes-end] var(--gutter) [full-end];
+    padding-top: var(--sp-6);
+  }
+  main > .wide, main > .aside { grid-column: margin-start / notes-end; }
+  .masthead { margin-bottom: var(--sp-5); }
+  .step { padding: var(--sp-4) 0 var(--sp-3); }
+  .step > .aside, .step > .wide, .step > .verdict { grid-column: text; grid-row: auto; margin-top: var(--sp-3); }
+  .num { font-size: 2.6rem; text-align: left; letter-spacing: -.05em; }
+  .spread { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+  .spread > figure {
+    top: 0; padding: var(--sp-3) 0 var(--sp-3); margin: 0 calc(-1 * var(--gutter));
+    padding-left: var(--gutter); padding-right: var(--gutter);
+    background: var(--paper); border-bottom: 1px solid var(--rule);
+    box-shadow: 0 10px 14px -12px rgba(0, 0, 0, .25);
+  }
+  .spread > .run .step { grid-template-columns: 2.6rem minmax(0, 1fr); column-gap: .9rem; scroll-margin-top: var(--sticky-fig, 16rem); }
+  .spread > .run .step > .num { font-size: 2.6rem; }
+  /* display maths and figures in a step reclaim the numeral gutter */
+  .step .body .katex-display, .step .body > figure, .step > figure { margin-left: -3.5rem; }
+  .step .katex-display > .katex { font-size: .98em; }
+  th, td { padding: .5em .4em; }
+  th { padding-left: 0; }
+  #mimir-controls { gap: var(--sp-2); }
+  #mimir-controls button { padding: 0 .95rem; }
+}
+
+/* ---------- Motion ---------- */
+@property --sweep { syntax: "<angle>"; inherits: false; initial-value: 360deg; }
+@keyframes sk-settle { from { opacity: 0; transform: translateY(.45rem); filter: blur(1.5px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes sk-ink    { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sk-draw   { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes sk-wash   { from { fill-opacity: 0; } }
+@keyframes sk-swell  { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.07); } }
+@keyframes sk-circle { from { --sweep: 0deg; } to { --sweep: 360deg; } }
+
+/* none: nothing moves; every step still appears */
+:root[data-motion="none"] *, :root[data-motion="none"] *::before, :root[data-motion="none"] *::after {
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+/* gentle: a step settles into place like ink drying; the pen mark fades in */
+:root[data-motion="gentle"] [data-latest]:not(svg, svg *),
+:root[data-motion="full"] [data-latest]:not(svg, svg *) { animation: sk-settle var(--t-settle) var(--ease-ink) both; }
+:root[data-motion="gentle"] svg [data-latest],
+:root[data-motion="gentle"] svg .mark-loop[data-highlight-on],
+:root[data-motion="gentle"] svg .mark-swipe[data-highlight-on] { animation: sk-ink .9s ease both; }
+:root[data-motion="gentle"] [data-highlight-on]:not(svg, svg *)::before,
+:root[data-motion="gentle"] [data-highlight-on]:not(svg, svg *)::after { animation: sk-ink .9s ease both; }
+/* full: strokes draw like a pen (pathLength="1"), washes ink in, the mark is drawn then swells once */
+:root[data-motion="full"] svg [data-latest] { animation: sk-ink .5s ease both; }
+:root[data-motion="full"] svg [data-latest] [pathLength="1"],
+:root[data-motion="full"] svg [data-latest][pathLength="1"] {
+  stroke-dasharray: 1 1; animation: sk-draw var(--t-draw) var(--ease-ink) both;
+}
+:root[data-motion="full"] svg [data-latest] .wash { animation: sk-wash .8s .55s ease both; }
+:root[data-motion="full"] svg .mark-loop[data-highlight-on],
+:root[data-motion="full"] svg .mark-swipe[data-highlight-on] {
+  stroke-dasharray: 1 1; transform-box: fill-box; transform-origin: center;
+  animation: sk-draw .8s .35s var(--ease-ink) both, sk-swell .55s 1.15s ease-in-out;
+}
+:root[data-motion="full"] [data-highlight-on]:not(svg, svg *)::before,
+:root[data-motion="full"] [data-highlight-on]:not(svg, svg *)::after {
+  -webkit-mask: conic-gradient(from 200deg, #000 var(--sweep), transparent 0);
+  mask: conic-gradient(from 200deg, #000 var(--sweep), transparent 0);
+  animation: sk-circle .7s .2s var(--ease-ink) both;
+}
+:root[data-motion="full"] [data-highlight-on]:not(svg, svg *)::after { animation: sk-circle .7s .2s var(--ease-ink) both, sk-swell .5s 1s ease-in-out; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Print: a clean handout ---------- */
+@media print {
+  @page { margin: 16mm 14mm; }
+  :root {
+    --paper: #fff; --paper-glow: #fff; --paper-deep: #fff; --ink: #000; --ink-soft: #333;
+    --ink-faint: #777; --rule: #999; --fig-ink: #000; --fig-soft: #555; --fig-paper: #fff;
+  }
+  body { background: #fff !important; color: #000; font-size: 10.5pt; }
+  body::before { display: none; }
+  html.mimir-js [data-step]:not([data-revealed]) { display: revert !important; }
+  html.mimir-js .step[data-step]:not([data-revealed]) { display: grid !important; }
+  html.mimir-js svg .mark-loop, html.mimir-js svg .mark-swipe { display: none !important; }
+  [data-highlight-on]::before, [data-highlight-on]::after { display: none !important; }
+  svg [data-highlight-on] { filter: none !important; }
+  #mimir-controls { display: none !important; }
+  * { animation: none !important; transition: none !important; }
+  main { min-height: 0; padding-top: 0; }
+  .spread { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .spread > figure { position: static; box-shadow: none; border: 0; margin: 0; padding: 0; background: none; }
+  .step, figure, table { break-inside: avoid; }
+  .num { color: #000 !important; }
+  .plate { background: none; padding: 0; }
+}

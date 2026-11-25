@@ -1,0 +1,525 @@
+/*
+ * Skald candidate C: "Blueprint". PROTOTYPE (issue #87), throwaway.
+ * Design tokens and base rules injected under every Mimir page.
+ * A drafting table: cool paper, navy ink, graph-paper screens, mono annotations,
+ * one signal accent for the current step and the teaching highlight.
+ */
+
+/* ---------- Fonts: IBM Plex Sans (text), IBM Plex Mono (labels, figures, controls) */
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/ibm-plex-sans-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/ibm-plex-sans-latin-ext-400.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("../fonts/ibm-plex-sans-latin-600.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("../fonts/ibm-plex-sans-latin-ext-600.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/ibm-plex-mono-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/ibm-plex-mono-latin-ext-400.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("../fonts/ibm-plex-mono-latin-500.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("../fonts/ibm-plex-mono-latin-ext-500.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+/* ---------- Tokens: light (drafting paper, navy ink) */
+:root {
+  color-scheme: light;
+  --sk-paper: #e9eef2;        /* page: cool drafting paper */
+  --sk-panel: #f5f8fa;        /* panels, control strip */
+  --sk-screen: #fafcfd;       /* figure screen behind the graph paper */
+  --sk-ink: #0f2a4a;          /* deep navy ink: text, notation strokes */
+  --sk-ink-2: #3f5877;        /* secondary text, leader lines, annotations */
+  --sk-ink-3: #7b8da4;        /* tertiary: units, captions' meta, faint labels */
+  --sk-rule: #c3cfdb;         /* hairlines between cells */
+  --sk-rule-2: #8a9cb2;       /* panel borders, ticks */
+  --sk-grid: rgba(15, 42, 74, .055);   /* graph paper, minor */
+  --sk-grid-2: rgba(15, 42, 74, .11);  /* graph paper, major */
+  --sk-signal: #e2560f;       /* the one accent: current step, teaching highlight */
+  --sk-signal-text: #b8430a;  /* accent when it is text on paper */
+  --sk-on-signal: #ffffff;
+  --sk-trace: rgba(226, 86, 15, .30);  /* highlight band under a line */
+  /* specimen tints for depictions with no conventional colours of their own */
+  --sk-sp-fluid: #dbe8f1;     /* cytoplasm, lumen, plasma */
+  --sk-sp-body: #c3d8e8;      /* dense region inside the fluid (nucleoid, nucleus) */
+  --sk-sp-membrane: #1d7b7f;  /* membranes, bilayers */
+  --sk-sp-band: #cfe7e5;      /* the space inside a bilayer */
+  --sk-sp-wall: #7356a8;      /* walls, matrices, fibres */
+  --sk-sp-coat: #4d8a3c;      /* coats, surface molecules */
+  --sk-sp-halo: rgba(84, 120, 160, .14); /* slime, capsule, gel */
+
+  /* type */
+  --sk-font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sk-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --sk-size: 1rem;            /* body 16px */
+  --sk-size-s: .875rem;       /* secondary text, table cells */
+  --sk-size-xs: .6875rem;     /* mono labels, panel tags (11px) */
+  --sk-size-h1: clamp(1.375rem, 1.05rem + 1.1vw, 1.75rem);
+  --sk-size-h2: 1.0625rem;
+  --sk-leading: 1.55;
+  --sk-track: .09em;          /* letter-spacing of uppercase mono labels */
+  /* SVG text, in user units of the 400-unit sheet (see guide) */
+  --sk-fig-label: 13px;
+  --sk-fig-note: 11px;
+
+  /* space (4px base) */
+  --sk-1: 4px; --sk-2: 8px; --sk-3: 12px; --sk-4: 16px; --sk-5: 24px; --sk-6: 32px; --sk-7: 48px;
+  --sk-gutter: 16px;
+  --sk-hair: 1px;
+  --sk-ctl-h: 60px;           /* control strip height */
+  --sk-maxw: 1320px;
+  --sk-col-gap: 24px;
+  --sk-fig-share: .575;       /* share of the desktop width the figure column takes */
+}
+
+/* ---------- Tokens: dark (night blueprint console) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --sk-paper: #06131f; --sk-panel: #0a1b2d; --sk-screen: #0b1e33;
+    --sk-ink: #d9ecfb; --sk-ink-2: #9cbad6; --sk-ink-3: #6383a3;
+    --sk-rule: #1c3854; --sk-rule-2: #355a7e;
+    --sk-grid: rgba(120, 186, 240, .065); --sk-grid-2: rgba(120, 186, 240, .14);
+    --sk-signal: #ff8a3d; --sk-signal-text: #ffa060; --sk-on-signal: #06131f;
+    --sk-trace: rgba(255, 138, 61, .34);
+    --sk-sp-fluid: #12314b; --sk-sp-body: #1c4567; --sk-sp-membrane: #5fcfca;
+    --sk-sp-band: #12403f; --sk-sp-wall: #b9a1ec; --sk-sp-coat: #92cf76;
+    --sk-sp-halo: rgba(140, 190, 235, .11);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --sk-paper: #06131f; --sk-panel: #0a1b2d; --sk-screen: #0b1e33;
+  --sk-ink: #d9ecfb; --sk-ink-2: #9cbad6; --sk-ink-3: #6383a3;
+  --sk-rule: #1c3854; --sk-rule-2: #355a7e;
+  --sk-grid: rgba(120, 186, 240, .065); --sk-grid-2: rgba(120, 186, 240, .14);
+  --sk-signal: #ff8a3d; --sk-signal-text: #ffa060; --sk-on-signal: #06131f;
+  --sk-trace: rgba(255, 138, 61, .34);
+  --sk-sp-fluid: #12314b; --sk-sp-body: #1c4567; --sk-sp-membrane: #5fcfca;
+  --sk-sp-band: #12403f; --sk-sp-wall: #b9a1ec; --sk-sp-coat: #92cf76;
+  --sk-sp-halo: rgba(140, 190, 235, .11);
+}
+
+@media (min-width: 960px) {
+  :root { --sk-gutter: 24px; --sk-fig-label: 11px; --sk-fig-note: 9.5px; --sk-ctl-h: 60px; }
+}
+
+/* ---------- Base */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background-color: var(--sk-paper);
+  background-image:
+    linear-gradient(var(--sk-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--sk-grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+  color: var(--sk-ink);
+  font: 400 var(--sk-size)/var(--sk-leading) var(--sk-font);
+  font-feature-settings: "kern", "liga";
+  overflow-x: hidden;
+}
+p { margin: 0 0 var(--sk-3); }
+p:last-child { margin-bottom: 0; }
+h1, h2, h3 { margin: 0 0 var(--sk-3); font-weight: 600; line-height: 1.22; letter-spacing: -.005em; }
+h1 { font-size: var(--sk-size-h1); }
+h2 { font-size: var(--sk-size-h2); }
+em, i { font-style: italic; }
+strong, b { font-weight: 600; }
+code, kbd, samp { font-family: var(--sk-mono); font-size: .92em; }
+.katex { font-size: 1.08em; }
+.katex-display { margin: var(--sk-3) 0; overflow-x: auto; overflow-y: hidden; padding: var(--sk-1) 0; scrollbar-width: thin; scrollbar-color: var(--sk-rule-2) transparent; }
+@media (max-width: 479.98px) { .katex-display > .katex { font-size: .98em; } }
+:focus-visible { outline: 2px solid var(--sk-signal); outline-offset: 2px; }
+.sk-mono { font-family: var(--sk-mono); }
+.sk-meta { font: 400 var(--sk-size-xs)/1.4 var(--sk-mono); letter-spacing: var(--sk-track); text-transform: uppercase; color: var(--sk-ink-3); }
+
+/* ---------- The bench: figure panel + readout column */
+main {
+  max-width: var(--sk-maxw);
+  margin: 0 auto;
+  padding: var(--sk-gutter) var(--sk-gutter) calc(var(--sk-ctl-h) + var(--sk-5));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "head" "fig" "log";
+  gap: var(--sk-4);
+  align-items: start;
+}
+.sk-head { grid-area: head; }
+.sk-fig  { grid-area: fig; }
+.sk-log  { grid-area: log; }
+@media (min-width: 960px) {
+  main:has(> .sk-fig) {
+    grid-template-columns: calc((100% - var(--sk-col-gap)) * var(--sk-fig-share)) minmax(0, 1fr);
+    grid-template-areas: "fig head" "fig log";
+    grid-template-rows: auto 1fr;
+    column-gap: var(--sk-col-gap);
+    row-gap: var(--sk-4);
+    padding-bottom: var(--sk-gutter);
+  }
+  main:not(:has(> .sk-fig)) { max-width: 760px; }
+}
+
+/* Title block: ruler on top, mono tag, title, intro */
+.sk-head {
+  position: relative;
+  padding: var(--sk-5) 0 var(--sk-2);
+  background:
+    repeating-linear-gradient(90deg, var(--sk-rule-2) 0 1px, transparent 1px 40px) top left / 100% 9px no-repeat,
+    repeating-linear-gradient(90deg, var(--sk-rule-2) 0 1px, transparent 1px 8px) top left / 100% 5px no-repeat;
+  border-top: 1px solid var(--sk-rule-2);
+}
+.sk-head h1 { margin-top: var(--sk-3); text-wrap: balance; }
+.sk-head > :last-child { margin-bottom: 0; }
+.sk-head > p:not(.sk-tag) { color: var(--sk-ink); max-width: 62ch; }
+.sk-tag {
+  display: inline-block;
+  margin: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--sk-rule-2);
+  background: var(--sk-panel);
+  color: var(--sk-ink-2);
+  font: 400 .75rem/1.35 var(--sk-mono);
+  letter-spacing: .01em;
+}
+
+/* Labelled panel: the label sits on the top border, like a legend on an instrument */
+.sk-panel {
+  position: relative;
+  margin: var(--sk-4) 0;
+  padding: var(--sk-4);
+  border: 1px solid var(--sk-rule-2);
+  background: var(--sk-panel);
+}
+.sk-panel[data-label]::before {
+  content: attr(data-label);
+  position: absolute; top: -.62em; left: var(--sk-3);
+  padding: 0 6px;
+  background: var(--sk-paper);
+  color: var(--sk-ink-2);
+  font: 500 var(--sk-size-xs)/1.2 var(--sk-mono);
+  letter-spacing: var(--sk-track); text-transform: uppercase;
+}
+.sk-panel.sk-result { border: 1.5px solid var(--sk-ink); background: var(--sk-screen); }
+.sk-panel.sk-result[data-label]::before { background: var(--sk-ink); color: var(--sk-paper); top: -.7em; padding: 1px 6px; }
+
+/* ---------- Step log: an instrument readout, one entry per step */
+.sk-log { counter-reset: sk-step; min-width: 0; }
+.sk-steps { list-style: none; margin: 0; padding: 0; }
+.sk-step {
+  counter-increment: sk-step;
+  position: relative;
+  padding: var(--sk-3) 0 var(--sk-4) 46px;
+  border-top: 1px solid var(--sk-rule);
+  scroll-margin-top: var(--sk-4);
+  scroll-margin-bottom: calc(var(--sk-ctl-h) + var(--sk-4));
+}
+.sk-step::before {
+  content: counter(sk-step, decimal-leading-zero);
+  position: absolute; left: 0; top: var(--sk-3);
+  width: 32px; height: 22px;
+  border: 1px solid var(--sk-rule-2);
+  color: var(--sk-ink-2);
+  font: 500 .75rem/20px var(--sk-mono);
+  text-align: center;
+  letter-spacing: .04em;
+}
+.sk-step::after { /* the plot line of the log, joining the indices */
+  content: ""; position: absolute; left: 16px; top: calc(var(--sk-3) + 23px); bottom: 0;
+  border-left: 1px dotted var(--sk-rule-2);
+}
+.sk-step[data-latest]::before { background: var(--sk-signal); border-color: var(--sk-signal); color: var(--sk-on-signal); }
+.sk-step[data-latest] { box-shadow: inset 0 2px 0 -1px var(--sk-signal); }
+.sk-step > :first-child { margin-top: 0; }
+.sk-step .katex-display { margin: var(--sk-2) 0; }
+
+/* ---------- Figure panel: the instrument's display */
+.sk-fig {
+  position: sticky; top: 0; z-index: 3;
+  margin: 0 calc(-1 * var(--sk-gutter));
+  display: flex; flex-direction: column;
+  background: var(--sk-screen);
+  border-block: 1px solid var(--sk-rule-2);
+}
+.sk-fig-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sk-3);
+  margin: 0; padding: 7px var(--sk-gutter);
+  border-bottom: 1px solid var(--sk-rule);
+  background: var(--sk-panel);
+  font: 500 var(--sk-size-xs)/1.3 var(--sk-mono);
+  letter-spacing: var(--sk-track); text-transform: uppercase;
+  color: var(--sk-ink);
+}
+.sk-fig-bar .sk-kind { color: var(--sk-ink-3); font-weight: 400; white-space: nowrap; }
+.sk-fig-bar .sk-kind::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border: 1px solid currentColor; vertical-align: 0; }
+.sk-screen {
+  position: relative;
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sk-3);
+  padding: var(--sk-3) var(--sk-3);
+}
+.sk-screen > svg { display: block; width: 100%; max-width: 640px; height: auto; }
+/* graph paper, aligned to nothing: use behind diagrams and depictions, never behind a plot */
+.sk-paper {
+  background-image:
+    linear-gradient(var(--sk-grid-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--sk-grid-2) 1px, transparent 1px),
+    linear-gradient(var(--sk-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--sk-grid) 1px, transparent 1px);
+  background-size: 40px 40px, 40px 40px, 8px 8px, 8px 8px;
+  background-position: -1px -1px;
+}
+/* registration marks in the screen's four corners */
+.sk-screen::before {
+  content: ""; position: absolute; inset: 8px; pointer-events: none;
+  --m: var(--sk-rule-2);
+  background:
+    linear-gradient(var(--m) 0 0) 0 5px / 11px 1px, linear-gradient(var(--m) 0 0) 5px 0 / 1px 11px,
+    linear-gradient(var(--m) 0 0) 100% 5px / 11px 1px, linear-gradient(var(--m) 0 0) calc(100% - 5px) 0 / 1px 11px,
+    linear-gradient(var(--m) 0 0) 0 calc(100% - 5px) / 11px 1px, linear-gradient(var(--m) 0 0) 5px 100% / 1px 11px,
+    linear-gradient(var(--m) 0 0) 100% calc(100% - 5px) / 11px 1px, linear-gradient(var(--m) 0 0) calc(100% - 5px) 100% / 1px 11px;
+  background-repeat: no-repeat;
+}
+.sk-caption {
+  margin: 0; padding: var(--sk-2) var(--sk-gutter);
+  border-top: 1px solid var(--sk-rule);
+  background: var(--sk-panel);
+  color: var(--sk-ink-2);
+  font: 400 .8125rem/1.45 var(--sk-font);
+}
+.sk-caption .sk-fig-no { font: 500 var(--sk-size-xs)/1 var(--sk-mono); letter-spacing: var(--sk-track); text-transform: uppercase; color: var(--sk-ink); margin-right: .6em; }
+/* a figure whose content arrives later shows this until then */
+.sk-standby {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  margin: 0; padding: 4px 10px; white-space: nowrap;
+  background: var(--sk-screen); color: var(--sk-ink-3);
+  font: 400 var(--sk-size-xs)/1.4 var(--sk-mono); letter-spacing: var(--sk-track); text-transform: uppercase;
+}
+.sk-standby::before { content: "\25CC\00a0\00a0"; }
+.sk-screen:has([data-revealed]) > .sk-standby { display: none; }
+.sk-screen:has(> .sk-standby):not(:has([data-revealed])) {
+  background-image:
+    linear-gradient(var(--sk-grid-2) 1px, transparent 1px), linear-gradient(90deg, var(--sk-grid-2) 1px, transparent 1px),
+    linear-gradient(var(--sk-grid) 1px, transparent 1px), linear-gradient(90deg, var(--sk-grid) 1px, transparent 1px);
+  background-size: 40px 40px, 40px 40px, 8px 8px, 8px 8px;
+  background-position: -1px -1px;
+}
+@media (max-width: 959.98px) {
+  .sk-fig:has(.sk-standby):not(:has(.sk-screen [data-revealed])) { position: relative; }
+  .sk-fig:has(.sk-standby):not(:has(.sk-screen [data-revealed])) .sk-screen:has(> svg[data-step]) { min-height: 72px; aspect-ratio: auto !important; }
+}
+@media (min-width: 960px) {
+  .sk-fig {
+    top: var(--sk-gutter);
+    margin-inline: 0;
+    height: calc(100vh - 2 * var(--sk-gutter) - var(--sk-ctl-h) + 1px);
+    min-height: 420px;
+    border: 1px solid var(--sk-rule-2);
+  }
+  .sk-fig-bar, .sk-caption { padding-inline: var(--sk-4); }
+  .sk-screen { padding: var(--sk-5); }
+  .sk-screen > svg { max-height: calc(100vh - 230px); }
+  .sk-step { scroll-margin-bottom: var(--sk-5); }
+}
+
+/* Readout cells: label over value, hairline-separated */
+.sk-cells { display: flex; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; border: 1px solid var(--sk-rule-2); }
+.sk-cells > * { flex: 1 1 0; min-width: 7em; padding: var(--sk-2) var(--sk-3); border-left: 1px solid var(--sk-rule); }
+.sk-cells > :first-child { border-left: 0; }
+.sk-cells .sk-meta { display: block; margin-bottom: 2px; }
+
+/* Tables */
+.sk-table-wrap { max-width: 100%; overflow-x: auto; margin: var(--sk-3) 0; }
+.sk-table { border-collapse: collapse; font-size: var(--sk-size-s); font-variant-numeric: tabular-nums; background: var(--sk-screen); }
+.sk-table th, .sk-table td { border: 1px solid var(--sk-rule); padding: 6px 10px; text-align: center; vertical-align: middle; }
+.sk-table th { font: 500 var(--sk-size-xs)/1.2 var(--sk-mono); letter-spacing: .04em; color: var(--sk-ink-2); background: var(--sk-panel); text-transform: none; }
+.sk-table th[scope="row"] { text-align: left; font-family: var(--sk-font); }
+.sk-table .katex { font-size: 1em; }
+
+/* ---------- Teaching highlight: targeting brackets in the signal accent.
+   Never recolours the target. HTML: corner brackets around the element.
+   SVG: .sk-reticle (bracket path the builder draws around a point or shape;
+                     add .sk-dashed for a dashed contour around an irregular shape)
+        .sk-trace   (accent band under a line, drawn before the line)
+   Both stay hidden until their data-highlight step is the latest. */
+[data-highlight-on]:not(svg, svg *) { position: relative; }
+[data-highlight-on]:not(svg, svg *)::after {
+  content: ""; position: absolute; inset: -5px -5px; pointer-events: none; z-index: 1;
+  --c: var(--sk-signal); --l: 9px; --w: 2px;
+  background:
+    linear-gradient(var(--c) 0 0) 0 0 / var(--l) var(--w), linear-gradient(var(--c) 0 0) 0 0 / var(--w) var(--l),
+    linear-gradient(var(--c) 0 0) 100% 0 / var(--l) var(--w), linear-gradient(var(--c) 0 0) 100% 0 / var(--w) var(--l),
+    linear-gradient(var(--c) 0 0) 0 100% / var(--l) var(--w), linear-gradient(var(--c) 0 0) 0 100% / var(--w) var(--l),
+    linear-gradient(var(--c) 0 0) 100% 100% / var(--l) var(--w), linear-gradient(var(--c) 0 0) 100% 100% / var(--w) var(--l);
+  background-repeat: no-repeat;
+}
+svg .sk-reticle { fill: none; stroke: var(--sk-signal); stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; }
+svg .sk-reticle.sk-dashed { stroke-width: 1.5; stroke-dasharray: 5 3.5; stroke-linecap: butt; }
+svg .sk-trace { fill: none; stroke: var(--sk-trace); stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+svg :is(.sk-reticle, .sk-trace):not([data-highlight-on]) { display: none; }
+/* fallback for any other SVG target: an accent contour hugging its strokes */
+svg [data-highlight-on]:not(.sk-reticle, .sk-trace) {
+  filter: drop-shadow(0 0 .6px var(--sk-signal)) drop-shadow(0 0 2.5px var(--sk-signal));
+}
+
+/* ---------- Figure base: ink follows the theme */
+svg { font-family: var(--sk-mono); }
+svg text { fill: var(--sk-ink); font-size: var(--sk-fig-label); font-family: var(--sk-mono); }
+svg .sk-note { font-size: var(--sk-fig-note); fill: var(--sk-ink-2); }
+svg .sk-sub { font-size: .72em; }
+/* mathematical symbols in figures use KaTeX's fonts, so they match the text's math */
+svg .sk-math { font-family: KaTeX_Main, "Times New Roman", serif; font-size: calc(var(--sk-fig-label) * 1.12); }
+svg .sk-var { font-family: KaTeX_Math, "Times New Roman", serif; font-style: italic; }
+svg .sk-halo { paint-order: stroke; stroke: var(--sk-screen); stroke-width: 4px; stroke-linejoin: round; }
+svg .sk-ink { fill: none; stroke: var(--sk-ink); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+svg .sk-ink-2 { fill: none; stroke: var(--sk-ink-2); stroke-width: 1; }
+svg .sk-leader { fill: none; stroke: var(--sk-ink-2); stroke-width: .9; }
+svg .sk-dot { fill: var(--sk-ink); stroke: none; }
+svg .sk-dot-open { fill: var(--sk-screen); stroke: var(--sk-ink); stroke-width: 1.5; }
+svg .sk-grid { fill: none; stroke: var(--sk-grid-2); stroke-width: 1; }
+svg .sk-grid-minor { fill: none; stroke: var(--sk-grid); stroke-width: 1; }
+svg .sk-axis { fill: none; stroke: var(--sk-ink); stroke-width: 1.25; }
+svg .sk-dim { fill: none; stroke: var(--sk-ink-2); stroke-width: .9; }
+svg .sk-arrowhead { fill: var(--sk-ink); stroke: none; }
+svg .sk-arrowhead-2 { fill: var(--sk-ink-2); stroke: none; }
+svg .sk-screen-fill { fill: var(--sk-screen); }
+
+/* ---------- Step controls: the instrument's control strip */
+#mimir-controls {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; align-items: center; gap: var(--sk-2);
+  min-height: var(--sk-ctl-h);
+  padding: 9px var(--sk-gutter) calc(9px + env(safe-area-inset-bottom, 0px));
+  background: var(--sk-panel);
+  border-top: 1px solid var(--sk-rule-2);
+  box-shadow: 0 -1px 0 var(--sk-paper), 0 -8px 24px -18px rgba(5, 20, 40, .45);
+  font-family: var(--sk-mono);
+}
+#mimir-controls:empty { display: none; }
+#mimir-back, #mimir-next {
+  appearance: none; -webkit-appearance: none;
+  height: 40px; padding: 0 14px;
+  border: 1px solid var(--sk-ink); border-radius: 0;
+  background: transparent; color: var(--sk-ink);
+  font: 500 .75rem/1 var(--sk-mono); letter-spacing: var(--sk-track); text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#mimir-back::before { content: "\25C2\00a0"; }
+#mimir-next::after { content: "\00a0\25B8"; }
+#mimir-next { background: var(--sk-ink); color: var(--sk-panel); min-width: 9.5em; }
+#mimir-back:hover:not(:disabled) { background: color-mix(in srgb, var(--sk-ink) 8%, transparent); }
+#mimir-next:hover:not(:disabled) { background: var(--sk-signal); border-color: var(--sk-signal); color: var(--sk-on-signal); }
+#mimir-back:disabled, #mimir-next:disabled { opacity: .38; cursor: default; }
+#mimir-progress {
+  order: -1;
+  display: flex; flex-direction: column; justify-content: center;
+  min-width: 5.6em; margin-right: auto; padding-right: var(--sk-3);
+  color: var(--sk-ink);
+  font: 500 1.375rem/1 var(--sk-mono); font-variant-numeric: tabular-nums; letter-spacing: .02em;
+  white-space: nowrap;
+}
+#mimir-progress::before {
+  content: "STEP"; display: block; margin-bottom: 4px;
+  font: 400 .625rem/1 var(--sk-mono); letter-spacing: .14em; color: var(--sk-ink-3);
+}
+:root[data-step-current]:not([data-step-current="0"]) #mimir-progress { color: var(--sk-signal-text); }
+#mimir-status {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0;
+}
+@media (min-width: 960px) {
+  #mimir-controls {
+    left: calc((100% - min(100%, var(--sk-maxw))) / 2 + var(--sk-gutter));
+    right: auto;
+    bottom: var(--sk-gutter);
+    width: calc((min(100%, var(--sk-maxw)) - 2 * var(--sk-gutter) - var(--sk-col-gap)) * var(--sk-fig-share));
+    padding: 9px var(--sk-4);
+    border: 1px solid var(--sk-rule-2);
+    box-shadow: none;
+  }
+  :root:not(:has(main > .sk-fig)) #mimir-controls { left: 0; right: 0; bottom: 0; width: auto; border-width: 1px 0 0; }
+  #mimir-status {
+    position: static; width: auto; height: auto; overflow: visible; clip-path: none;
+    order: -1; flex: 1 1 auto; min-width: 0; margin-right: var(--sk-3);
+    overflow: hidden; text-overflow: ellipsis;
+    color: var(--sk-ink-3); font: 400 .6875rem/1.3 var(--sk-mono); letter-spacing: .03em;
+  }
+  #mimir-status::before { content: "\203A\00a0"; color: var(--sk-ink-2); }
+  #mimir-progress { margin-right: 0; padding-right: var(--sk-4); border-right: 1px solid var(--sk-rule); }
+}
+
+/* ---------- Motion. none: nothing moves. gentle: quick fade + short rise.
+   full: text prints in, figure layers scan in, .sk-pen strokes plot like a pen
+   plotter (needs pathLength="1"), the highlight blinks once like a cursor. */
+@keyframes sk-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sk-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes sk-print { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes sk-scan { from { clip-path: inset(0 100% 0 0); opacity: .35; } 60% { opacity: 1; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+@keyframes sk-plot { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes sk-blink { 0%, 18% { opacity: 0; } 19%, 52% { opacity: 1; } 53%, 72% { opacity: 0; } 73%, 100% { opacity: 1; } }
+
+:root[data-motion="none"] *, :root[data-motion="none"] *::before, :root[data-motion="none"] *::after {
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+
+:root[data-motion="gentle"] [data-latest]:not(svg, svg *) { animation: sk-rise .24s cubic-bezier(.2, .7, .2, 1) both; }
+:root[data-motion="gentle"] :is(svg[data-latest], svg [data-latest]) { animation: sk-fade .28s ease-out both; }
+:root[data-motion="gentle"] [data-highlight-on]:not(svg, svg *)::after,
+:root[data-motion="gentle"] svg [data-highlight-on] { animation: sk-fade .22s ease-out .08s both; }
+:root[data-motion="gentle"] :is(#mimir-back, #mimir-next) { transition: background-color .15s, color .15s, border-color .15s; }
+
+:root[data-motion="full"] [data-latest]:not(svg, svg *) { animation: sk-print .42s cubic-bezier(.4, .1, .2, 1) both; }
+:root[data-motion="full"] :is(svg[data-latest], svg [data-latest]) { animation: sk-scan .62s cubic-bezier(.45, 0, .2, 1) both; }
+:root[data-motion="full"] :is(svg[data-latest], [data-latest]) .sk-pen,
+:root[data-motion="full"] .sk-pen[data-latest] { stroke-dasharray: 1; animation: sk-plot 1.1s cubic-bezier(.45, 0, .3, 1) .1s both; }
+:root[data-motion="full"] [data-highlight-on]:not(svg, svg *)::after,
+:root[data-motion="full"] svg :is(.sk-reticle, .sk-trace)[data-highlight-on] { animation: sk-blink .7s steps(1, end) .35s both; }
+:root[data-motion="full"] :is(#mimir-back, #mimir-next) { transition: background-color .12s, color .12s, border-color .12s; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-motion="full"] *, :root[data-motion="full"] *::after,
+  :root[data-motion="gentle"] *, :root[data-motion="gentle"] *::after { animation-name: sk-fade !important; transform: none; }
+}
+
+/* ---------- Print: a light handout with every step shown, no controls */
+@media print {
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"] {
+    color-scheme: light;
+    --sk-paper: #ffffff; --sk-panel: #ffffff; --sk-screen: #ffffff;
+    --sk-ink: #0f2a4a; --sk-ink-2: #3f5877; --sk-ink-3: #6b7d94;
+    --sk-rule: #c3cfdb; --sk-rule-2: #8a9cb2;
+    --sk-grid: rgba(15, 42, 74, .06); --sk-grid-2: rgba(15, 42, 74, .12);
+    --sk-signal: #e2560f; --sk-signal-text: #b8430a; --sk-on-signal: #fff;
+    --sk-sp-fluid: #e3eef5; --sk-sp-body: #cbdeec; --sk-sp-membrane: #1d7b7f;
+    --sk-sp-band: #d7ecea; --sk-sp-wall: #7356a8; --sk-sp-coat: #4d8a3c; --sk-sp-halo: rgba(84, 120, 160, .12);
+  }
+  @page { margin: 14mm 14mm 16mm; }
+  html.mimir-js [data-step]:not([data-revealed]) { display: revert !important; }
+  #mimir-controls, .sk-standby { display: none !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  body { background: #fff; font-size: 11pt; }
+  main, main:has(> .sk-fig) { display: block; max-width: none; padding: 0; }
+  .sk-head { padding-top: 14pt; }
+  .sk-fig { position: static; height: auto; min-height: 0; margin: 12pt 0; border: 1px solid var(--sk-rule-2); break-inside: avoid; }
+  .sk-fig-bar, .sk-caption { background: none; }
+  .sk-paper, .sk-screen { background-image: none !important; }
+  .sk-screen { padding: 10pt; }
+  .sk-screen > svg { max-height: 120mm; max-width: 150mm; }
+  .sk-step, .sk-step[data-latest] { break-inside: avoid; box-shadow: none; }
+  .sk-step[data-latest]::before { background: none; border-color: var(--sk-rule-2); color: var(--sk-ink-2); }
+  [data-highlight-on]:not(svg, svg *)::after { display: none; }
+  svg :is(.sk-reticle, .sk-trace) { display: none !important; }
+  svg [data-highlight-on] { filter: none; }
+  .sk-panel { background: none; }
+  .sk-panel[data-label]::before { background: #fff; }
+  .sk-panel.sk-result[data-label]::before { background: #fff; color: var(--sk-ink); border: 1px solid var(--sk-ink); }
+}

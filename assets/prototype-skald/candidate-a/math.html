@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Amplitude, period, phase shift</title>
+<link rel="stylesheet" href="../../vendor/katex/katex.min.css">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .keypoints td { min-width: 3.1rem; }
+  .plot .curve { stroke-width: 2.4px; }
+  .plot .pt { fill: var(--fig-ink); stroke: var(--fig-paper); stroke-width: 2.5px; }
+  .plot .axis { stroke: var(--fig-soft); stroke-width: 1.3px; }
+  .plot .guide { stroke: var(--fig-grid); stroke-dasharray: 3 4; stroke-width: 1px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="sk-head">
+    <p class="sk-label">[practice question, made by Mimir, answer checked]</p>
+    <p class="sk-question">Find the amplitude, period and phase shift of
+      \( f(x) = 3\sin\left(2x - \frac{\pi}{2}\right) \), then sketch one period.</p>
+  </header>
+
+  <ol class="sk-steps">
+    <li data-step="1">
+      <p>Write \(f\) in the form \(A\sin\big(B(x - C)\big)\):</p>
+      \[ \begin{aligned} f(x) &= 3\sin\left(2x - \frac{\pi}{2}\right) \\ &= 3\sin\left(2\left(x - \frac{\pi}{4}\right)\right) \end{aligned} \]
+      <p>so <span data-highlight="2">\(A = 3\)</span>, <span data-highlight="3">\(B = 2\)</span>, <span data-highlight="4">\(C = \frac{\pi}{4}\)</span>.</p>
+    </li>
+    <li data-step="2">
+      <p>Amplitude: \( |A| = 3 \).</p>
+    </li>
+    <li data-step="3">
+      <p>Period:</p>
+      \[ T = \frac{2\pi}{B} = \frac{2\pi}{2} = \pi \]
+    </li>
+    <li data-step="4">
+      <p>Phase shift: \( C = \frac{\pi}{4} \), so the graph is shifted \( \frac{\pi}{4} \) to the right.</p>
+    </li>
+    <li data-step="5">
+      <p>Key points of one period, from \(x = \frac{\pi}{4}\) to \(x = \frac{5\pi}{4}\):</p>
+      <div class="sk-table-wrap">
+        <table class="sk-table keypoints" data-highlight="5">
+          <tr><th scope="row">\(x\)</th><td>\(\frac{\pi}{4}\)</td><td>\(\frac{\pi}{2}\)</td><td>\(\frac{3\pi}{4}\)</td><td>\(\pi\)</td><td>\(\frac{5\pi}{4}\)</td></tr>
+          <tr><th scope="row">\(f(x)\)</th><td>\(0\)</td><td>\(3\)</td><td>\(0\)</td><td>\(-3\)</td><td>\(0\)</td></tr>
+        </table>
+      </div>
+    </li>
+    <li data-step="6">
+      <p>Sketch of one period, with the five key points marked.</p>
+      <figure class="sk-figure">
+        <svg class="plot" viewBox="0 0 470 304" role="img" aria-labelledby="plot-t plot-d">
+          <title id="plot-t">One period of f(x) = 3 sin(2x − π/2)</title>
+          <desc id="plot-d">A sine curve from x = π/4 to x = 5π/4. It starts at 0, rises to 3 at π/2, returns to 0 at 3π/4, falls to −3 at π and returns to 0 at 5π/4. The five key points are marked with dots.</desc>
+          <defs>
+            <marker id="ax-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto">
+              <path d="M1 1.5 L9 5 L1 8.5" fill="none" stroke="var(--fig-soft)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <!-- grid: verticals at every π/4, horizontals at ±3 -->
+          <g class="grid">
+            <path d="M112 30 V270 M176 30 V270 M240 30 V270 M304 30 V270 M368 30 V270 M432 30 V270"/>
+          </g>
+          <path class="guide" d="M48 42 H440 M48 258 H440"/>
+          <!-- axes -->
+          <path class="axis" d="M48 150 H452" marker-end="url(#ax-head)"/>
+          <path class="axis" d="M48 284 V14" marker-end="url(#ax-head)"/>
+          <path class="axis" d="M44 42 H52 M44 258 H52 M112 146 V154 M176 146 V154 M240 146 V154 M304 146 V154 M368 146 V154 M432 146 V154"/>
+          <!-- axis names and tick labels at the exact values -->
+          <text class="fig-math" x="460" y="155"><tspan class="v">x</tspan></text>
+          <text class="fig-math" x="58" y="22"><tspan class="v">y</tspan></text>
+          <g class="fig-tick" text-anchor="end">
+            <text x="38" y="47">3</text>
+            <text x="38" y="155">0</text>
+            <text x="38" y="263">−3</text>
+          </g>
+          <g class="fig-tick fig-math" text-anchor="middle" style="font-size:15px">
+            <text x="112" y="297">π/4</text>
+            <text x="176" y="297">π/2</text>
+            <text x="240" y="297">3π/4</text>
+            <text x="304" y="297">π</text>
+            <text x="368" y="297">5π/4</text>
+            <text x="432" y="297">3π/2</text>
+          </g>
+          <!-- the curve: 97 points computed from y = 3 sin(2x − π/2), x from π/4 to 5π/4 -->
+          <path class="ink curve sk-draw" pathLength="1" d="M112.00 150.00 L114.67 142.94 L117.33 135.90 L120.00 128.93 L122.67 122.05 L125.33 115.28 L128.00 108.67 L130.67 102.23 L133.33 96.00 L136.00 90.00 L138.67 84.25 L141.33 78.79 L144.00 73.63 L146.67 68.80 L149.33 64.32 L152.00 60.20 L154.67 56.47 L157.33 53.14 L160.00 50.22 L162.67 47.73 L165.33 45.68 L168.00 44.08 L170.67 42.92 L173.33 42.23 L176.00 42.00 L178.67 42.23 L181.33 42.92 L184.00 44.08 L186.67 45.68 L189.33 47.73 L192.00 50.22 L194.67 53.14 L197.33 56.47 L200.00 60.20 L202.67 64.32 L205.33 68.80 L208.00 73.63 L210.67 78.79 L213.33 84.25 L216.00 90.00 L218.67 96.00 L221.33 102.23 L224.00 108.67 L226.67 115.28 L229.33 122.05 L232.00 128.93 L234.67 135.90 L237.33 142.94 L240.00 150.00 L242.67 157.06 L245.33 164.10 L248.00 171.07 L250.67 177.95 L253.33 184.72 L256.00 191.33 L258.67 197.77 L261.33 204.00 L264.00 210.00 L266.67 215.75 L269.33 221.21 L272.00 226.37 L274.67 231.20 L277.33 235.68 L280.00 239.80 L282.67 243.53 L285.33 246.86 L288.00 249.78 L290.67 252.27 L293.33 254.32 L296.00 255.92 L298.67 257.08 L301.33 257.77 L304.00 258.00 L306.67 257.77 L309.33 257.08 L312.00 255.92 L314.67 254.32 L317.33 252.27 L320.00 249.78 L322.67 246.86 L325.33 243.53 L328.00 239.80 L330.67 235.68 L333.33 231.20 L336.00 226.37 L338.67 221.21 L341.33 215.75 L344.00 210.00 L346.67 204.00 L349.33 197.77 L352.00 191.33 L354.67 184.72 L357.33 177.95 L360.00 171.07 L362.67 164.10 L365.33 157.06 L368.00 150.00"/>
+          <!-- the five key points -->
+          <circle class="pt" cx="112" cy="150" r="4.5"/>
+          <circle class="pt" cx="176" cy="42" r="4.5" data-highlight="6"/>
+          <circle class="pt" cx="240" cy="150" r="4.5"/>
+          <circle class="pt" cx="304" cy="258" r="4.5"/>
+          <circle class="pt" cx="368" cy="150" r="4.5"/>
+        </svg>
+      </figure>
+      <p class="sk-answer"><span class="sk-eyebrow">Answer</span>Amplitude 3, period \(\pi\), phase shift \(\frac{\pi}{4}\) to the right.</p>
+    </li>
+  </ol>
+
+  <div id="mimir-controls"></div>
+</main>
+<script src="../../vendor/katex/katex.min.js"></script>
+<script src="../../vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../shell.js"></script>
+</body>
+</html>

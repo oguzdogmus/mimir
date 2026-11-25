@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Amplitude, period and phase shift</title>
+<link rel="stylesheet" href="../../vendor/katex/katex.min.css">
+<link rel="stylesheet" href="tokens.css">
+<style>
+.screen-plot { aspect-ratio: 400 / 292; }
+.sk-fig .curve { stroke-width: 2; }
+.sk-fig svg .coord { font-size: calc(var(--sk-fig-note) * 1.15); fill: var(--sk-ink-2); }
+</style>
+</head>
+<body>
+<main>
+  <header class="sk-head">
+    <p class="sk-tag">[practice question, made by Mimir, answer checked]</p>
+    <div class="sk-panel" data-label="Question">
+      <p>Find the amplitude, period and phase shift of \( f(x) = 3\sin\left(2x - \frac{\pi}{2}\right) \), then sketch one period.</p>
+    </div>
+  </header>
+
+  <section class="sk-log" aria-label="Worked answer">
+    <ol class="sk-steps">
+      <li class="sk-step" data-step="1">
+        <p>Write \(f\) in the form \(A\sin\big(B(x - C)\big)\):</p>
+        \[ f(x) = 3\sin\left(2x - \frac{\pi}{2}\right) = 3\sin\left(2\left(x - \frac{\pi}{4}\right)\right) \]
+        <p>so <span data-highlight="2">\(A = 3\)</span>, <span data-highlight="3">\(B = 2\)</span>, <span data-highlight="4">\(C = \frac{\pi}{4}\)</span>.</p>
+      </li>
+      <li class="sk-step" data-step="2">
+        <p>Amplitude: \( |A| = 3 \).</p>
+      </li>
+      <li class="sk-step" data-step="3">
+        <p>Period:</p>
+        \[ T = \frac{2\pi}{B} = \frac{2\pi}{2} = \pi \]
+      </li>
+      <li class="sk-step" data-step="4">
+        <p>Phase shift: \( C = \frac{\pi}{4} \), so the graph is shifted \( \frac{\pi}{4} \) to the right.</p>
+      </li>
+      <li class="sk-step" data-step="5">
+        <p>Key points of one period, from \(x = \frac{\pi}{4}\) to \(x = \frac{5\pi}{4}\):</p>
+        <div class="sk-table-wrap">
+          <table class="sk-table" data-highlight="5">
+            <tr><th scope="row">\(x\)</th><td>\(\frac{\pi}{4}\)</td><td>\(\frac{\pi}{2}\)</td><td>\(\frac{3\pi}{4}\)</td><td>\(\pi\)</td><td>\(\frac{5\pi}{4}\)</td></tr>
+            <tr><th scope="row">\(f(x)\)</th><td>\(0\)</td><td>\(3\)</td><td>\(0\)</td><td>\(-3\)</td><td>\(0\)</td></tr>
+          </table>
+        </div>
+      </li>
+      <li class="sk-step" data-step="6">
+        <p>Sketch of one period (the plot, Fig. 1), with the five key points marked.</p>
+        <div class="sk-panel sk-result" data-label="Answer">
+          <p>Amplitude 3, period \(\pi\), phase shift \(\frac{\pi}{4}\) to the right.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <figure class="sk-fig" aria-label="Figure 1, plot of one period">
+    <p class="sk-fig-bar"><span>Fig. 1 · one period of f</span><span class="sk-kind">plot</span></p>
+    <div class="sk-screen screen-plot">
+      <p class="sk-standby">plot appears at step 6</p>
+<svg data-step="6" viewBox="0 0 400 292" role="img" aria-labelledby="plot-t plot-d">
+<title id="plot-t">One period of f(x) = 3 sin(2x − π/2)</title>
+<desc id="plot-d">The curve starts on the x-axis at x = π/4, rises to its peak 3 at x = π/2, crosses the axis at x = 3π/4, falls to −3 at x = π and returns to the axis at x = 5π/4. The five key points are marked. Dimension lines show the amplitude 3, the period π from π/4 to 5π/4, and the phase shift π/4 from 0 to π/4.</desc>
+<defs><marker id="m-ax" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="5.6" orient="auto" markerUnits="userSpaceOnUse"><path class="sk-arrowhead" d="M0 0L10 3.5L0 7z"/></marker><marker id="m-dim" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="7" markerHeight="4.2" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path class="sk-arrowhead-2" d="M0 0L10 3L0 6z"/></marker></defs>
+<rect class="sk-screen-fill" x="0" y="0" width="400" height="292"/>
+<path class="sk-grid-minor" d="M72 52V248M124 52V248M176 52V248M228 52V248M280 52V248M332 52V248M46 248H364M46 220H364M46 192H364M46 164H364M46 136H364M46 108H364M46 80H364M46 52H364"/>
+<path class="sk-grid" d="M98 52V248M150 52V248M202 52V248M254 52V248M306 52V248M358 52V248M46 234H364M46 206H364M46 178H364M46 122H364M46 94H364M46 66H364"/>
+<path class="sk-axis" d="M38 150H386" marker-end="url(#m-ax)"/>
+<path class="sk-axis" d="M46 254V18" marker-end="url(#m-ax)"/>
+<path class="sk-axis" d="M98 146.5V153.5M150 146.5V153.5M202 146.5V153.5M254 146.5V153.5M306 146.5V153.5M358 146.5V153.5M42.5 234H49.5M42.5 206H49.5M42.5 178H49.5M42.5 122H49.5M42.5 94H49.5M42.5 66H49.5"/>
+<text class="sk-math sk-var" x="390" y="154" text-anchor="end" dy="14">x</text>
+<text class="sk-math sk-var" x="54" y="24">y</text>
+<text class="sk-math" x="46" y="266" text-anchor="middle">0</text>
+<text class="sk-math" x="98" y="266" text-anchor="middle">π/4</text>
+<text class="sk-math" x="150" y="266" text-anchor="middle">π/2</text>
+<text class="sk-math" x="202" y="266" text-anchor="middle">3π/4</text>
+<text class="sk-math" x="254" y="266" text-anchor="middle">π</text>
+<text class="sk-math" x="306" y="266" text-anchor="middle">5π/4</text>
+<text class="sk-math" x="358" y="266" text-anchor="middle">3π/2</text>
+<text class="sk-math" x="37" y="238.5" text-anchor="end">−3</text>
+<text class="sk-math" x="37" y="210.5" text-anchor="end">−2</text>
+<text class="sk-math" x="37" y="182.5" text-anchor="end">−1</text>
+<text class="sk-math" x="37" y="126.5" text-anchor="end">1</text>
+<text class="sk-math" x="37" y="98.5" text-anchor="end">2</text>
+<text class="sk-math" x="37" y="70.5" text-anchor="end">3</text>
+<path class="sk-dim" d="M98 52V37M306 52V37"/>
+<path class="sk-dim" d="M99 43H305" marker-start="url(#m-dim)" marker-end="url(#m-dim)"/>
+<text class="sk-math sk-halo" x="202" y="39" text-anchor="middle"><tspan class="sk-var">T</tspan> = π</text>
+<path class="sk-dim" d="M68 149V67" marker-start="url(#m-dim)" marker-end="url(#m-dim)"/>
+<path class="sk-dim" d="M63 66H144" stroke-dasharray="2 3"/>
+<text class="sk-math sk-halo" x="73" y="113">3</text>
+<path class="sk-dim" d="M47 192H97" marker-start="url(#m-dim)" marker-end="url(#m-dim)"/>
+<text class="sk-math sk-halo" x="72" y="209" text-anchor="middle">π/4</text>
+<path class="sk-ink sk-pen curve" pathLength="1" d="M98.00 150.00 L100.17 144.51 L102.33 139.04 L104.50 133.61 L106.67 128.26 L108.83 123.00 L111.00 117.85 L113.17 112.85 L115.33 108.00 L117.50 103.33 L119.67 98.86 L121.83 94.61 L124.00 90.60 L126.17 86.85 L128.33 83.36 L130.50 80.16 L132.67 77.25 L134.83 74.66 L137.00 72.39 L139.17 70.46 L141.33 68.86 L143.50 67.61 L145.67 66.72 L147.83 66.18 L150.00 66.00 L152.17 66.18 L154.33 66.72 L156.50 67.61 L158.67 68.86 L160.83 70.46 L163.00 72.39 L165.17 74.66 L167.33 77.25 L169.50 80.16 L171.67 83.36 L173.83 86.85 L176.00 90.60 L178.17 94.61 L180.33 98.86 L182.50 103.33 L184.67 108.00 L186.83 112.85 L189.00 117.85 L191.17 123.00 L193.33 128.26 L195.50 133.61 L197.67 139.04 L199.83 144.51 L202.00 150.00 L204.17 155.49 L206.33 160.96 L208.50 166.39 L210.67 171.74 L212.83 177.00 L215.00 182.15 L217.17 187.15 L219.33 192.00 L221.50 196.67 L223.67 201.14 L225.83 205.39 L228.00 209.40 L230.17 213.15 L232.33 216.64 L234.50 219.84 L236.67 222.75 L238.83 225.34 L241.00 227.61 L243.17 229.54 L245.33 231.14 L247.50 232.39 L249.67 233.28 L251.83 233.82 L254.00 234.00 L256.17 233.82 L258.33 233.28 L260.50 232.39 L262.67 231.14 L264.83 229.54 L267.00 227.61 L269.17 225.34 L271.33 222.75 L273.50 219.84 L275.67 216.64 L277.83 213.15 L280.00 209.40 L282.17 205.39 L284.33 201.14 L286.50 196.67 L288.67 192.00 L290.83 187.15 L293.00 182.15 L295.17 177.00 L297.33 171.74 L299.50 166.39 L301.67 160.96 L303.83 155.49 L306.00 150.00"/>
+<circle class="sk-dot-open" cx="98" cy="150" r="3.6"/>
+<circle class="sk-dot-open" cx="150" cy="66" r="3.6"/>
+<circle class="sk-dot-open" cx="202" cy="150" r="3.6"/>
+<circle class="sk-dot-open" cx="254" cy="234" r="3.6"/>
+<circle class="sk-dot-open" cx="306" cy="150" r="3.6"/>
+<text class="sk-math coord" x="165" y="62">(π/2, 3)</text>
+<text class="sk-math coord" x="263" y="247">(π, −3)</text>
+<path class="sk-reticle" data-highlight="6" d="M140 61V56H145M155 56H160V61M160 71V76H155M145 76H140V71"/>
+</svg>
+    </div>
+    <figcaption class="sk-caption" data-step="6"><span class="sk-fig-no">Fig. 1</span>\( f(x) = 3\sin\left(2x - \frac{\pi}{2}\right) \) over one period, key points marked. Dimension lines: amplitude, period, phase shift.</figcaption>
+  </figure>
+
+  <div id="mimir-controls"></div>
+</main>
+<script src="../../vendor/katex/katex.min.js"></script>
+<script src="../../vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../shell.js"></script>
+</body>
+</html>

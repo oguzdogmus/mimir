@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Amplitude, period and phase shift</title>
+<link rel="stylesheet" href="../../vendor/katex/katex.min.css">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .plot { margin: var(--sp-3) 0 0; max-width: 36rem; }
+  .plot svg text { font-size: 19px; }
+  @media (max-width: 600px) { .plot svg text { font-size: 24px; } }
+  .keypts circle { fill: var(--fig-ink); stroke: var(--fig-paper); stroke-width: 2.5; }
+  table .katex { font-size: 1.12em; }
+  .points td { min-width: 3.4rem; }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <p class="label">[practice question, made by Mimir, answer checked]</p>
+    <span class="tag" aria-hidden="true">Q.</span>
+    <h1 class="question">Find the amplitude, period and phase shift of \( f(x) = 3\sin\left(2x - \frac{\pi}{2}\right) \), then sketch one period.</h1>
+  </header>
+  <div class="steps">
+    <section class="step" data-step="1">
+      <span class="num">1</span>
+      <div class="body">
+        <p>Write \(f\) in the form \(A\sin\big(B(x - C)\big)\):</p>
+        \[ f(x) = 3\sin\left(2x - \frac{\pi}{2}\right) = 3\sin\left(2\left(x - \frac{\pi}{4}\right)\right) \]
+        <p>so <span data-highlight="2">\(A = 3\)</span>, <span data-highlight="3">\(B = 2\)</span>, <span data-highlight="4">\(C = \frac{\pi}{4}\)</span>.</p>
+      </div>
+    </section>
+    <section class="step" data-step="2">
+      <span class="num">2</span>
+      <div class="body"><p><span class="runin">Amplitude:</span> \( |A| = 3 \).</p></div>
+    </section>
+    <section class="step" data-step="3">
+      <span class="num">3</span>
+      <div class="body"><p><span class="runin">Period:</span></p>
+        \[ T = \frac{2\pi}{B} = \frac{2\pi}{2} = \pi \]</div>
+    </section>
+    <section class="step" data-step="4">
+      <span class="num">4</span>
+      <div class="body"><p><span class="runin">Phase shift:</span> \( C = \frac{\pi}{4} \), so the graph is shifted \( \frac{\pi}{4} \) to the right.</p></div>
+    </section>
+    <section class="step" data-step="5">
+      <span class="num">5</span>
+      <div class="body">
+        <p>Key points of one period, from \(x = \frac{\pi}{4}\) to \(x = \frac{5\pi}{4}\):</p>
+        <div class="table-wrap">
+          <table class="points">
+            <tr><th scope="row">\(x\)</th><td>\(\dfrac{\pi}{4}\)</td><td>\(\dfrac{\pi}{2}\)</td><td>\(\dfrac{3\pi}{4}\)</td><td>\(\pi\)</td><td>\(\dfrac{5\pi}{4}\)</td></tr>
+            <tr><th scope="row">\(f(x)\)</th><td>\(0\)</td><td>\(3\)</td><td>\(0\)</td><td>\(-3\)</td><td>\(0\)</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+    <section class="step" data-step="6">
+      <span class="num">6</span>
+      <div class="body">
+        <p>Sketch of one period, with the five key points marked.</p>
+        <figure class="plot">
+        <svg viewBox="0 0 600 300" role="img" aria-labelledby="plot-t plot-d">
+          <title id="plot-t">One period of f(x) = 3 sin(2x − π/2)</title>
+          <desc id="plot-d">The curve starts at (π/4, 0), rises to its maximum 3 at x = π/2, crosses zero at 3π/4, falls to its minimum −3 at x = π and returns to zero at 5π/4. The five key points are marked.</desc>
+          <path class="soft" d="M52 42H485.33M52 258H485.33" stroke-dasharray="2 6" stroke-width="1.3"/>
+          <g class="axes">
+            <path class="ink" pathLength="1" d="M38 150H586" stroke-width="1.5"/>
+            <path class="ink" pathLength="1" d="M52 292V14" stroke-width="1.5"/>
+            <path class="ink" d="M576 144L588 150L576 156M46 26L52 14L58 26" stroke-width="1.5"/>
+            <path class="ink" d="M138.67 145V155M225.33 145V155M312 145V155M398.67 145V155M485.33 145V155M47 42H57M47 258H57" stroke-width="1.5"/>
+            <text class="tex-i" x="588" y="176" text-anchor="end">x</text>
+            <text class="tex-i" x="66" y="24">y</text>
+            <text class="tex" x="42" y="48" text-anchor="end">3</text>
+            <text class="tex" x="42" y="264" text-anchor="end">−3</text>
+            <text class="tex" x="42" y="172" text-anchor="end">0</text>
+            <text class="tex" x="138.67" y="177" text-anchor="middle"><tspan class="tex-i">π</tspan>/4</text><text class="tex" x="225.33" y="177" text-anchor="middle"><tspan class="tex-i">π</tspan>/2</text><text class="tex" x="307" y="177" text-anchor="end">3<tspan class="tex-i">π</tspan>/4</text><text class="tex" x="398.67" y="177" text-anchor="middle"><tspan class="tex-i">π</tspan></text><text class="tex" x="485.33" y="136" text-anchor="middle">5<tspan class="tex-i">π</tspan>/4</text>
+          </g>
+          <path class="curve" pathLength="1" d="M138.67 150 L142.28 142.94 L145.89 135.9 L149.5 128.93 L153.11 122.05 L156.72 115.28 L160.33 108.67 L163.94 102.23 L167.56 96 L171.17 90 L174.78 84.25 L178.39 78.79 L182 73.63 L185.61 68.8 L189.22 64.32 L192.83 60.2 L196.44 56.47 L200.06 53.14 L203.67 50.22 L207.28 47.73 L210.89 45.68 L214.5 44.08 L218.11 42.92 L221.72 42.23 L225.33 42 L228.94 42.23 L232.56 42.92 L236.17 44.08 L239.78 45.68 L243.39 47.73 L247 50.22 L250.61 53.14 L254.22 56.47 L257.83 60.2 L261.44 64.32 L265.06 68.8 L268.67 73.63 L272.28 78.79 L275.89 84.25 L279.5 90 L283.11 96 L286.72 102.23 L290.33 108.67 L293.94 115.28 L297.56 122.05 L301.17 128.93 L304.78 135.9 L308.39 142.94 L312 150 L315.61 157.06 L319.22 164.1 L322.83 171.07 L326.44 177.95 L330.06 184.72 L333.67 191.33 L337.28 197.77 L340.89 204 L344.5 210 L348.11 215.75 L351.72 221.21 L355.33 226.37 L358.94 231.2 L362.56 235.68 L366.17 239.8 L369.78 243.53 L373.39 246.86 L377 249.78 L380.61 252.27 L384.22 254.32 L387.83 255.92 L391.44 257.08 L395.06 257.77 L398.67 258 L402.28 257.77 L405.89 257.08 L409.5 255.92 L413.11 254.32 L416.72 252.27 L420.33 249.78 L423.94 246.86 L427.56 243.53 L431.17 239.8 L434.78 235.68 L438.39 231.2 L442 226.37 L445.61 221.21 L449.22 215.75 L452.83 210 L456.44 204 L460.06 197.77 L463.67 191.33 L467.28 184.72 L470.89 177.95 L474.5 171.07 L478.11 164.1 L481.72 157.06 L485.33 150" stroke-width="3"/>
+          <g class="keypts"><circle cx="138.67" cy="150" r="5"/><circle cx="225.33" cy="42" r="5"/><circle cx="312" cy="150" r="5"/><circle cx="398.67" cy="258" r="5"/><circle cx="485.33" cy="150" r="5"/></g>
+          <path class="mark-loop" data-highlight="6" pathLength="1" d="M208.7 41.58C208.71 41.27 208.68 40.36 208.75 39.74C208.82 39.12 208.93 38.48 209.13 37.86C209.33 37.24 209.59 36.62 209.93 36.03C210.27 35.45 210.69 34.88 211.17 34.37C211.64 33.85 212.2 33.37 212.78 32.94C213.35 32.5 214 32.12 214.64 31.77C215.29 31.43 215.97 31.13 216.64 30.86C217.32 30.59 218.01 30.35 218.69 30.14C219.37 29.92 220.06 29.73 220.74 29.55C221.43 29.37 222.11 29.21 222.8 29.07C223.5 28.93 224.19 28.8 224.9 28.71C225.6 28.62 226.31 28.56 227.02 28.54C227.73 28.52 228.45 28.53 229.15 28.6C229.85 28.66 230.55 28.77 231.23 28.92C231.9 29.08 232.57 29.28 233.2 29.51C233.84 29.75 234.46 30.02 235.06 30.32C235.66 30.62 236.23 30.95 236.79 31.3C237.35 31.65 237.89 32.02 238.42 32.41C238.95 32.8 239.47 33.21 239.96 33.65C240.45 34.08 240.93 34.54 241.36 35.04C241.79 35.53 242.21 36.06 242.55 36.61C242.89 37.17 243.19 37.76 243.4 38.37C243.61 38.98 243.76 39.62 243.82 40.26C243.87 40.9 243.84 41.57 243.74 42.22C243.64 42.86 243.45 43.51 243.21 44.14C242.98 44.76 242.66 45.37 242.33 45.96C242.01 46.54 241.62 47.1 241.24 47.65C240.86 48.2 240.46 48.72 240.06 49.24C239.66 49.76 239.26 50.27 238.85 50.78C238.44 51.29 238.03 51.8 237.59 52.31C237.15 52.81 236.71 53.33 236.22 53.82C235.72 54.31 235.21 54.81 234.65 55.26C234.08 55.71 233.48 56.16 232.84 56.54C232.19 56.92 231.5 57.27 230.79 57.56C230.08 57.84 229.33 58.08 228.58 58.25C227.82 58.43 227.04 58.54 226.27 58.61C225.51 58.68 224.73 58.7 223.96 58.68C223.2 58.66 222.44 58.59 221.69 58.5C220.95 58.4 220.21 58.28 219.48 58.12C218.75 57.96 218.04 57.78 217.34 57.55C216.64 57.33 215.95 57.07 215.3 56.77C214.65 56.47 214.01 56.13 213.43 55.75C212.84 55.37 212.29 54.94 211.8 54.47C211.31 54.01 210.86 53.5 210.48 52.97C210.09 52.44 209.77 51.87 209.49 51.3C209.21 50.73 208.99 50.13 208.79 49.54C208.59 48.95 208.44 48.35 208.29 47.75C208.14 47.15 208.02 46.56 207.91 45.95C207.79 45.35 207.68 44.75 207.58 44.13C207.49 43.51 207.39 42.88 207.34 42.24C207.3 41.6 207.25 40.94 207.29 40.27C207.32 39.6 207.39 38.91 207.54 38.24C207.7 37.56 207.92 36.87 208.22 36.22C208.53 35.57 208.92 34.93 209.38 34.34C209.84 33.74 210.39 33.18 210.98 32.67C211.57 32.17 212.59 31.53 212.91 31.3"/>
+        </svg>
+        </figure>
+        <p class="answer">Amplitude 3, period \(\pi\), phase shift \(\frac{\pi}{4}\) to the right.</p>
+      </div>
+    </section>
+  </div>
+
+  <div id="mimir-controls"></div>
+</main>
+<script src="../../vendor/katex/katex.min.js"></script>
+<script src="../../vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../shell.js"></script>
+</body>
+</html>

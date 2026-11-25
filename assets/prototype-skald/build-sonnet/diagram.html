@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>A DFA for binary numbers divisible by 3</title>
+<link rel="stylesheet" href="../../vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../candidate-b3/tokens.css">
+<style>
+/* <svg viewBox="0 0 560 215" role="img" aria-labelledby="dfa-t dfa-d" class="dfa">
+<title id="dfa-t">DFA for binary numbers divisible by 3</title>
+<desc id="dfa-d">Three states q0, q1 and q2 in a row. The start arrow enters q0, which is the accepting state and is drawn as a double circle. From q0, reading 0 loops back to q0 and reading 1 goes to q1. From q1, reading 0 goes to q2 and reading 1 goes back to q0. From q2, reading 0 goes to q1 and reading 1 loops back to q2.</desc>
+<path class="mark-loop" data-highlight="1" pathLength="1" d="M135.7 178.8 C133.7 179.5 127.6 182 123.4 183.1 C119.2 184.2 114.8 185 110.4 185.4 C106 185.8 101.5 185.9 97 185.4 C92.6 185 88.1 184.1 83.9 182.7 C79.7 181.3 75.5 179.3 71.9 177 C68.3 174.6 65 171.6 62.3 168.4 C59.6 165.2 57.4 161.5 55.7 157.8 C54.1 154.1 53.1 150.1 52.5 146.1 C52 142.2 52 138.1 52.4 134.2 C52.7 130.2 53.6 126.2 54.8 122.4 C55.9 118.6 57.5 114.8 59.5 111.1 C61.5 107.5 63.9 103.9 66.7 100.7 C69.6 97.4 72.9 94.2 76.5 91.6 C80.2 89 84.4 86.7 88.7 85 C93.1 83.3 97.8 82.1 102.5 81.5 C107.1 80.9 112 81 116.6 81.5 C121.2 82 125.8 83.2 130 84.6 C134.2 86.1 138.3 88 142 90.2 C145.8 92.4 149.3 94.9 152.4 97.7 C155.6 100.5 158.6 103.6 161.1 106.9 C163.7 110.2 166 113.8 167.7 117.5 C169.4 121.3 170.7 125.4 171.3 129.6 C171.9 133.7 172 138.1 171.4 142.3 C170.7 146.5 169.3 150.8 167.4 154.8 C165.5 158.7 162.8 162.5 159.8 165.8 C156.8 169.2 153.2 172.2 149.4 174.8 C145.7 177.5 141.5 179.7 137.3 181.6 C133.1 183.5 128.7 185 124.2 186.1 C119.7 187.3 115.1 188.2 110.4 188.6 C105.8 189 98.6 188.6 96.2 188.6"/>
+<path class="mark-loop" data-highlight="2" pathLength="1" d="M296 183 C293.8 183.4 287.5 185 283.1 185.4 C278.7 185.8 274.2 185.9 269.7 185.4 C265.2 184.9 260.6 184 256.4 182.6 C252.1 181.1 247.8 179.1 244.1 176.7 C240.5 174.3 237 171.2 234.2 168 C231.4 164.8 229 161.1 227.2 157.4 C225.4 153.7 224.2 149.7 223.4 145.8 C222.6 141.9 222.4 137.9 222.5 133.9 C222.6 130 223.1 126.1 224 122.2 C225 118.4 226.3 114.6 228 110.9 C229.8 107.3 232 103.7 234.7 100.5 C237.3 97.2 240.5 94.1 244.1 91.5 C247.6 89 251.8 86.7 256 85.1 C260.3 83.5 265 82.4 269.6 81.8 C274.2 81.3 279.1 81.4 283.7 82 C288.3 82.5 292.9 83.7 297.2 85.1 C301.5 86.6 305.7 88.5 309.5 90.6 C313.4 92.8 317.1 95.3 320.5 98 C323.8 100.7 327 103.8 329.8 107.1 C332.5 110.4 335.1 114 337 117.8 C338.9 121.5 340.5 125.7 341.3 129.8 C342.1 133.9 342.3 138.4 341.8 142.5 C341.3 146.7 340.1 151 338.3 154.8 C336.5 158.7 334 162.5 331.2 165.8 C328.4 169.1 324.9 172 321.4 174.6 C317.8 177.2 313.8 179.5 309.8 181.4 C305.7 183.3 301.4 184.8 297 186 C292.6 187.2 288 188.1 283.3 188.5 C278.7 189 273.8 189.1 269.1 188.6 C264.3 188.1 257.3 186.1 254.9 185.5"/>
+<path class="mark-swipe" data-highlight="2" pathLength="1" d="M139.4 118 Q195 66 242.5 110.5"/>
+<path class="mark-loop" data-highlight="3" pathLength="1" d="M136.1 179.5 C134.1 180.4 128.2 183.6 123.9 184.9 C119.6 186.3 114.9 187.2 110.4 187.5 C105.9 187.8 101.1 187.6 96.7 186.8 C92.3 186 87.9 184.5 83.9 182.7 C79.9 180.9 76.2 178.5 72.9 175.8 C69.6 173.2 66.7 170.2 64.2 167.1 C61.7 163.9 59.5 160.5 57.7 157 C55.9 153.5 54.4 149.8 53.4 146 C52.3 142.1 51.6 138.1 51.5 134.1 C51.4 130.1 51.7 125.9 52.7 121.9 C53.7 117.9 55.2 113.8 57.4 110.1 C59.5 106.4 62.4 102.8 65.6 99.7 C68.8 96.6 72.6 93.9 76.6 91.6 C80.5 89.4 84.9 87.7 89.3 86.3 C93.7 85 98.3 84.2 102.8 83.7 C107.3 83.2 111.9 83.1 116.4 83.4 C120.9 83.7 125.4 84.3 129.7 85.3 C134.1 86.4 138.4 87.7 142.5 89.5 C146.5 91.4 150.6 93.6 154 96.3 C157.5 99 160.7 102.2 163.3 105.7 C165.8 109.1 167.9 113.1 169.2 117.1 C170.6 121.1 171.2 125.4 171.3 129.6 C171.4 133.7 170.8 138.1 169.7 142.1 C168.7 146.2 167 150.2 165.1 154 C163.1 157.7 160.7 161.3 158 164.7 C155.3 168.1 152.2 171.3 148.9 174.3 C145.5 177.2 141.8 180 137.7 182.3 C133.7 184.6 129.3 186.6 124.8 188.1 C120.2 189.5 115.3 190.5 110.4 190.8 C105.6 191.1 98.3 190.1 95.9 190"/>
+<path class="mark-swipe" data-highlight="3" pathLength="1" d="M250.6 152 Q195 204 147.5 159.5"/>
+<path class="mark-loop" data-highlight="4" pathLength="1" d="M139.9 178.6 C137.8 179.6 131.9 183 127.6 184.5 C123.3 185.9 118.6 186.8 114.1 187.2 C109.6 187.5 104.9 187.2 100.5 186.6 C96.2 185.9 91.9 184.6 87.9 183.1 C83.9 181.6 80.1 179.6 76.6 177.5 C73 175.3 69.7 172.8 66.8 170 C63.8 167.3 61 164.2 58.7 160.9 C56.4 157.6 54.3 154 52.9 150.2 C51.4 146.5 50.4 142.4 50.1 138.3 C49.9 134.2 50.2 129.9 51.1 125.8 C52.1 121.8 53.8 117.7 56 113.9 C58.1 110.2 61 106.7 64.1 103.5 C67.2 100.4 70.8 97.6 74.5 95.1 C78.3 92.7 82.3 90.6 86.4 88.8 C90.6 87.1 94.9 85.6 99.3 84.6 C103.7 83.5 108.2 82.7 112.8 82.4 C117.3 82.1 122.1 82.2 126.6 82.8 C131.1 83.4 135.8 84.5 140 86.2 C144.2 87.9 148.3 90.1 151.8 92.8 C155.3 95.5 158.4 98.7 160.9 102.2 C163.4 105.6 165.3 109.5 166.7 113.4 C168.1 117.3 168.9 121.5 169.2 125.6 C169.6 129.6 169.4 133.8 168.9 137.9 C168.3 141.9 167.3 146 166 150 C164.6 154 162.8 157.9 160.6 161.6 C158.4 165.4 155.7 169.1 152.5 172.4 C149.4 175.7 145.7 178.8 141.7 181.3 C137.8 183.9 133.2 186.1 128.7 187.6 C124.1 189.1 119.1 190.1 114.3 190.4 C109.5 190.8 102.3 189.9 99.9 189.8"/>
+<path class="mark-swipe" data-highlight="4" pathLength="1" d="M81.8 116 C19.1 98.3 149.9 45.5 122.6 92.2"/>
+<circle class="ink" cx="110" cy="135" r="34" stroke-width="2"/>
+<circle class="ink" cx="280" cy="135" r="34" stroke-width="2"/>
+<circle class="ink" cx="450" cy="135" r="34" stroke-width="2"/>
+<circle class="ink" cx="110" cy="135" r="28" stroke-width="2"/>
+<text class="tex-i state" x="110" y="135" text-anchor="middle" dy=".32em">q<tspan class="tex sub" dy=".36em">0</tspan></text>
+<text class="tex-i state" x="280" y="135" text-anchor="middle" dy=".32em">q<tspan class="tex sub" dy=".36em">1</tspan></text>
+<text class="tex-i state" x="450" y="135" text-anchor="middle" dy=".32em">q<tspan class="tex sub" dy=".36em">2</tspan></text>
+<path class="ink" stroke-width="2" d="M139.4 118 Q195 66 242.5 110.5"/><path class="ink-fill" d="M250.6 118 L239.4 113.8 L245.7 107.1Z"/>
+<path class="ink" stroke-width="2" d="M250.6 152 Q195 204 147.5 159.5"/><path class="ink-fill" d="M139.4 152 L150.6 156.2 L144.3 162.9Z"/>
+<path class="ink" stroke-width="2" d="M309.4 118 Q365 66 412.5 110.5"/><path class="ink-fill" d="M420.6 118 L409.4 113.8 L415.7 107.1Z"/>
+<path class="ink" stroke-width="2" d="M420.6 152 Q365 204 317.5 159.5"/><path class="ink-fill" d="M309.4 152 L320.6 156.2 L314.3 162.9Z"/>
+<path class="ink" stroke-width="2" d="M81.8 116 C19.1 98.3 149.9 45.5 122.6 92.2"/><path class="ink-fill" d="M117.1 101.7 L118.6 89.9 L126.6 94.6Z"/>
+<path class="ink" stroke-width="2" d="M442.9 101.7 C410.1 45.5 540.9 98.3 488.8 113"/><path class="ink-fill" d="M478.2 116 L487.5 108.6 L490 117.4Z"/>
+<path class="ink" stroke-width="2" d="M14 135 L65 135"/><path class="ink-fill" d="M76 135 L65 139.6 L65 130.4Z"/>
+<text class="tex elab" x="195" y="75" text-anchor="middle" dy=".35em">1</text>
+<text class="tex elab" x="195" y="195" text-anchor="middle" dy=".35em">1</text>
+<text class="tex elab" x="365" y="75" text-anchor="middle" dy=".35em">0</text>
+<text class="tex elab" x="365" y="195" text-anchor="middle" dy=".35em">0</text>
+<text class="tex elab" x="81.9" y="65.4" text-anchor="middle" dy=".35em">0</text>
+<text class="tex elab" x="478.1" y="65.4" text-anchor="middle" dy=".35em">1</text>
+</svg> text sizes in viewBox units (viewBox 560 wide): desktop figure about 640 px, phone about 350 px */
+svg.dfa .state { font-size: 15px; }
+svg.dfa .state .sub { font-size: 11px; }
+svg.dfa .elab { font-size: 14px; }
+@media (max-width: 600px) {
+  svg.dfa .state { font-size: 26px; }
+  svg.dfa .state .sub { font-size: 19px; }
+  svg.dfa .elab { font-size: 23px; }
+}
+.tape { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-3) 0 0; }
+.tape .cells { display: flex; gap: .3rem; }
+.tape .sym { min-width: 2.2rem; padding: .1rem .45rem; text-align: center; background: var(--board-deep); font-size: 1.1rem; }
+.tape .sym[data-highlight] { margin: 0; }
+.tape .sym[data-highlight-on]::after { inset: -.3em -.3em -.26em -.3em; }
+.tape .sym[data-highlight-on]::before { inset: -.22em -.26em -.38em -.34em; }
+.board > figure { margin-top: 0; }
+@media (max-width: 900px) { .tape { margin-top: var(--sp-2); } }
+</style>
+</head>
+<body>
+<main>
+<svg class="sk-defs" aria-hidden="true" focusable="false">
+  <filter id="sk-chalk" filterUnits="userSpaceOnUse" x="-300" y="-300" width="1600" height="1400" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency=".45" numOctaves="2" seed="4" result="warp"/>
+    <feDisplacementMap in="SourceGraphic" in2="warp" scale="3.2" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="9" result="grain"/>
+    <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.1 1.8" result="dust"/>
+    <feComposite in="rough" in2="dust" operator="in"/>
+  </filter>
+  <filter id="sk-marker" filterUnits="userSpaceOnUse" x="-300" y="-300" width="1600" height="1400" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency=".3" numOctaves="1" seed="4" result="warp"/>
+    <feDisplacementMap in="SourceGraphic" in2="warp" scale="1.8" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+<header class="head">
+  <p class="tag">[example machine, made by Mimir, checked]</p>
+  <h1>A DFA for binary numbers divisible by 3</h1>
+  <p class="intro">The machine reads a binary number from the most significant bit. State \(q_r\) means "the bits read so far have value \(\equiv r \pmod 3\)". Reading bit \(b\) in state \(q_r\) moves to \(q_{(2r+b) \bmod 3}\).</p>
+</header>
+<div class="board" style="--sticky-fig: 14.5rem">
+  <figure>
+<svg viewBox="0 0 560 215" role="img" aria-labelledby="dfa-t dfa-d" class="dfa">
+<title id="dfa-t">DFA for binary numbers divisible by 3</title>
+<desc id="dfa-d">Three states q0, q1 and q2 in a row. The start arrow enters q0, which is the accepting state and is drawn as a double circle. From q0, reading 0 loops back to q0 and reading 1 goes to q1. From q1, reading 0 goes to q2 and reading 1 goes back to q0. From q2, reading 0 goes to q1 and reading 1 loops back to q2.</desc>
+<path class="mark-loop" data-highlight="1" pathLength="1" d="M135.7 178.8 C133.7 179.5 127.6 182 123.4 183.1 C119.2 184.2 114.8 185 110.4 185.4 C106 185.8 101.5 185.9 97 185.4 C92.6 185 88.1 184.1 83.9 182.7 C79.7 181.3 75.5 179.3 71.9 177 C68.3 174.6 65 171.6 62.3 168.4 C59.6 165.2 57.4 161.5 55.7 157.8 C54.1 154.1 53.1 150.1 52.5 146.1 C52 142.2 52 138.1 52.4 134.2 C52.7 130.2 53.6 126.2 54.8 122.4 C55.9 118.6 57.5 114.8 59.5 111.1 C61.5 107.5 63.9 103.9 66.7 100.7 C69.6 97.4 72.9 94.2 76.5 91.6 C80.2 89 84.4 86.7 88.7 85 C93.1 83.3 97.8 82.1 102.5 81.5 C107.1 80.9 112 81 116.6 81.5 C121.2 82 125.8 83.2 130 84.6 C134.2 86.1 138.3 88 142 90.2 C145.8 92.4 149.3 94.9 152.4 97.7 C155.6 100.5 158.6 103.6 161.1 106.9 C163.7 110.2 166 113.8 167.7 117.5 C169.4 121.3 170.7 125.4 171.3 129.6 C171.9 133.7 172 138.1 171.4 142.3 C170.7 146.5 169.3 150.8 167.4 154.8 C165.5 158.7 162.8 162.5 159.8 165.8 C156.8 169.2 153.2 172.2 149.4 174.8 C145.7 177.5 141.5 179.7 137.3 181.6 C133.1 183.5 128.7 185 124.2 186.1 C119.7 187.3 115.1 188.2 110.4 188.6 C105.8 189 98.6 188.6 96.2 188.6"/>
+<path class="mark-loop" data-highlight="2" pathLength="1" d="M296 183 C293.8 183.4 287.5 185 283.1 185.4 C278.7 185.8 274.2 185.9 269.7 185.4 C265.2 184.9 260.6 184 256.4 182.6 C252.1 181.1 247.8 179.1 244.1 176.7 C240.5 174.3 237 171.2 234.2 168 C231.4 164.8 229 161.1 227.2 157.4 C225.4 153.7 224.2 149.7 223.4 145.8 C222.6 141.9 222.4 137.9 222.5 133.9 C222.6 130 223.1 126.1 224 122.2 C225 118.4 226.3 114.6 228 110.9 C229.8 107.3 232 103.7 234.7 100.5 C237.3 97.2 240.5 94.1 244.1 91.5 C247.6 89 251.8 86.7 256 85.1 C260.3 83.5 265 82.4 269.6 81.8 C274.2 81.3 279.1 81.4 283.7 82 C288.3 82.5 292.9 83.7 297.2 85.1 C301.5 86.6 305.7 88.5 309.5 90.6 C313.4 92.8 317.1 95.3 320.5 98 C323.8 100.7 327 103.8 329.8 107.1 C332.5 110.4 335.1 114 337 117.8 C338.9 121.5 340.5 125.7 341.3 129.8 C342.1 133.9 342.3 138.4 341.8 142.5 C341.3 146.7 340.1 151 338.3 154.8 C336.5 158.7 334 162.5 331.2 165.8 C328.4 169.1 324.9 172 321.4 174.6 C317.8 177.2 313.8 179.5 309.8 181.4 C305.7 183.3 301.4 184.8 297 186 C292.6 187.2 288 188.1 283.3 188.5 C278.7 189 273.8 189.1 269.1 188.6 C264.3 188.1 257.3 186.1 254.9 185.5"/>
+<path class="mark-swipe" data-highlight="2" pathLength="1" d="M139.4 118 Q195 66 242.5 110.5"/>
+<path class="mark-loop" data-highlight="3" pathLength="1" d="M136.1 179.5 C134.1 180.4 128.2 183.6 123.9 184.9 C119.6 186.3 114.9 187.2 110.4 187.5 C105.9 187.8 101.1 187.6 96.7 186.8 C92.3 186 87.9 184.5 83.9 182.7 C79.9 180.9 76.2 178.5 72.9 175.8 C69.6 173.2 66.7 170.2 64.2 167.1 C61.7 163.9 59.5 160.5 57.7 157 C55.9 153.5 54.4 149.8 53.4 146 C52.3 142.1 51.6 138.1 51.5 134.1 C51.4 130.1 51.7 125.9 52.7 121.9 C53.7 117.9 55.2 113.8 57.4 110.1 C59.5 106.4 62.4 102.8 65.6 99.7 C68.8 96.6 72.6 93.9 76.6 91.6 C80.5 89.4 84.9 87.7 89.3 86.3 C93.7 85 98.3 84.2 102.8 83.7 C107.3 83.2 111.9 83.1 116.4 83.4 C120.9 83.7 125.4 84.3 129.7 85.3 C134.1 86.4 138.4 87.7 142.5 89.5 C146.5 91.4 150.6 93.6 154 96.3 C157.5 99 160.7 102.2 163.3 105.7 C165.8 109.1 167.9 113.1 169.2 117.1 C170.6 121.1 171.2 125.4 171.3 129.6 C171.4 133.7 170.8 138.1 169.7 142.1 C168.7 146.2 167 150.2 165.1 154 C163.1 157.7 160.7 161.3 158 164.7 C155.3 168.1 152.2 171.3 148.9 174.3 C145.5 177.2 141.8 180 137.7 182.3 C133.7 184.6 129.3 186.6 124.8 188.1 C120.2 189.5 115.3 190.5 110.4 190.8 C105.6 191.1 98.3 190.1 95.9 190"/>
+<path class="mark-swipe" data-highlight="3" pathLength="1" d="M250.6 152 Q195 204 147.5 159.5"/>
+<path class="mark-loop" data-highlight="4" pathLength="1" d="M139.9 178.6 C137.8 179.6 131.9 183 127.6 184.5 C123.3 185.9 118.6 186.8 114.1 187.2 C109.6 187.5 104.9 187.2 100.5 186.6 C96.2 185.9 91.9 184.6 87.9 183.1 C83.9 181.6 80.1 179.6 76.6 177.5 C73 175.3 69.7 172.8 66.8 170 C63.8 167.3 61 164.2 58.7 160.9 C56.4 157.6 54.3 154 52.9 150.2 C51.4 146.5 50.4 142.4 50.1 138.3 C49.9 134.2 50.2 129.9 51.1 125.8 C52.1 121.8 53.8 117.7 56 113.9 C58.1 110.2 61 106.7 64.1 103.5 C67.2 100.4 70.8 97.6 74.5 95.1 C78.3 92.7 82.3 90.6 86.4 88.8 C90.6 87.1 94.9 85.6 99.3 84.6 C103.7 83.5 108.2 82.7 112.8 82.4 C117.3 82.1 122.1 82.2 126.6 82.8 C131.1 83.4 135.8 84.5 140 86.2 C144.2 87.9 148.3 90.1 151.8 92.8 C155.3 95.5 158.4 98.7 160.9 102.2 C163.4 105.6 165.3 109.5 166.7 113.4 C168.1 117.3 168.9 121.5 169.2 125.6 C169.6 129.6 169.4 133.8 168.9 137.9 C168.3 141.9 167.3 146 166 150 C164.6 154 162.8 157.9 160.6 161.6 C158.4 165.4 155.7 169.1 152.5 172.4 C149.4 175.7 145.7 178.8 141.7 181.3 C137.8 183.9 133.2 186.1 128.7 187.6 C124.1 189.1 119.1 190.1 114.3 190.4 C109.5 190.8 102.3 189.9 99.9 189.8"/>
+<path class="mark-swipe" data-highlight="4" pathLength="1" d="M81.8 116 C19.1 98.3 149.9 45.5 122.6 92.2"/>
+<circle class="ink" cx="110" cy="135" r="34" stroke-width="2"/>
+<circle class="ink" cx="280" cy="135" r="34" stroke-width="2"/>
+<circle class="ink" cx="450" cy="135" r="34" stroke-width="2"/>
+<circle class="ink" cx="110" cy="135" r="28" stroke-width="2"/>
+<text class="tex-i state" x="110" y="135" text-anchor="middle" dy=".32em">q<tspan class="tex sub" dy=".36em">0</tspan></text>
+<text class="tex-i state" x="280" y="135" text-anchor="middle" dy=".32em">q<tspan class="tex sub" dy=".36em">1</tspan></text>
+<text class="tex-i state" x="450" y="135" text-anchor="middle" dy=".32em">q<tspan class="tex sub" dy=".36em">2</tspan></text>
+<path class="ink" stroke-width="2" d="M139.4 118 Q195 66 242.5 110.5"/><path class="ink-fill" d="M250.6 118 L239.4 113.8 L245.7 107.1Z"/>
+<path class="ink" stroke-width="2" d="M250.6 152 Q195 204 147.5 159.5"/><path class="ink-fill" d="M139.4 152 L150.6 156.2 L144.3 162.9Z"/>
+<path class="ink" stroke-width="2" d="M309.4 118 Q365 66 412.5 110.5"/><path class="ink-fill" d="M420.6 118 L409.4 113.8 L415.7 107.1Z"/>
+<path class="ink" stroke-width="2" d="M420.6 152 Q365 204 317.5 159.5"/><path class="ink-fill" d="M309.4 152 L320.6 156.2 L314.3 162.9Z"/>
+<path class="ink" stroke-width="2" d="M81.8 116 C19.1 98.3 149.9 45.5 122.6 92.2"/><path class="ink-fill" d="M117.1 101.7 L118.6 89.9 L126.6 94.6Z"/>
+<path class="ink" stroke-width="2" d="M442.9 101.7 C410.1 45.5 540.9 98.3 488.8 113"/><path class="ink-fill" d="M478.2 116 L487.5 108.6 L490 117.4Z"/>
+<path class="ink" stroke-width="2" d="M14 135 L65 135"/><path class="ink-fill" d="M76 135 L65 139.6 L65 130.4Z"/>
+<text class="tex elab" x="195" y="75" text-anchor="middle" dy=".35em">1</text>
+<text class="tex elab" x="195" y="195" text-anchor="middle" dy=".35em">1</text>
+<text class="tex elab" x="365" y="75" text-anchor="middle" dy=".35em">0</text>
+<text class="tex elab" x="365" y="195" text-anchor="middle" dy=".35em">0</text>
+<text class="tex elab" x="81.9" y="65.4" text-anchor="middle" dy=".35em">0</text>
+<text class="tex elab" x="478.1" y="65.4" text-anchor="middle" dy=".35em">1</text>
+</svg>
+    <div class="tape"><span class="frame-word">input</span><div class="cells"><span class="sym" data-highlight="2">1</span><span class="sym" data-highlight="3">1</span><span class="sym" data-highlight="4">0</span></div></div>
+  </figure>
+  <div class="work">
+    <div class="step" data-step="1"><div class="n">1</div><p>Start in \(q_0\) (value 0).</p></div>
+    <div class="step" data-step="2"><div class="n">2</div><p>Read <span class="sym">1</span>: \(q_0 \to q_1\) (value 1).</p></div>
+    <div class="step" data-step="3"><div class="n">3</div><p>Read <span class="sym">1</span>: \(q_1 \to q_0\) (value 3).</p></div>
+    <div class="step" data-step="4"><div class="n">4</div><p>Read <span class="sym">0</span>: \(q_0 \to q_0\) (value 6).</p></div>
+    <div class="step" data-step="5"><div class="n">5</div><p>Input finished in \(q_0\), an accepting state: <span class="sym">110</span> is accepted, and \(6 = 2 \cdot 3\) is divisible by 3.</p></div>
+  </div>
+</div>
+  <div id="mimir-controls"></div>
+</main>
+<script src="../../vendor/katex/katex.min.js"></script>
+<script src="../../vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../shell.js"></script>
+</body>
+</html>

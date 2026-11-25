@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Amplitude, period and phase shift</title>
+<link rel="stylesheet" href="../../vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../candidate-b3/tokens.css">
+<style>
+svg .tk{font-size:14px} svg .ax{font-size:17px}
+svg .grid{stroke-width:1;stroke-dasharray:3 5;opacity:.55}
+svg .pt{fill:var(--fig-paper);stroke:var(--fig-ink);stroke-width:2.5}
+.table-wrap .katex{font-size:1em}
+@media (max-width:600px){svg .tk{font-size:22px} svg .ax{font-size:27px}}
+</style>
+</head>
+<body>
+<main>
+<svg class="sk-defs" aria-hidden="true" focusable="false">
+  <filter id="sk-chalk" filterUnits="userSpaceOnUse" x="-300" y="-300" width="1600" height="1400" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency=".45" numOctaves="2" seed="4" result="warp"/>
+    <feDisplacementMap in="SourceGraphic" in2="warp" scale="3.2" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="9" result="grain"/>
+    <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.1 1.8" result="dust"/>
+    <feComposite in="rough" in2="dust" operator="in"/>
+  </filter>
+  <filter id="sk-marker" filterUnits="userSpaceOnUse" x="-300" y="-300" width="1600" height="1400" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency=".3" numOctaves="1" seed="4" result="warp"/>
+    <feDisplacementMap in="SourceGraphic" in2="warp" scale="1.8" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+<header class="head">
+  <p class="tag">[practice question, made by Mimir, answer checked]</p>
+  <h1 class="question">Find the amplitude, period and phase shift of \( f(x) = 3\sin\left(2x - \frac{\pi}{2}\right) \), then sketch one period.</h1>
+</header>
+<div class="board work-first">
+  <div class="work">
+    <div class="step" data-step="1"><div class="n">1</div><div class="body">
+      <p>Write \(f\) in the form \(A\sin\big(B(x - C)\big)\):</p>
+      \[ f(x) = 3\sin\left(2x - \frac{\pi}{2}\right) = 3\sin\left(2\left(x - \frac{\pi}{4}\right)\right) \]
+      <p>so <span data-highlight="1">\(A = 3\)</span>, \(B = 2\), \(C = \frac{\pi}{4}\).</p></div></div>
+    <div class="step" data-step="2"><div class="n">2</div><p><span class="runin">Amplitude:</span> <span data-highlight="2">\( |A| = 3 \)</span>.</p></div>
+    <div class="step" data-step="3"><div class="n">3</div><div class="body"><p><span class="runin">Period:</span></p>
+      \[ T = \frac{2\pi}{B} = \frac{2\pi}{2} = \pi \]</div></div>
+    <div class="step" data-step="4"><div class="n">4</div><p><span class="runin">Phase shift:</span> <span data-highlight="4">\( C = \frac{\pi}{4} \)</span>, so the graph is shifted \( \frac{\pi}{4} \) to the right.</p></div>
+    <div class="step" data-step="5"><div class="n">5</div><div class="body">
+      <p>Key points of one period, from \(x = \frac{\pi}{4}\) to \(x = \frac{5\pi}{4}\):</p>
+      <div class="table-wrap"><table>
+        <tr><th scope="row">x</th><td>\(\dfrac{\pi}{4}\)</td><td>\(\dfrac{\pi}{2}\)</td><td>\(\dfrac{3\pi}{4}\)</td><td>\(\pi\)</td><td>\(\dfrac{5\pi}{4}\)</td></tr>
+        <tr><th scope="row">f(x)</th><td>0</td><td><span data-highlight="5">3</span></td><td>0</td><td>−3</td><td>0</td></tr>
+      </table></div></div></div>
+    <div class="step" data-step="6"><div class="n">6</div><div class="body">
+      <p>Sketch of one period (the plot), with the five key points marked.</p>
+      <p class="answer">Amplitude 3, period \(\pi\), phase shift \(\frac{\pi}{4}\) to the right.</p></div></div>
+  </div>
+  <figure>
+<svg viewBox="0 -24 600 410" role="img">
+<title>One period of f(x) = 3 sin(2x − π/2)</title>
+<desc>Graph of one period from x = π/4 to x = 5π/4: it rises from 0 to a peak of 3 at π/2, falls through 0 at 3π/4 to a trough of −3 at π, and returns to 0 at 5π/4. The five key points are marked.</desc>
+<line class="soft grid" x1="143.3" y1="20" x2="143.3" y2="340"/><line class="soft grid" x1="226.7" y1="20" x2="226.7" y2="340"/><line class="soft grid" x1="310.0" y1="20" x2="310.0" y2="340"/><line class="soft grid" x1="393.3" y1="20" x2="393.3" y2="340"/><line class="soft grid" x1="476.7" y1="20" x2="476.7" y2="340"/><line class="soft grid" x1="560.0" y1="20" x2="560.0" y2="340"/><line class="soft grid" x1="60" y1="60.0" x2="560" y2="60.0"/><line class="soft grid" x1="60" y1="300.0" x2="560" y2="300.0"/>
+<line class="ink" x1="60" y1="14" x2="60" y2="346" stroke-width="2"/>
+<line class="ink" x1="52" y1="180" x2="560" y2="180" stroke-width="2"/>
+<path class="ink-fill" d="M572 180 L558 175 L558 185 Z"/>
+<path class="ink-fill" d="M60 4 L55 18 L65 18 Z"/>
+<text class="label ax" x="60" y="-8" text-anchor="middle"><tspan class="tex-i">f</tspan>(<tspan class="tex-i">x</tspan>)</text>
+<text class="label ax" x="588" y="208" text-anchor="end"><tspan class="tex-i">x</tspan></text>
+<text class="tk" x="48" y="65.0" text-anchor="end">3</text><text class="tk" x="48" y="305.0" text-anchor="end">−3</text><text class="tk" x="48" y="185" text-anchor="end">0</text><text class="tk" x="143.3" y="364" text-anchor="middle"><tspan class="tex-i"></tspan>π/4</text><text class="tk" x="226.7" y="364" text-anchor="middle"><tspan class="tex-i"></tspan>π/2</text><text class="tk" x="310.0" y="364" text-anchor="middle"><tspan class="tex-i"></tspan>3π/4</text><text class="tk" x="393.3" y="364" text-anchor="middle"><tspan class="tex-i"></tspan>π</text><text class="tk" x="476.7" y="364" text-anchor="middle"><tspan class="tex-i"></tspan>5π/4</text><text class="tk" x="560.0" y="364" text-anchor="middle"><tspan class="tex-i"></tspan>3π/2</text>
+<g data-step="6"><path class="curve" pathLength="1" stroke-width="3.2" d="M143.3 180.0 L146.8 172.2 L150.3 164.3 L153.8 156.6 L157.2 148.9 L160.7 141.4 L164.2 134.1 L167.6 126.9 L171.1 120.0 L174.6 113.3 L178.1 106.9 L181.5 100.9 L185.0 95.1 L188.5 89.8 L191.9 84.8 L195.4 80.2 L198.9 76.1 L202.4 72.4 L205.8 69.1 L209.3 66.4 L212.8 64.1 L216.2 62.3 L219.7 61.0 L223.2 60.3 L226.7 60.0 L230.1 60.3 L233.6 61.0 L237.1 62.3 L240.6 64.1 L244.0 66.4 L247.5 69.1 L251.0 72.4 L254.4 76.1 L257.9 80.2 L261.4 84.8 L264.9 89.8 L268.3 95.1 L271.8 100.9 L275.3 106.9 L278.8 113.3 L282.2 120.0 L285.7 126.9 L289.2 134.1 L292.6 141.4 L296.1 148.9 L299.6 156.6 L303.1 164.3 L306.5 172.2 L310.0 180.0 L313.5 187.8 L316.9 195.7 L320.4 203.4 L323.9 211.1 L327.4 218.6 L330.8 225.9 L334.3 233.1 L337.8 240.0 L341.2 246.7 L344.7 253.1 L348.2 259.1 L351.7 264.9 L355.1 270.2 L358.6 275.2 L362.1 279.8 L365.6 283.9 L369.0 287.6 L372.5 290.9 L376.0 293.6 L379.4 295.9 L382.9 297.7 L386.4 299.0 L389.9 299.7 L393.3 300.0 L396.8 299.7 L400.3 299.0 L403.8 297.7 L407.2 295.9 L410.7 293.6 L414.2 290.9 L417.6 287.6 L421.1 283.9 L424.6 279.8 L428.1 275.2 L431.5 270.2 L435.0 264.9 L438.5 259.1 L441.9 253.1 L445.4 246.7 L448.9 240.0 L452.4 233.1 L455.8 225.9 L459.3 218.6 L462.8 211.1 L466.2 203.4 L469.7 195.7 L473.2 187.8 L476.7 180.0"/><circle class="pt" cx="143.3" cy="180.0" r="5.5"/><circle class="pt" cx="226.7" cy="60.0" r="5.5"/><circle class="pt" cx="310.0" cy="180.0" r="5.5"/><circle class="pt" cx="393.3" cy="300.0" r="5.5"/><circle class="pt" cx="476.7" cy="180.0" r="5.5"/></g>
+<path class="mark-loop" data-highlight="6" pathLength="1" d="M236.3 75.5 C235.9 75.6 234.8 76.2 234.0 76.4 C233.2 76.7 232.4 77.0 231.6 77.2 C230.8 77.5 230.0 77.7 229.2 77.8 C228.3 78.0 227.5 78.1 226.6 78.2 C225.8 78.3 224.9 78.4 224.1 78.4 C223.2 78.4 222.3 78.4 221.5 78.3 C220.6 78.2 219.7 78.1 218.9 78.0 C218.1 77.8 217.2 77.6 216.4 77.3 C215.6 77.0 214.8 76.7 214.1 76.3 C213.4 76.0 212.6 75.6 212.0 75.1 C211.3 74.7 210.7 74.2 210.1 73.7 C209.5 73.1 209.0 72.6 208.5 72.0 C208.0 71.4 207.6 70.8 207.2 70.2 C206.8 69.5 206.5 68.9 206.2 68.2 C205.9 67.6 205.6 66.9 205.4 66.2 C205.2 65.5 205.1 64.8 205.0 64.1 C204.9 63.4 204.8 62.7 204.8 62.0 C204.7 61.3 204.7 60.6 204.8 59.9 C204.8 59.2 204.9 58.5 205.0 57.8 C205.1 57.1 205.3 56.4 205.5 55.7 C205.7 55.0 205.9 54.3 206.2 53.6 C206.5 52.9 206.8 52.2 207.2 51.5 C207.6 50.9 208.0 50.2 208.5 49.6 C208.9 48.9 209.5 48.3 210.0 47.7 C210.6 47.1 211.2 46.5 211.8 46.0 C212.5 45.5 213.2 44.9 213.9 44.5 C214.7 44.0 215.4 43.6 216.2 43.2 C217.0 42.8 217.9 42.5 218.7 42.2 C219.6 41.9 220.5 41.7 221.3 41.5 C222.2 41.3 223.1 41.2 224.0 41.1 C224.9 41.0 225.8 41.0 226.7 41.0 C227.6 41.0 228.5 41.0 229.3 41.1 C230.2 41.2 231.1 41.4 231.9 41.5 C232.7 41.7 233.6 41.9 234.4 42.2 C235.2 42.4 236.0 42.7 236.7 43.0 C237.5 43.3 238.3 43.6 239.0 44.0 C239.7 44.3 240.4 44.7 241.1 45.1 C241.8 45.5 242.5 46.0 243.1 46.5 C243.7 46.9 244.3 47.4 244.9 48.0 C245.5 48.5 246.0 49.0 246.5 49.6 C247.0 50.2 247.5 50.8 247.9 51.5 C248.4 52.1 248.7 52.8 249.1 53.5 C249.4 54.2 249.7 54.9 249.9 55.6 C250.1 56.3 250.2 57.1 250.3 57.8 C250.4 58.6 250.4 59.3 250.4 60.1 C250.3 60.9 250.2 61.6 250.1 62.4 C249.9 63.2 249.7 63.9 249.4 64.6 C249.1 65.4 248.7 66.1 248.3 66.8 C247.9 67.5 247.4 68.2 246.9 68.8 C246.4 69.5 245.9 70.1 245.3 70.7 C244.7 71.3 244.1 71.9 243.4 72.4 C242.8 72.9 242.1 73.4 241.4 73.9 C240.7 74.4 240.0 74.9 239.2 75.3 C238.5 75.7 237.7 76.1 236.9 76.5 C236.1 76.8 235.3 77.2 234.5 77.5 C233.6 77.8 232.8 78.1 231.9 78.3 C231.1 78.6 230.2 78.8 229.3 79.0 C228.4 79.1 227.5 79.3 226.6 79.4 C225.7 79.5 224.8 79.6 223.9 79.6 C223.0 79.6 221.6 79.5 221.1 79.5"/>
+</svg>
+  </figure>
+</div>
+  <div id="mimir-controls"></div>
+</main>
+<script src="../../vendor/katex/katex.min.js"></script>
+<script src="../../vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../shell.js"></script>
+</body>
+</html>

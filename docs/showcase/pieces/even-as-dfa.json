@@ -1,0 +1,41 @@
+{
+ "term": "2026-Fall",
+ "course": "CS301 Automata",
+ "name": "even-as-dfa",
+ "title": "A DFA for an even number of a's",
+ "machine": {
+  "kind": "dfa",
+  "states": [
+   "q0",
+   "q1"
+  ],
+  "start": "q0",
+  "accept": [
+   "q0"
+  ],
+  "transitions": [
+   {
+    "from": "q0",
+    "read": "a",
+    "to": "q1"
+   },
+   {
+    "from": "q0",
+    "read": "b",
+    "to": "q0"
+   },
+   {
+    "from": "q1",
+    "read": "a",
+    "to": "q0"
+   },
+   {
+    "from": "q1",
+    "read": "b",
+    "to": "q1"
+   }
+  ]
+ },
+ "example": "aba",
+ "body": "<style>\n#fig text.tex-i { font-size: 12px; }\n#fig text.tex { font-size: 11px; }\n@media (max-width: 600px) { #fig text.tex-i { font-size: 18px; } #fig text.tex { font-size: 16px; } }\n</style>\n<header class=\"head\"><p class=\"tag\">[example machine, made by Mimir, checked]</p><h1>A DFA for an even number of a's</h1><p class=\"intro\">The alphabet is \\(\\{a, b\\}\\). State \\(q_0\\) means an even number of a's read so far, \\(q_1\\) an odd number. Every state has exactly one move on each symbol, as this course's DFAs must.</p></header>\n<div class=\"board\" style=\"--sticky-fig: 14rem\"><figure><svg id=\"fig\" viewBox=\"0 30 400 160\" role=\"img\"><title>DFA for an even number of a's</title><desc>Two states, q0 and q1. q0 is the start state, entered by an arrow from nowhere, and is accepting, drawn as a double circle. Reading a moves q0 to q1 and q1 to q0. Reading b keeps q0 in q0 and q1 in q1, each by a self-loop on top of the state.</desc>\n<path class=\"mark-swipe\" data-highlight=\"2\" pathLength=\"1\" d=\"M123.6 109.0 Q200.0 30.0 268.8 101.1\"/>\n<path class=\"mark-swipe\" data-highlight=\"3\" pathLength=\"1\" d=\"M289.0 96.4 C276.6 52.4 323.4 52.4 314.0 85.8\"/>\n<path class=\"mark-swipe\" data-highlight=\"4\" pathLength=\"1\" d=\"M276.4 131.0 Q200.0 150.0 134.2 133.6\"/>\n<path class=\"mark-loop\" data-highlight=\"1\" pathLength=\"1\" d=\"M121.6 149.9 C119.7 150.7 113.9 153.2 109.8 154.2 C105.8 155.3 101.6 156.0 97.4 156.3 C93.3 156.5 88.9 156.4 84.8 155.7 C80.7 155.0 76.5 153.8 72.9 152.1 C69.4 150.3 65.9 147.9 63.4 145.1 C60.8 142.4 58.8 139.0 57.5 135.7 C56.2 132.3 55.7 128.6 55.7 125.1 C55.6 121.5 56.3 117.8 57.3 114.3 C58.4 110.8 59.9 107.4 61.9 104.1 C63.8 100.8 66.3 97.5 69.2 94.7 C72.1 91.8 75.6 89.1 79.4 87.0 C83.2 84.9 87.6 83.2 92.0 82.2 C96.3 81.3 101.1 81.0 105.4 81.2 C109.8 81.5 114.2 82.6 118.1 83.9 C122.0 85.3 125.6 87.3 128.9 89.4 C132.1 91.6 135.0 94.2 137.5 97.0 C140.0 99.8 142.2 102.9 143.8 106.2 C145.3 109.5 146.5 113.2 146.8 116.9 C147.1 120.6 146.7 124.7 145.5 128.4 C144.2 132.1 142.1 135.9 139.5 139.1 C136.9 142.4 133.5 145.4 129.9 147.8 C126.3 150.3 122.2 152.3 118.1 153.9 C114.0 155.6 109.6 156.8 105.2 157.6 C100.9 158.3 94.1 158.5 91.9 158.7\"/>\n<path class=\"mark-loop\" data-highlight=\"2\" pathLength=\"1\" d=\"M321.4 149.6 C319.4 150.4 313.9 153.3 309.9 154.5 C305.9 155.8 301.6 156.8 297.4 157.1 C293.1 157.4 288.6 157.3 284.5 156.5 C280.4 155.7 276.2 154.2 272.8 152.2 C269.4 150.3 266.3 147.6 263.9 144.8 C261.5 142.0 259.8 138.6 258.5 135.3 C257.2 132.0 256.6 128.5 256.4 125.0 C256.2 121.5 256.4 117.9 257.2 114.3 C258.0 110.8 259.2 107.1 261.1 103.8 C262.9 100.4 265.4 97.0 268.5 94.1 C271.5 91.3 275.3 88.6 279.2 86.7 C283.1 84.8 287.7 83.4 292.1 82.7 C296.4 81.9 301.0 81.8 305.3 82.1 C309.6 82.5 313.8 83.4 317.7 84.6 C321.6 85.8 325.4 87.5 328.8 89.5 C332.2 91.4 335.5 93.8 338.2 96.5 C340.9 99.3 343.3 102.5 344.8 105.9 C346.3 109.3 347.3 113.2 347.3 116.9 C347.4 120.7 346.6 124.7 345.1 128.3 C343.7 132.0 341.3 135.6 338.7 138.7 C336.0 141.9 332.7 144.8 329.3 147.3 C325.8 149.8 322.0 152.0 318.0 153.8 C314.0 155.6 309.7 157.2 305.3 158.1 C300.9 159.1 294.0 159.4 291.7 159.6\"/>\n<path class=\"mark-loop\" data-highlight=\"4\" pathLength=\"1\" d=\"M121.6 149.9 C119.7 150.8 114.2 154.0 110.2 155.3 C106.1 156.7 101.6 157.6 97.3 157.8 C93.0 158.0 88.5 157.6 84.5 156.6 C80.5 155.5 76.5 153.7 73.3 151.7 C70.0 149.6 67.1 147.0 64.8 144.2 C62.4 141.4 60.5 138.3 59.1 135.1 C57.6 131.9 56.6 128.5 56.1 125.0 C55.6 121.5 55.5 117.8 56.2 114.2 C56.9 110.6 58.2 106.8 60.2 103.4 C62.2 100.0 65.1 96.7 68.3 94.0 C71.5 91.3 75.5 88.9 79.5 87.2 C83.5 85.4 88.0 84.3 92.2 83.5 C96.5 82.8 101.0 82.6 105.2 82.8 C109.5 82.9 113.7 83.5 117.8 84.5 C121.8 85.5 125.9 86.9 129.4 88.8 C133.0 90.7 136.4 93.2 139.1 96.0 C141.7 98.8 144.0 102.2 145.2 105.7 C146.5 109.2 147.1 113.2 146.9 116.9 C146.7 120.7 145.6 124.6 144.1 128.1 C142.6 131.7 140.4 135.2 137.9 138.4 C135.4 141.5 132.5 144.5 129.2 147.2 C126.0 149.9 122.3 152.4 118.3 154.4 C114.4 156.4 109.9 158.1 105.5 159.0 C101.0 160.0 93.9 160.0 91.6 160.1\"/>\n<path class=\"ink\" pathLength=\"1\" d=\"M40 120 L63.0 120\"/><polygon class=\"ink-fill\" points=\"74.0,120.0 63.0,124.0 63.0,116.0\"/>\n<path class=\"ink\" pathLength=\"1\" d=\"M123.6 109.0 Q200.0 30.0 268.8 101.1\"/><polygon class=\"ink-fill\" points=\"276.4,109.0 265.9,103.9 271.7,98.3\"/>\n<path class=\"ink\" pathLength=\"1\" d=\"M276.4 131.0 Q200.0 150.0 134.2 133.6\"/><polygon class=\"ink-fill\" points=\"123.6,131.0 135.2,129.8 133.3,137.5\"/>\n<path class=\"ink\" pathLength=\"1\" d=\"M89.0 96.4 C76.6 52.4 123.4 52.4 114.0 85.8\"/><polygon class=\"ink-fill\" points=\"111.0,96.4 110.1,84.8 117.8,86.9\"/>\n<path class=\"ink\" pathLength=\"1\" d=\"M289.0 96.4 C276.6 52.4 323.4 52.4 314.0 85.8\"/><polygon class=\"ink-fill\" points=\"311.0,96.4 310.1,84.8 317.8,86.9\"/>\n<g id=\"state-1\"><circle class=\"ink\" cx=\"100\" cy=\"120\" r=\"26\" pathLength=\"1\"/><circle class=\"ink\" cx=\"100\" cy=\"120\" r=\"21\" pathLength=\"1\"/><text class=\"tex-i\" x=\"100\" y=\"124\" text-anchor=\"middle\">q<tspan dy=\".3em\" font-size=\".7em\">0</tspan></text></g>\n<g id=\"state-2\"><circle class=\"ink\" cx=\"300\" cy=\"120\" r=\"26\" pathLength=\"1\"/><text class=\"tex-i\" x=\"300\" y=\"124\" text-anchor=\"middle\">q<tspan dy=\".3em\" font-size=\".7em\">1</tspan></text></g>\n<text class=\"tex\" x=\"200\" y=\"57\" text-anchor=\"middle\">a</text>\n<text class=\"tex\" x=\"200\" y=\"168\" text-anchor=\"middle\">a</text>\n<text class=\"tex\" x=\"100\" y=\"51\" text-anchor=\"middle\">b</text>\n<text class=\"tex\" x=\"300\" y=\"51\" text-anchor=\"middle\">b</text>\n</svg>\n<div class=\"tape-row\"><span class=\"frame-word\">input</span><ol class=\"tape\" role=\"group\" aria-label=\"Input tape\"><li data-highlight=\"2\">a</li><li data-highlight=\"3\">b</li><li data-highlight=\"4\">a</li></ol></div></figure>\n<div class=\"work\">\n<div class=\"step\" data-step=\"1\"><div class=\"n\">1</div><p>Start in \\(q_0\\): no a's read yet, and zero is even.</p></div>\n<div class=\"step\" data-step=\"2\"><div class=\"n\">2</div><p>Read a: \\(q_0 \\to q_1\\), one a, odd.</p></div>\n<div class=\"step\" data-step=\"3\"><div class=\"n\">3</div><p>Read b: \\(q_1 \\to q_1\\); a b does not change the count.</p></div>\n<div class=\"step\" data-step=\"4\"><div class=\"n\">4</div><p>Read a: \\(q_1 \\to q_0\\), two a's, even.</p></div>\n<div class=\"step\" data-step=\"5\"><div class=\"n\">5</div><p>The input is finished in \\(q_0\\), an accepting state: aba is accepted.</p></div>\n</div></div>"
+}

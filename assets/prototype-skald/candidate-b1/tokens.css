@@ -1,0 +1,522 @@
+/*
+ * Skald, candidate B1: "Tutor's notebook". PROTOTYPE (issue #87), throwaway.
+ * Design tokens and base rules injected under every Mimir page.
+ * A bright dot-grid pad, blue-black fountain-pen ink, a red correction pen and a
+ * yellow highlighter. Builders compose the body with the classes in guide.md.
+ */
+
+/* ---------- Fonts: Andika (text, SIL's face for new readers), Kalam (the hand) ---------- */
+@font-face {
+  font-family: "Andika"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/andika-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Andika"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/andika-latin-ext-400.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Andika"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../fonts/andika-latin-700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Andika"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../fonts/andika-latin-ext-700.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Andika"; font-style: italic; font-weight: 400; font-display: swap;
+  src: url("../fonts/andika-latin-400-italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Andika"; font-style: italic; font-weight: 400; font-display: swap;
+  src: url("../fonts/andika-latin-ext-400-italic.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Kalam"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/kalam-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Kalam"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/kalam-latin-ext-400.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Kalam"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../fonts/kalam-latin-700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Kalam"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../fonts/kalam-latin-ext-700.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---------- Tokens: light (a bright dot-grid pad in daylight) ---------- */
+:root {
+  color-scheme: light;
+  --paper: #fafbfc;            /* the pad: cool, bright white */
+  --sheet: #ffffff;            /* a printout taped into the pad */
+  --dot: #c3ccd8;              /* the printed dot grid */
+  --ink: #1a2847;              /* blue-black fountain-pen ink: text and notation */
+  --ink-soft: #4b5873;
+  --pencil: #7c8595;           /* graphite: axes, guides, leaders, frame words */
+  --rule: #d4dbe5;
+  --pen: #d3263a;              /* the red correction pen: loops, arrows */
+  --hi: rgba(255, 224, 20, .52);        /* the yellow highlighter */
+  --hi-edge: rgba(250, 205, 0, .66);    /* ink pools where the nib lands and lifts */
+  --hi-blend: multiply;
+  --hi-glow: transparent;            /* at night the highlighter glows */
+  --tape: rgba(196, 210, 228, .58);
+
+  /* figures */
+  --fig-ink: var(--ink);       /* the one neutral ink for formal notation */
+  --fig-soft: var(--pencil);   /* axes, grids, leader lines, ghosts */
+  --fig-paper: var(--paper);   /* knock-outs and halos; set to --sheet on taped figures */
+  --fig-curve: #2148c0;        /* a second pen, royal blue: default curve colour */
+  /* coloured pencils for depictions and Mimir's own sketches */
+  --pig-ochre: #c07a10;  --wash-ochre: #fbe8c2;
+  --pig-sage: #3c875a;   --wash-sage: #dbefe1;
+  --pig-violet: #6a4cc2; --wash-violet: #e8e1fa;
+  --pig-sky: #2c74b5;    --wash-sky: #dceaf7;
+  /* conventional colours, only where the field uses them */
+  --arterial: #c4202e;   --venous: #2a4fa8;
+
+  /* type */
+  --font-text: "Andika", "Segoe UI", system-ui, sans-serif;
+  --font-hand: "Kalam", "Segoe Print", "Bradley Hand", cursive;
+  --font-tex: "KaTeX_Main", "Times New Roman", serif;
+  --fs-small: .875rem;
+  --fs-body: clamp(1.0625rem, 1rem + .2vw, 1.15rem);
+  --fs-hand: 1.1875rem;
+  --fs-intro: 1.125rem;
+  --fs-title: clamp(1.5rem, 1.18rem + 1.35vw, 2.15rem);
+  --fs-question: clamp(1.25rem, 1.08rem + .8vw, 1.6rem);
+  --lh-body: 1.6;
+
+  /* space (a 4-based scale) and the pad */
+  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem; --sp-5: 1.5rem;
+  --sp-6: 2rem; --sp-7: 3rem; --sp-8: 4.5rem;
+  --grid: 22px;                /* dot pitch */
+  --gutter: clamp(1rem, .4rem + 3vw, 4rem);
+  --col-num: 2.5rem;           /* the margin where circled numbers sit */
+  --col-text: 40rem;
+
+  /* motion */
+  --ease-pen: cubic-bezier(.3, .6, .2, 1);
+  --t-write: .7s;
+  --t-draw: 1.1s;
+
+  /* hand-drawn shapes, used as masks so they take any colour */
+  --shape-circle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M8.85 11.42C9.07 11.22 9.72 10.58 10.21 10.22C10.69 9.86 11.22 9.54 11.75 9.25C12.28 8.96 12.83 8.71 13.39 8.49C13.94 8.26 14.51 8.07 15.07 7.89C15.64 7.71 16.21 7.56 16.79 7.43C17.36 7.3 17.94 7.19 18.53 7.11C19.11 7.03 19.7 6.97 20.29 6.95C20.87 6.93 21.47 6.94 22.05 6.99C22.64 7.04 23.22 7.12 23.79 7.25C24.36 7.38 24.93 7.55 25.47 7.75C26.01 7.95 26.54 8.2 27.05 8.46C27.55 8.73 28.04 9.02 28.52 9.34C28.99 9.65 29.45 9.99 29.9 10.34C30.34 10.69 30.78 11.05 31.2 11.44C31.63 11.82 32.04 12.22 32.44 12.65C32.83 13.07 33.22 13.52 33.57 13.99C33.91 14.46 34.24 14.97 34.52 15.49C34.79 16.02 35.03 16.57 35.2 17.14C35.37 17.71 35.49 18.31 35.54 18.9C35.58 19.49 35.56 20.1 35.49 20.7C35.41 21.29 35.26 21.89 35.07 22.46C34.89 23.03 34.63 23.58 34.37 24.12C34.1 24.65 33.79 25.16 33.47 25.66C33.15 26.16 32.81 26.63 32.47 27.1C32.12 27.57 31.77 28.03 31.4 28.48C31.04 28.93 30.67 29.37 30.28 29.81C29.89 30.24 29.5 30.68 29.07 31.09C28.64 31.51 28.19 31.92 27.71 32.29C27.23 32.66 26.72 33.02 26.18 33.33C25.64 33.64 25.07 33.93 24.49 34.16C23.91 34.39 23.29 34.58 22.68 34.72C22.06 34.86 21.43 34.95 20.8 35.01C20.17 35.06 19.53 35.07 18.9 35.05C18.27 35.03 17.64 34.97 17.02 34.88C16.4 34.8 15.78 34.68 15.17 34.53C14.56 34.38 13.95 34.21 13.36 34C12.77 33.79 12.18 33.54 11.63 33.26C11.07 32.97 10.53 32.65 10.03 32.29C9.52 31.93 9.05 31.52 8.62 31.09C8.19 30.65 7.8 30.16 7.47 29.66C7.13 29.16 6.84 28.63 6.59 28.09C6.35 27.54 6.15 26.98 5.98 26.42C5.81 25.86 5.69 25.29 5.57 24.72C5.46 24.15 5.37 23.59 5.29 23.02C5.21 22.45 5.15 21.89 5.09 21.32C5.03 20.74 4.98 20.17 4.95 19.58C4.92 18.99 4.9 18.4 4.93 17.79C4.95 17.19 5 16.57 5.11 15.96C5.21 15.34 5.36 14.72 5.57 14.12C5.79 13.53 6.06 12.93 6.39 12.37C6.72 11.82 7.11 11.28 7.55 10.79C7.98 10.3 8.48 9.85 9 9.44C9.52 9.03 10.09 8.66 10.66 8.33C11.24 8 11.84 7.72 12.45 7.46C13.05 7.2 13.67 6.98 14.29 6.78C14.91 6.58 15.85 6.35 16.17 6.26' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round'/%3E%3C/svg%3E");
+  --shape-box: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-1.5 -3.5 103 107' preserveAspectRatio='none'%3E%3Cpath d='M-0.6 4C2.94 3.7 13.83 2.44 20.64 2.22C27.45 2.01 33.73 2.72 40.28 2.7C46.83 2.68 53.37 2.16 59.92 2.11C66.47 2.07 73.01 2.45 79.56 2.43C86.11 2.41 95.91 -1.12 99.2 2C102.49 5.12 99.35 14.75 99.32 21.12C99.29 27.49 99.07 33.87 99.02 40.24C98.97 46.61 98.94 52.99 99.03 59.36C99.12 65.73 99.5 72.11 99.56 78.48C99.62 84.85 102.71 94.48 99.4 97.6C96.09 100.72 86.27 97.25 79.7 97.19C73.13 97.13 66.57 96.95 60 97.26C53.43 97.57 46.87 98.92 40.3 99.05C33.73 99.18 27.17 98.16 20.6 98.01C14.03 97.87 4.14 101.46 0.9 98.2C-2.34 94.94 1.16 85.04 1.18 78.46C1.21 71.88 1.04 65.3 1.05 58.72C1.05 52.14 1.23 45.56 1.22 38.98C1.22 32.4 1 25.82 1.01 19.24C1.02 12.66 1.25 2.79 1.3 -0.5' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+}
+
+/* ---------- Tokens: dark (the same pad at night: slate page, pale ink) ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #1a2230; --sheet: #222c3c; --dot: #344157;
+    --ink: #e3e8f0; --ink-soft: #aab4c5; --pencil: #8692a6; --rule: #33405a;
+    --pen: #ff6b75;
+    --hi: rgba(255, 214, 0, .38); --hi-edge: rgba(255, 222, 30, .5); --hi-blend: screen; --hi-glow: rgba(255, 210, 0, .38);
+    --tape: rgba(170, 188, 215, .15);
+    --fig-curve: #8eb0ff;
+    --pig-ochre: #e2a64a; --wash-ochre: #3b3222;
+    --pig-sage: #7cc89a;  --wash-sage: #1f3a2e;
+    --pig-violet: #ab98f2; --wash-violet: #2e2a4c;
+    --pig-sky: #7db9ec;   --wash-sky: #1e3449;
+    --arterial: #f0646c;  --venous: #86a6f0;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #1a2230; --sheet: #222c3c; --dot: #344157;
+  --ink: #e3e8f0; --ink-soft: #aab4c5; --pencil: #8692a6; --rule: #33405a;
+  --pen: #ff6b75;
+  --hi: rgba(255, 214, 0, .38); --hi-edge: rgba(255, 222, 30, .5); --hi-blend: screen; --hi-glow: rgba(255, 210, 0, .38);
+  --tape: rgba(170, 188, 215, .15);
+  --fig-curve: #8eb0ff;
+  --pig-ochre: #e2a64a; --wash-ochre: #3b3222;
+  --pig-sage: #7cc89a;  --wash-sage: #1f3a2e;
+  --pig-violet: #ab98f2; --wash-violet: #2e2a4c;
+  --pig-sky: #7db9ec;   --wash-sky: #1e3449;
+  --arterial: #f0646c;  --venous: #86a6f0;
+}
+
+/* ---------- Base: the pad ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background-color: var(--paper);
+  background-image: radial-gradient(circle at center, var(--dot) 0 1px, transparent 1.4px);
+  background-size: var(--grid) var(--grid);
+  background-position: calc(var(--grid) / -2 + 1px) calc(var(--grid) / -2 + 1px);
+  color: var(--ink);
+  font: 400 var(--fs-body)/var(--lh-body) var(--font-text);
+  overflow-wrap: break-word;
+}
+::selection { background: var(--hi); }
+a { color: var(--fig-curve); text-underline-offset: .2em; }
+p { margin: 0 0 var(--sp-4); }
+strong, b { font-weight: 700; }
+h1, h2, h3 { font-family: var(--font-text); color: var(--ink); margin: 0; text-wrap: balance; }
+h1 { font-size: var(--fs-title); font-weight: 700; line-height: 1.16; letter-spacing: -.012em; max-width: 30ch; }
+h1.question { font-size: var(--fs-question); font-weight: 700; line-height: 1.4; letter-spacing: 0; max-width: 38rem; }
+h1.question .katex { font-size: 1.06em; }
+h2 { font-size: 1.25rem; font-weight: 700; line-height: 1.25; margin-bottom: var(--sp-3); }
+
+/* The hand: frame words, labels, step numbers, figure tags. Never content sentences. */
+.hand { font-family: var(--font-hand); font-weight: 400; }
+
+/* ---------- The page ---------- */
+main {
+  max-width: calc(var(--col-num) + 72rem);
+  margin: 0 auto;
+  padding: clamp(1.25rem, .6rem + 3vw, 3.5rem) var(--gutter) 0;
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; flex-direction: column;
+  overflow-x: clip;
+}
+/* Header: provenance label in pencil, then the title or question, then the intro. */
+.top {
+  display: grid; grid-template-columns: var(--col-num) minmax(0, var(--col-text));
+  column-gap: var(--sp-4); margin-bottom: var(--sp-6);
+}
+.top > * { grid-column: 2; }
+.top > .tag { grid-column: 1; grid-row: 2; }
+.label {
+  font-family: var(--font-hand); font-size: var(--fs-hand); line-height: 1.3;
+  color: var(--pencil); margin: 0 0 var(--sp-3);
+}
+.tag {           /* a handwritten frame word in the margin, e.g. "Q." */
+  font-family: var(--font-hand); font-weight: 700; font-size: 1.35rem; line-height: 1.5;
+  color: var(--ink-soft); justify-self: center;
+}
+.intro { font-size: var(--fs-intro); line-height: 1.6; margin: var(--sp-4) 0 0; max-width: 38rem; }
+
+/* ---------- Steps: notes taken down the page ---------- */
+.steps, .run { max-width: calc(var(--col-num) + var(--sp-4) + var(--col-text)); }
+.step {
+  display: grid; grid-template-columns: var(--col-num) minmax(0, 1fr);
+  column-gap: var(--sp-4); align-items: start;
+  padding: var(--sp-3) 0 var(--sp-4);
+  scroll-margin: 5rem 0 7rem;
+}
+.step > * { grid-column: 2; min-width: 0; }
+.step > .num { grid-column: 1; grid-row: 1 / span 9; }
+.step > .wide { grid-column: 1 / -1; }
+.body > :last-child { margin-bottom: 0; }
+.num {
+  position: relative; display: grid; place-items: center;
+  width: 2.4rem; height: 2.4rem; margin-top: -.3rem; justify-self: center;
+  font: 700 1.3rem/1 var(--font-hand); color: var(--ink);
+  padding-top: .12em;
+}
+.num::before {
+  content: ""; position: absolute; inset: 0;
+  background: var(--ink-soft);
+  -webkit-mask: var(--shape-circle) center / 100% 100% no-repeat;
+  mask: var(--shape-circle) center / 100% 100% no-repeat;
+}
+.step[data-latest] > .num::before { background: var(--pen); }
+/* no two circles alike: the same loop, turned and flipped as a hand would vary it */
+.step:nth-of-type(3n+2) > .num::before { transform: rotate(104deg) scale(1.04, .97); }
+.step:nth-of-type(3n) > .num::before { transform: rotate(212deg) scaleX(-1); }
+.step:nth-of-type(4n) > .num::before { transform: rotate(-38deg) scale(.97, 1.03); }
+.runin { font-weight: 700; }
+
+/* The answer: boxed by hand, as a tutor boxes a final answer. */
+.answer {
+  position: relative; display: inline-block; max-width: 100%;
+  margin: var(--sp-4) 0 var(--sp-2); padding: .6rem 1rem .65rem;
+  font-weight: 700; font-size: 1.0625rem; line-height: 1.5;
+}
+.answer::before {
+  content: ""; position: absolute; inset: -.1rem -.15rem; pointer-events: none;
+  background: var(--ink);
+  -webkit-mask: var(--shape-box) center / 100% 100% no-repeat;
+  mask: var(--shape-box) center / 100% 100% no-repeat;
+}
+
+/* Spread: notes down the left, the figure set beside them (sticky) on desktop. */
+.spread {
+  display: grid; grid-template-columns: minmax(0, 33rem) minmax(0, 1fr);
+  column-gap: clamp(2rem, 1rem + 3vw, 4.5rem); align-items: start;
+}
+.spread > figure { grid-column: 2; grid-row: 1; position: sticky; top: var(--sp-5); margin: 0; z-index: 1; }
+.spread > .run { grid-column: 1; grid-row: 1; }
+
+/* ---------- Figures: drawn into the pad, or a printout taped in ---------- */
+figure { margin: var(--sp-4) 0; }
+figure svg, svg.fig { display: block; width: 100%; height: auto; overflow: visible; }
+figcaption {
+  font-size: var(--fs-small); line-height: 1.5; color: var(--ink-soft); margin-top: var(--sp-3);
+  max-width: 34rem;
+}
+.fig-tag { font-family: var(--font-hand); font-size: 1.05rem; color: var(--pencil); margin-right: .45em; white-space: nowrap; }
+.taped {
+  --fig-paper: var(--sheet);
+  position: relative; background: var(--sheet);
+  padding: clamp(.9rem, .5rem + 1.6vw, 1.6rem) clamp(.8rem, .4rem + 1.4vw, 1.4rem) clamp(.7rem, .4rem + 1vw, 1.1rem);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 9%, transparent), 0 1px 3px color-mix(in srgb, #0a1020 12%, transparent);
+  transform: rotate(-.5deg);
+}
+.taped::before, .taped::after {          /* two strips of frosted tape */
+  content: ""; position: absolute; top: -.7rem; width: 5.5rem; height: 1.45rem;
+  background: var(--tape);
+  clip-path: polygon(0 8%, 4% 0, 8% 10%, 12% 0, 16% 6%, 84% 4%, 88% 0, 92% 9%, 96% 0, 100% 7%,
+                     100% 92%, 96% 100%, 92% 90%, 88% 100%, 84% 95%, 16% 97%, 12% 100%, 8% 91%, 4% 100%, 0 93%);
+}
+.taped::before { left: 1.2rem; transform: rotate(-5deg); }
+.taped::after { right: 1.2rem; transform: rotate(4deg); }
+
+svg text { font-family: var(--font-hand); fill: var(--fig-ink); }
+svg .tex, svg text.tex { font-family: var(--font-tex); font-weight: 400; }
+svg .tex-i { font-family: "KaTeX_Math", var(--font-tex); font-style: normal; }
+svg .label { font-family: var(--font-hand); font-weight: 400; }
+svg .small { font-family: var(--font-text); font-weight: 400; fill: var(--fig-soft); }
+svg .ink { stroke: var(--fig-ink); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+svg .ink-fill { fill: var(--fig-ink); stroke: none; }
+svg .soft { stroke: var(--fig-soft); fill: none; stroke-linecap: round; }
+svg .soft-fill { fill: var(--fig-soft); }
+svg .curve { stroke: var(--fig-curve); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+svg .leader { stroke: var(--fig-soft); fill: none; stroke-width: 1.3; stroke-linecap: round; }
+svg .knock { fill: var(--fig-paper); }
+svg .halo { paint-order: stroke; stroke: var(--fig-paper); stroke-width: 5px; stroke-linejoin: round; }
+
+/* Tables: a value table ruled by hand, a line under the head row and after the head column. */
+.table-wrap { overflow-x: auto; margin: var(--sp-3) 0 var(--sp-2); scrollbar-width: thin; }
+table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: .45em .85em; text-align: center; }
+th { font-weight: 700; text-align: left; padding-left: 0; }
+th[scope="row"] { border-right: 1.6px solid var(--ink); padding-right: .85em; }
+tr + tr > * { border-top: 1.6px solid var(--ink); }
+
+/* Small inline pieces */
+.sym {
+  display: inline-block; min-width: 1.5em; padding: 0 .3em; text-align: center;
+  font-family: var(--font-tex); font-size: 1.05em; line-height: 1.3; position: relative;
+}
+.sym::before {
+  content: ""; position: absolute; inset: -.05em -.02em; background: var(--ink-soft);
+  -webkit-mask: var(--shape-box) center / 100% 100% no-repeat;
+  mask: var(--shape-box) center / 100% 100% no-repeat; opacity: .8;
+}
+.katex { font-size: 1.1em; }
+.katex-display { margin: var(--sp-3) 0 var(--sp-4); overflow-x: auto; overflow-y: hidden; padding: var(--sp-2) 0 var(--sp-2) var(--sp-5); scrollbar-width: thin; }
+.katex-display > .katex { text-align: left; }   /* written from the left, as in notes */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- The teaching highlight: highlighter and red pen ---------- */
+/* HTML targets: a highlighter swipe behind the target. Add .loop for a red pen loop instead. */
+span[data-highlight] { display: inline-block; }
+[data-highlight-on]:not(svg, svg *) { position: relative; z-index: 0; }
+[data-highlight-on]:not(svg, svg *, .loop)::before {
+  content: ""; position: absolute; z-index: -1; pointer-events: none;
+  inset: .08em -.28em -.04em -.22em;
+  background: linear-gradient(90deg, var(--hi-edge) 0 .22em, var(--hi) .55em calc(100% - .55em), var(--hi-edge) calc(100% - .2em));
+  border-radius: .18em .5em .22em .6em / .4em .25em .5em .3em;
+  transform: rotate(-1.3deg) skewX(-10deg); transform-origin: left center;
+  box-shadow: 0 0 .7em .05em var(--hi-glow);
+}
+.loop[data-highlight-on]:not(svg, svg *)::before,
+.loop[data-highlight-on]:not(svg, svg *)::after {
+  content: ""; position: absolute; pointer-events: none; z-index: -1; border: 2px solid var(--pen);
+}
+.loop[data-highlight-on]:not(svg, svg *)::before {
+  inset: -.36em -.4em -.3em -.34em; border-radius: 48% 52% 44% 56% / 58% 46% 54% 42%; transform: rotate(-2deg);
+}
+.loop[data-highlight-on]:not(svg, svg *)::after {
+  inset: -.28em -.3em -.42em -.44em; border-width: 1.3px; border-top-color: transparent;
+  border-radius: 54% 46% 52% 48% / 44% 58% 42% 56%; transform: rotate(3deg); opacity: .8;
+}
+/* SVG targets: draw the mark as its own element beside the target.
+   .mark-loop   red pen loop around a thing (state, point, label, layer)
+   .mark-arrow  red pen arrow pointing at a thing (a <g> holding shaft and head)
+   .mark-swipe  highlighter stroke under a line (edge, part of a curve)  */
+svg .mark-loop, svg .mark-swipe, svg .mark-arrow { display: none; pointer-events: none; }
+svg .mark-loop[data-highlight-on], svg .mark-swipe[data-highlight-on], svg .mark-arrow[data-highlight-on] { display: inline; }
+svg .mark-loop, svg .mark-arrow path { fill: none; stroke: var(--pen); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+svg .mark-swipe { fill: none; stroke: var(--hi); stroke-width: 15; stroke-linecap: butt; stroke-linejoin: round; mix-blend-mode: var(--hi-blend); filter: drop-shadow(0 0 5px var(--hi-glow)); }
+svg [data-highlight-on]:not(.mark-loop, .mark-swipe, .mark-arrow) { filter: drop-shadow(0 0 3px var(--hi-edge)) drop-shadow(0 0 6px var(--hi)); }
+
+/* ---------- Step controls: the pad's foot, under a perforation ---------- */
+:root { --cur: 0; --tot: 1; }
+:root[data-step-current="1"]{--cur:1} :root[data-step-current="2"]{--cur:2} :root[data-step-current="3"]{--cur:3}
+:root[data-step-current="4"]{--cur:4} :root[data-step-current="5"]{--cur:5} :root[data-step-current="6"]{--cur:6}
+:root[data-step-current="7"]{--cur:7} :root[data-step-current="8"]{--cur:8} :root[data-step-current="9"]{--cur:9}
+:root[data-step-current="10"]{--cur:10} :root[data-step-current="11"]{--cur:11} :root[data-step-current="12"]{--cur:12}
+:root[data-step-total="1"]{--tot:1} :root[data-step-total="2"]{--tot:2} :root[data-step-total="3"]{--tot:3}
+:root[data-step-total="4"]{--tot:4} :root[data-step-total="5"]{--tot:5} :root[data-step-total="6"]{--tot:6}
+:root[data-step-total="7"]{--tot:7} :root[data-step-total="8"]{--tot:8} :root[data-step-total="9"]{--tot:9}
+:root[data-step-total="10"]{--tot:10} :root[data-step-total="11"]{--tot:11} :root[data-step-total="12"]{--tot:12}
+
+#mimir-controls {
+  position: sticky; bottom: 0; z-index: 5;
+  display: flex; align-items: center; gap: var(--sp-3);
+  margin: auto calc(-1 * var(--gutter)) 0;   /* sits at the foot of the page */
+  padding: var(--sp-4) var(--gutter) max(var(--sp-3), env(safe-area-inset-bottom));
+  background: var(--paper);
+}
+#mimir-controls:empty { display: none; }
+main > :nth-last-child(2) { margin-bottom: var(--sp-7); }
+#mimir-controls::before {   /* perforation, with the highlighter run along it as far as you have read */
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 9px; pointer-events: none;
+  background:
+    linear-gradient(90deg, var(--hi-edge), var(--hi) 1.2rem) left 3px / calc(100% * var(--cur) / var(--tot)) 6px no-repeat,
+    radial-gradient(circle, var(--pencil) 0 1.2px, transparent 1.6px) left 1px / 7px 3px repeat-x;
+  background-position: left top 4px, left top;
+  transition: background-size .5s var(--ease-pen);
+}
+#mimir-controls button {
+  position: relative; font: 700 1rem/1 var(--font-text); color: var(--ink);
+  min-height: 2.85rem; padding: 0 1.05rem; cursor: pointer; background: transparent; border: 0;
+  display: inline-flex; align-items: center; gap: .5rem;
+}
+#mimir-next { order: 3; margin-left: auto; padding: 0 1.25rem; }
+#mimir-next::before {                       /* boxed by hand */
+  content: ""; position: absolute; inset: 0; background: var(--ink); pointer-events: none;
+  -webkit-mask: var(--shape-box) center / 100% 100% no-repeat; mask: var(--shape-box) center / 100% 100% no-repeat;
+}
+#mimir-next::after { content: "\2192"; font: 700 1.25rem/1 var(--font-hand); margin-top: .1em; }
+#mimir-back::before { content: "\2190"; font: 700 1.25rem/1 var(--font-hand); margin-top: .1em; }
+#mimir-back { color: var(--ink-soft); }
+#mimir-controls button:hover:not(:disabled) { background: linear-gradient(var(--hi), var(--hi)) center / 100% 62% no-repeat; }
+#mimir-controls button:disabled { opacity: .36; cursor: default; }
+#mimir-controls button:focus-visible { outline: 2px dashed var(--pen); outline-offset: 3px; }
+#mimir-progress {
+  order: 2; font: 700 1.3rem/1 var(--font-hand); color: var(--ink-soft); white-space: nowrap; padding-top: .15em;
+}
+#mimir-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
+
+/* ---------- Narrower screens ---------- */
+@media (max-width: 900px) {
+  :root { --col-num: 2.1rem; }
+  .top, .step { column-gap: var(--sp-3); }
+  .num { width: 2.2rem; height: 2.2rem; font-size: 1.2rem; }
+  .spread { grid-template-columns: minmax(0, 1fr); }
+  .spread > figure, .spread > .run { grid-column: 1; grid-row: auto; }
+  .spread > figure {
+    top: 0; margin: 0 calc(-1 * var(--gutter)) var(--sp-3);
+    padding: var(--sp-4) var(--gutter) var(--sp-3);
+    background: var(--paper);
+    border-bottom: 1.5px dashed color-mix(in srgb, var(--pencil) 55%, transparent);
+  }
+  .spread > figure.taped { top: .8rem; padding: var(--sp-3) var(--sp-3) var(--sp-2); margin: var(--sp-4) 0 var(--sp-4); transform: none; }
+  .spread > figure.taped figcaption { margin-top: var(--sp-1); }
+  .spread > .run .step { scroll-margin-top: var(--sticky-fig, 16rem); }
+  /* display maths and figures in a step may use the number margin */
+  .step .body .katex-display, .step .body > figure, .step .body > .table-wrap { margin-left: calc(-1 * (var(--col-num) + var(--sp-3))); }
+  .step .body .katex-display { padding-left: 0; }
+  .step .katex-display > .katex { font-size: 1em; }
+  th, td { padding: .4em .32em; }
+  th[scope="row"] { padding-right: .5em; }
+  #mimir-controls { gap: var(--sp-2); }
+  #mimir-controls button { padding: 0 .8rem; }
+}
+
+/* ---------- Motion ---------- */
+@property --sweep { syntax: "<angle>"; inherits: false; initial-value: 360deg; }
+@keyframes sk-fade  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sk-rise  { from { opacity: 0; transform: translateY(.3rem); } to { opacity: 1; transform: none; } }
+@keyframes sk-write { from { clip-path: inset(-1rem 100% -1rem -3rem); } to { clip-path: inset(-1rem -3rem -1rem -3rem); } }
+@keyframes sk-draw  { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes sk-swipe { from { transform: rotate(-1.3deg) skewX(-10deg) scaleX(0); } to { transform: rotate(-1.3deg) skewX(-10deg) scaleX(1); } }
+@keyframes sk-wash  { from { fill-opacity: 0; } }
+@keyframes sk-circle { from { --sweep: 0deg; } to { --sweep: 360deg; } }
+
+/* none: nothing moves; every step still appears */
+:root[data-motion="none"] *, :root[data-motion="none"] *::before, :root[data-motion="none"] *::after {
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+/* gentle: the new note fades up softly; marks fade in */
+:root[data-motion="gentle"] [data-latest]:not(svg, svg *) { animation: sk-rise .55s ease-out both; }
+:root[data-motion="gentle"] svg [data-latest],
+:root[data-motion="gentle"] svg [data-highlight-on],
+:root[data-motion="gentle"] [data-highlight-on]:not(svg, svg *)::before,
+:root[data-motion="gentle"] [data-highlight-on]:not(svg, svg *)::after { animation: sk-fade .7s ease both; }
+/* full: the note is written across the page, strokes draw like a pen (pathLength="1"),
+   the highlighter is swiped, the red pen draws its loop, the step number is circled */
+:root[data-motion="full"] [data-latest]:not(svg, svg *) { animation: sk-write var(--t-write) var(--ease-pen) both; }
+:root[data-motion="full"] svg [data-latest] { animation: sk-fade .4s ease both; }
+:root[data-motion="full"] svg [data-latest] [pathLength="1"],
+:root[data-motion="full"] svg [data-latest][pathLength="1"] {
+  stroke-dasharray: 1 1; animation: sk-draw var(--t-draw) var(--ease-pen) both;
+}
+:root[data-motion="full"] svg [data-latest] .wash { animation: sk-wash .8s .5s ease both; }
+:root[data-motion="full"] svg .mark-loop[data-highlight-on],
+:root[data-motion="full"] svg .mark-swipe[data-highlight-on],
+:root[data-motion="full"] svg .mark-arrow[data-highlight-on] [pathLength="1"] {
+  stroke-dasharray: 1 1; animation: sk-draw .75s .45s var(--ease-pen) both;
+}
+:root[data-motion="full"] [data-highlight-on]:not(svg, svg *, .loop)::before { animation: sk-swipe .45s .35s var(--ease-pen) both; }
+:root[data-motion="full"] .loop[data-highlight-on]:not(svg, svg *)::before,
+:root[data-motion="full"] .loop[data-highlight-on]:not(svg, svg *)::after,
+:root[data-motion="full"] .step[data-latest] > .num::before {
+  -webkit-mask: var(--shape-circle) center / 100% 100% no-repeat, conic-gradient(from 210deg, #000 var(--sweep), transparent 0);
+  mask: var(--shape-circle) center / 100% 100% no-repeat, conic-gradient(from 210deg, #000 var(--sweep), transparent 0);
+  -webkit-mask-composite: source-in; mask-composite: intersect;
+  animation: sk-circle .6s .2s var(--ease-pen) both;
+}
+:root[data-motion="full"] .loop[data-highlight-on]:not(svg, svg *)::before,
+:root[data-motion="full"] .loop[data-highlight-on]:not(svg, svg *)::after {
+  -webkit-mask: conic-gradient(from 210deg, #000 var(--sweep), transparent 0);
+  mask: conic-gradient(from 210deg, #000 var(--sweep), transparent 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Print: a clean handout ---------- */
+@media print {
+  @page { margin: 15mm 14mm; }
+  /* print is always the light pad in black ink, whatever the screen theme */
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"] {
+    color-scheme: light;
+    --paper: #fff; --sheet: #fff; --ink: #000; --ink-soft: #333; --pencil: #555; --rule: #999;
+    --fig-ink: #000; --fig-soft: #555; --fig-paper: #fff; --fig-curve: #000;
+    --pig-ochre: #c07a10;  --wash-ochre: #fbe8c2;
+    --pig-sage: #3c875a;   --wash-sage: #dbefe1;
+    --pig-violet: #6a4cc2; --wash-violet: #e8e1fa;
+    --pig-sky: #2c74b5;    --wash-sky: #dceaf7;
+    --arterial: #c4202e;   --venous: #2a4fa8;
+  }
+  body { background: #fff !important; color: #000; font-size: 10.5pt; }
+  main { min-height: 0; padding-top: 0; max-width: none; }
+  html.mimir-js [data-step]:not([data-revealed]) { display: revert !important; }
+  html.mimir-js .step[data-step]:not([data-revealed]) { display: grid !important; }
+  html.mimir-js svg .mark-loop, html.mimir-js svg .mark-swipe, html.mimir-js svg .mark-arrow { display: none !important; }
+  [data-highlight-on]::before, .loop[data-highlight-on]::after { display: none !important; }
+  svg [data-highlight-on] { filter: none !important; }
+  #mimir-controls { display: none !important; }
+  * { animation: none !important; transition: none !important; }
+  .step > .num::before, .step[data-latest] > .num::before { background: #000; }
+  .spread { display: block; }
+  .spread > figure { position: static; border: 0; margin: 0 0 var(--sp-4); padding: 0; background: none; max-width: 34rem; }
+  .step .body .katex-display, .step .body > figure, .step .body > .table-wrap { margin-left: 0; }
+  .taped { transform: none; box-shadow: none; padding: 0; }
+  .taped::before, .taped::after { display: none; }
+  .step, figure, table, .answer { break-inside: avoid; }
+}

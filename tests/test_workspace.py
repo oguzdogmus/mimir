@@ -239,6 +239,7 @@ def test_template_stripping_per_file():
     assert "forecast record 1 line" in profile.splitlines()[0]
     assert not any(l.startswith("dial_preference:") for l in profile.splitlines())
     assert "setup_done:" in profile.splitlines()
+    assert "motion:" in profile.splitlines()  # empty until the student chooses: reads as none, and is asked once
     assert "forecast_record:" in profile.splitlines()
     assert [l for l in profile.splitlines() if l.startswith("## ")] == \
         ["## Exam dates", "## Active courses", "## Forecast record"]

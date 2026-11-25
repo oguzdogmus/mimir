@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -6 120 158" class="mm-root" aria-hidden="true">
+<style>
+.mimir-mascot .mm-ln{fill:none;stroke:var(--mm-ink);stroke-width:4.6;stroke-linecap:round;stroke-linejoin:round}
+.mimir-mascot .mm-ln.mm-sf{stroke:var(--mm-soft)}
+.mimir-mascot .mm-dot{fill:var(--mm-ink)}
+.mimir-mascot .mm-fill{fill:var(--mm-ink);stroke:var(--mm-ink);stroke-width:4.6;stroke-linejoin:round}
+.mimir-mascot .mm-skin{fill:var(--mm-paper)}
+.mimir-mascot .mm-wash{fill:color-mix(in srgb,var(--mm-soft) 26%,var(--mm-paper))}
+.mimir-mascot .mm-blush{fill:color-mix(in srgb,var(--mm-accent) 55%,color-mix(in srgb,var(--mm-ink) 10%,var(--mm-paper)))}
+.mimir-mascot .mm-mk{fill:none;stroke:var(--mm-accent);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+.mimir-mascot .mm-mkdot{fill:var(--mm-accent)}
+.mimir-mascot:not([data-mood="curious"]) .mm-curious,
+.mimir-mascot:not([data-mood="explaining"]) .mm-explaining,
+.mimir-mascot:not([data-mood="thinking"]) .mm-thinking,
+.mimir-mascot:not([data-mood="surprised"]) .mm-surprised,
+.mimir-mascot:not([data-mood="pleased"]) .mm-pleased,
+.mimir-mascot:not([data-mood="proud"]) .mm-proud{opacity:0}
+.mimir-mascot:not([data-mood]) .mm-curious{opacity:1}
+@media (prefers-reduced-motion:no-preference){
+[data-motion="gentle"] .mimir-mascot .mm-face,
+[data-motion="gentle"] .mimir-mascot .mm-mark,
+[data-motion="full"] .mimir-mascot .mm-face,
+[data-motion="full"] .mimir-mascot .mm-mark{transition:opacity .2s ease}
+[data-motion="full"] .mimir-mascot .mm-bob{animation:mm-m2-bob 2.6s ease-in-out infinite}
+[data-motion="full"] .mimir-mascot .mm-blink{transform-box:fill-box;transform-origin:center;animation:mm-m2-blink 5s infinite}
+[data-motion="full"] .mimir-mascot[data-mood="curious"] .mm-face.mm-curious,
+[data-motion="full"] .mimir-mascot[data-mood="explaining"] .mm-face.mm-explaining,
+[data-motion="full"] .mimir-mascot[data-mood="thinking"] .mm-face.mm-thinking,
+[data-motion="full"] .mimir-mascot[data-mood="surprised"] .mm-face.mm-surprised,
+[data-motion="full"] .mimir-mascot[data-mood="pleased"] .mm-face.mm-pleased,
+[data-motion="full"] .mimir-mascot[data-mood="proud"] .mm-face.mm-proud{animation:mm-m2-nod .45s ease-out}
+}
+@keyframes mm-m2-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+@keyframes mm-m2-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.15)}}
+@keyframes mm-m2-nod{0%{transform:translateY(0)}40%{transform:translateY(2px)}100%{transform:translateY(0)}}
+</style>
+
+<!-- head knock-out and beard wash -->
+<path class="mm-skin" d="M23.5 88C20.5 72 22.5 57 31 48.5 38.5 41.5 48.5 38.8 59 38.6 70.5 38.4 81.5 41.8 89 49.5 96.5 57.5 98.5 71 96.4 86.5L96 112H24Z"/>
+<path class="mm-wash" d="M23.4 88C30 93 38 92 46 90 54 88.8 66 88.8 74 90 82 92 90 93 96.5 87 97.8 99 95 107 96.4 112 97.6 116.4 94.4 120.4 91 121 88.5 128 83 134 77.4 138.6 75 141 73.5 144 72 146 68 150 62 149 58.5 146 54 142 49.5 139 44 135 38 130.5 32.4 126 29 120.6 25.6 120 22.6 116 23.8 112 25.5 107 22 101 23.4 88Z"/>
+
+<!-- blush: cheeks and nose -->
+<ellipse class="mm-blush" cx="34.5" cy="83" rx="7" ry="4.6"/>
+<ellipse class="mm-blush" cx="85.5" cy="83" rx="7" ry="4.6"/>
+<ellipse class="mm-blush" cx="60" cy="81" rx="8" ry="6.5"/>
+
+<!-- head: dome, ears, nose, moustache, beard -->
+<path class="mm-ln" d="M23.6 89.5C20.4 72.4 22.4 57.2 31.1 48.4 38.6 41.3 48.6 38.9 59.1 38.6 63 38.5 66.2 38.8 69 39.4M96.3 87.4C98.6 71.2 96.8 57.8 89.3 49.8 83.6 43.8 75.6 40.4 66.8 39.6 62.8 39.2 58.8 39.4 55.6 40.2"/>
+<path class="mm-ln" d="M23.8 70C16.5 66 12.5 72 14.2 78.5 15.6 83.8 19.8 86.4 24.4 84.6M96.2 69.6C103.5 65.8 107.4 71.8 105.8 78.2 104.4 83.6 100.2 86.2 95.6 84.4"/>
+<path class="mm-ln" d="M57.2 63.2C55.6 69.8 50.4 73.8 51 80.2 51.6 85.8 57.4 88.2 61.8 87.4 66.8 86.6 70.2 82.6 68.8 77.6"/>
+<path class="mm-ln" d="M60 88.5C54 85.5 44.5 86.5 39.5 92.5 37 95.8 39.2 98.6 42.4 96.8M60.2 88.4C66.2 85.4 75.6 86.6 80.6 92.6 83 95.9 80.8 98.7 77.6 96.9"/>
+<path class="mm-ln" d="M23.5 90C22 101 25.5 107 23.8 112 22.6 116 25.6 120 29 120.6 32.4 126.4 38 131 44 135.2 49.5 139 55 144.5 61 147.6 67 150.6 73.5 147.6 73.6 142 73.7 137.4 68.4 135.6 66 138.6 64.2 141 65.8 143.8 68.4 143.2"/>
+<path class="mm-ln" d="M96.4 88.6C97.8 99 95 107 96.4 112 97.6 116.4 94.4 120.4 91 121 88.5 128 83 134 77.4 138.6 75.6 140.2 74.6 141 73.4 142.4"/>
+<path class="mm-ln" d="M37.8 105C36.4 113 39.4 121 46 126.5M82.2 105C83.6 113 80.6 121 74 126.5M57.6 121.6C56.4 126 58.4 130.4 62.6 132.4"/>
+
+<!-- curious -->
+<g class="mm-face mm-curious">
+  <path class="mm-ln" d="M36 57C40 53 47.5 52.2 53 55M67 60C72.5 57.6 79 58.2 84 61"/>
+  <g class="mm-blink"><circle class="mm-dot" cx="45" cy="70" r="3.8"/><circle class="mm-dot" cx="75" cy="70" r="3.8"/></g>
+  <path class="mm-ln" d="M53.5 101C57 104.6 63.4 104.8 66.8 101"/>
+</g>
+<g class="mm-mark mm-curious"><g class="mm-bob">
+  <path class="mm-mk" d="M50.4 13C49.4 4.4 56.6-.2 63 .6 69.8 1.6 72.8 7.8 69.2 12.6 66.6 16 61 17.4 60.6 24"/>
+  <circle class="mm-mkdot" cx="60.7" cy="31.4" r="3.3"/>
+</g></g>
+
+<!-- explaining -->
+<g class="mm-face mm-explaining">
+  <path class="mm-ln" d="M35.8 55.5C39 49.5 47 48.6 53 53.2M67 61.5C72.5 60.6 78.5 61 84 62.6"/>
+  <g class="mm-blink"><circle class="mm-dot" cx="45" cy="70" r="3.8"/><circle class="mm-dot" cx="75" cy="70.6" r="3.8"/></g>
+  <path class="mm-fill" d="M52.8 99.6C56 98.4 64.6 98.6 67.4 99.8 67.4 106.4 63.8 109 60 109 56.2 109 52.6 106.4 52.8 99.6Z"/>
+</g>
+
+<!-- thinking -->
+<g class="mm-face mm-thinking">
+  <path class="mm-ln" d="M36.4 58.6C41.4 58.2 47.4 59 53 61.2M67 56.5C72.5 52.8 79 53.4 83.8 57.4"/>
+  <circle class="mm-dot" cx="49.6" cy="67.8" r="3.8"/><circle class="mm-dot" cx="79.2" cy="67.4" r="3.8"/>
+  <path class="mm-ln" d="M55 103C58.6 102.6 63 102.6 67.6 100.2"/>
+</g>
+<g class="mm-mark mm-thinking"><g class="mm-bob">
+  <circle class="mm-mkdot" cx="72" cy="30" r="2.6"/>
+  <circle class="mm-mkdot" cx="80.5" cy="19.6" r="3.4"/>
+  <circle class="mm-mkdot" cx="91" cy="7.6" r="4.4"/>
+</g></g>
+
+<!-- surprised -->
+<g class="mm-face mm-surprised">
+  <path class="mm-ln" d="M35.6 54C39 48 47 47.2 53 51.4M67 51.4C73 47.2 81 48 84.4 54"/>
+  <circle class="mm-ln" cx="45" cy="69.5" r="6"/><circle class="mm-ln" cx="75" cy="69.5" r="6"/>
+  <circle class="mm-dot" cx="45" cy="69.5" r="2"/><circle class="mm-dot" cx="75" cy="69.5" r="2"/>
+  <ellipse class="mm-ln" cx="60" cy="103.6" rx="3.4" ry="4.4"/>
+</g>
+
+<!-- pleased -->
+<g class="mm-face mm-pleased">
+  <path class="mm-ln" d="M36.2 60C40.5 56.8 47.5 56.4 53 59M67 59C72.5 56.4 79.5 56.8 83.8 60"/>
+  <path class="mm-ln" d="M39.5 72C41.8 66.6 48.2 66.6 50.5 72M69.5 72C71.8 66.6 78.2 66.6 80.5 72"/>
+  <path class="mm-ln" d="M49.6 99.4C54.4 107.4 65.6 107.4 70.4 99.4"/>
+</g>
+
+<!-- proud -->
+<g class="mm-face mm-proud">
+  <path class="mm-ln" d="M36 56.4C40 52.2 47.4 51.6 53 55M67 55C72.6 51.6 80 52.2 84 56.4"/>
+  <path class="mm-ln" d="M39.5 72C41.8 66.6 48.2 66.6 50.5 72M69.5 72C71.8 66.6 78.2 66.6 80.5 72"/>
+  <path class="mm-fill" d="M48.5 98.6C54 100.8 66 100.8 71.5 98.6 70.4 107 65.6 111 60 111 54.4 111 49.6 107 48.5 98.6Z"/>
+</g>
+<g class="mm-mark mm-proud"><g class="mm-bob">
+  <path class="mm-mk" d="M60.2 0C60.8 8 60.4 16 59.8 23.6"/>
+  <circle class="mm-mkdot" cx="59.7" cy="31.4" r="3.3"/>
+  <path class="mm-mk" d="M45 8 50.4 12.8M75 8 69.6 12.8M43 22.4H49.4M77 22.4H70.6"/>
+</g></g>
+</svg>

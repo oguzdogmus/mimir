@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" data-motion="{{MOTION}}">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="{{CSP}}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>{{TITLE}}</title>
+{{KATEX_STYLE}}<style>{{TOKENS}}</style>
+</head>
+<body>
+<main>
+<svg class="sk-defs" aria-hidden="true" focusable="false">
+<filter id="sk-chalk" filterUnits="userSpaceOnUse" x="-300" y="-300" width="1600" height="1400" color-interpolation-filters="sRGB">
+<feTurbulence type="fractalNoise" baseFrequency=".45" numOctaves="2" seed="4" result="warp"/>
+<feDisplacementMap in="SourceGraphic" in2="warp" scale="3.2" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+<feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="9" result="grain"/>
+<feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.1 1.8" result="dust"/>
+<feComposite in="rough" in2="dust" operator="in"/>
+</filter>
+<filter id="sk-marker" filterUnits="userSpaceOnUse" x="-300" y="-300" width="1600" height="1400" color-interpolation-filters="sRGB">
+<feTurbulence type="fractalNoise" baseFrequency=".3" numOctaves="1" seed="4" result="warp"/>
+<feDisplacementMap in="SourceGraphic" in2="warp" scale="1.8" xChannelSelector="R" yChannelSelector="G"/>
+</filter>
+</svg>
+{{BODY}}
+</main>
+{{MASCOT}}{{SCRIPTS}}</body>
+</html>

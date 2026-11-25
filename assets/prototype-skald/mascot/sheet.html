@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- PROTOTYPE (issue #87): mascot sheet. ?m=<name> shows every mood of mascot/<name>.svg
+     at the sizes it is used at, on three page palettes. Needs the HTTP server (run.sh). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mascot sheet</title>
+<style>
+  body { margin: 0; font: 13px/1.3 system-ui, sans-serif; background: #888; }
+  .pal { padding: 16px; }
+  .pal h2 { font-size: 13px; margin: 0 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .cell small { opacity: .7; }
+  .mimir-mascot svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .big .mimir-mascot { width: 200px; } .mid .mimir-mascot { width: 104px; } .sm .mimir-mascot { width: 56px; }
+  /* palettes taken from candidate tokens: B2·N1 light, B2·N1 dark, B3 dark */
+  .p1 { background: #f3f5f7; color: #262d35; --mm-ink: #262d35; --mm-paper: #f3f5f7; --mm-soft: #6f7a86; --mm-accent: #ff48b0; }
+  .p2 { background: #131a22; color: #dde3e9; --mm-ink: #dde3e9; --mm-paper: #131a22; --mm-soft: #7d8996; --mm-accent: #ff5db9; }
+  .p3 { background: #131a22; color: #e5ebe4; --mm-ink: #e5ebe4; --mm-paper: #131a22; --mm-soft: #87a09b; --mm-accent: #f0d77a; }
+  .p4 { background: #f3f5f7; color: #262d35; --mm-ink: #262d35; --mm-paper: #f3f5f7; --mm-soft: #6f7a86; --mm-accent: #3359d1; }
+</style>
+</head>
+<body>
+<div id="out"></div>
+<script>
+(function () {
+  var m = new URLSearchParams(location.search).get("m") || "m1";
+  var moods = ["curious", "explaining", "thinking", "surprised", "pleased", "proud"];
+  var pals = [["p1", "B2·N1 light"], ["p2", "B2·N1 dark"], ["p3", "B3 dark"], ["p4", "B2·N2 light"]];
+  fetch(m + ".svg").then(function (r) { return r.text(); }).then(function (svg) {
+    var html = "";
+    pals.forEach(function (p) {
+      html += '<section class="pal ' + p[0] + '"><h2>' + p[1] + '</h2>';
+      [["big", "200px"], ["mid", "104px desktop"], ["sm", "56px small phone"]].forEach(function (s) {
+        html += '<div class="row ' + s[0] + '">';
+        moods.forEach(function (mood) {
+          html += '<div class="cell"><div class="mimir-mascot" data-mood="' + mood + '">' + svg + '</div><small>' + mood + ' · ' + s[1] + '</small></div>';
+        });
+        html += '</div>';
+      });
+      html += '</section>';
+    });
+    document.getElementById("out").innerHTML = html;
+  });
+})();
+</script>
+</body>
+</html>

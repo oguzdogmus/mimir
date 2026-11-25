@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>DFA divisible by 3</title>
+<link rel="stylesheet" href="../../vendor/katex/katex.min.css">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .dfa .state { font-size: 21px; }
+  .dfa .state .sub { font-size: 14px; font-style: normal; }
+  .dfa .edge-label { font-size: 17px; font-family: var(--font-read); }
+  .tape { display: flex; align-items: center; justify-content: center; gap: 0.9rem; margin: var(--sp-4) 0 var(--sp-2); }
+  .cells { display: flex; }
+  .cell {
+    position: relative; display: grid; place-items: center;
+    width: 2.5rem; height: 2.5rem; margin-left: -1px;
+    border: 1px solid var(--rule-strong);
+    font: 600 1.0625rem/1 var(--font-ui); color: var(--ink);
+    transition: color .3s var(--ease);
+  }
+  .cell:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+  .cell:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+  /* the read head under a cell: ember while that symbol is being read, a faint tick once read */
+  .head { position: absolute; left: 50%; top: calc(100% + 5px); width: 0; height: 0; translate: -50% 0;
+          border: 5px solid transparent; border-top: 0; border-bottom: 7px solid var(--ink-faint); }
+  .head:not([data-latest]) { border-bottom-color: var(--rule-strong); }
+  .head[data-latest] { border-bottom-color: var(--accent); }
+  .cell:has(.head[data-revealed]:not([data-latest])) { color: var(--ink-faint); }
+  .cell:has(.head[data-latest]) { box-shadow: inset 0 0 0 1.5px var(--accent); z-index: 1; }
+  .value { font-family: var(--font-ui); font-size: var(--fs-sm); color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<main>
+  <header class="sk-head">
+    <p class="sk-label">[example machine, made by Mimir, checked]</p>
+    <h1>A DFA for binary numbers divisible by 3</h1>
+    <p class="sk-lede">The machine reads a binary number from the most significant bit.
+      State \(q_r\) means "the bits read so far have value \(\equiv r \pmod 3\)". Reading bit
+      \(b\) in state \(q_r\) moves to \(q_{(2r+b) \bmod 3}\).</p>
+  </header>
+
+  <figure class="sk-figure sk-pin">
+    <svg class="dfa" viewBox="12 40 456 180" role="img" aria-labelledby="dfa-t dfa-d">
+      <title id="dfa-t">DFA with states q0, q1 and q2</title>
+      <desc id="dfa-d">Start state q0, which is also the only accepting state (double circle). Transitions: q0 on 0 to q0, q0 on 1 to q1, q1 on 0 to q2, q1 on 1 to q0, q2 on 0 to q1, q2 on 1 to q2.</desc>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9.6" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+          <path d="M0 1.2 L10 5 L0 8.8 Z" class="ink-fill"/>
+        </marker>
+      </defs>
+
+      <!-- start arrow from nowhere -->
+      <path class="ink sk-draw" pathLength="1" d="M28 140 L84 140" marker-end="url(#arrow)"/>
+
+      <!-- q0: start and accepting -->
+      <g data-highlight="1"><g data-highlight="3"><g data-highlight="4">
+        <circle class="ink" cx="110" cy="140" r="26"/>
+        <circle class="ink" cx="110" cy="140" r="21"/>
+      </g></g></g>
+      <text class="state fig-math" x="110" y="146" text-anchor="middle"><tspan class="v">q</tspan><tspan class="sub" dy="4">0</tspan></text>
+
+      <!-- q1 -->
+      <g data-highlight="2"><circle class="ink" cx="260" cy="140" r="26"/></g>
+      <text class="state fig-math" x="260" y="146" text-anchor="middle"><tspan class="v">q</tspan><tspan class="sub" dy="4">1</tspan></text>
+
+      <!-- q2 -->
+      <circle class="ink" cx="410" cy="140" r="26"/>
+      <text class="state fig-math" x="410" y="146" text-anchor="middle"><tspan class="v">q</tspan><tspan class="sub" dy="4">2</tspan></text>
+
+      <!-- q0 -0-> q0 (self-loop, label beyond the apex) -->
+      <g data-highlight="4">
+        <path class="ink sk-draw" pathLength="1" d="M99 116.4 C85 64 135 64 121 116.4" marker-end="url(#arrow)"/>
+        <text class="edge-label" x="110" y="64" text-anchor="middle">0</text>
+      </g>
+      <!-- q0 -1-> q1 (upper arc) -->
+      <g data-highlight="2">
+        <path class="ink sk-draw" pathLength="1" d="M129.9 123.3 Q185 85 240.1 123.3" marker-end="url(#arrow)"/>
+        <text class="edge-label" x="185" y="92" text-anchor="middle">1</text>
+      </g>
+      <!-- q1 -1-> q0 (lower arc) -->
+      <g data-highlight="3">
+        <path class="ink sk-draw" pathLength="1" d="M240.1 156.7 Q185 195 129.9 156.7" marker-end="url(#arrow)"/>
+        <text class="edge-label" x="185" y="201" text-anchor="middle">1</text>
+      </g>
+      <!-- q1 -0-> q2 (upper arc) -->
+      <path class="ink sk-draw" pathLength="1" d="M279.9 123.3 Q335 85 390.1 123.3" marker-end="url(#arrow)"/>
+      <text class="edge-label" x="335" y="92" text-anchor="middle">0</text>
+      <!-- q2 -0-> q1 (lower arc) -->
+      <path class="ink sk-draw" pathLength="1" d="M390.1 156.7 Q335 195 279.9 156.7" marker-end="url(#arrow)"/>
+      <text class="edge-label" x="335" y="201" text-anchor="middle">0</text>
+      <!-- q2 -1-> q2 (self-loop) -->
+      <path class="ink sk-draw" pathLength="1" d="M399 116.4 C385 64 435 64 421 116.4" marker-end="url(#arrow)"/>
+      <text class="edge-label" x="410" y="64" text-anchor="middle">1</text>
+    </svg>
+
+    <div class="tape" aria-label="Input tape 1 1 0">
+      <span class="sk-eyebrow">Input</span>
+      <span class="cells">
+        <span class="cell">1<span class="head" data-step="2"></span></span>
+        <span class="cell">1<span class="head" data-step="3"></span></span>
+        <span class="cell">0<span class="head" data-step="4"></span></span>
+      </span>
+    </div>
+  </figure>
+
+  <ol class="sk-steps">
+    <li data-step="1"><p>Start in \(q_0\) (value 0).</p></li>
+    <li data-step="2"><p>Read <span class="sk-term">1</span>: \(q_0 \to q_1\) (value 1).</p></li>
+    <li data-step="3"><p>Read <span class="sk-term">1</span>: \(q_1 \to q_0\) (value 3).</p></li>
+    <li data-step="4"><p>Read <span class="sk-term">0</span>: \(q_0 \to q_0\) (value 6).</p></li>
+    <li data-step="5"><p>Input finished in \(q_0\), an accepting state: <span class="sk-term">110</span> is accepted, and \(6 = 2 \cdot 3\) is divisible by 3.</p></li>
+  </ol>
+
+  <div id="mimir-controls"></div>
+</main>
+<script src="../../vendor/katex/katex.min.js"></script>
+<script src="../../vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../shell.js"></script>
+</body>
+</html>

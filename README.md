@@ -13,6 +13,38 @@ Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude
 - **Remembers you.** It keeps dated evidence of what you solved alone and with help, and picks up where you left off.
 - **Keeps your files on your machine.** Everything lives in one folder (default `~/learning/`). Generated pages work offline, and Mimir sends no telemetry. The course files Mimir reads are sent to your agent's model provider, like any other file your agent reads.
 
+## What it looks like
+
+Pages and diagrams follow Mimir's house style, Skald: a chalk board in dark theme, a whiteboard in light theme. You click through a page one step at a time, and the newest step is marked. The first three pages were built for a made-up automata course, the last for a made-up biology course, shown here with every step revealed. How they were made, and how to rebuild them, is in [`docs/showcase/`](docs/showcase/).
+
+A worked answer, step by step:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/showcase/cfg-language-dark.png">
+  <img src="assets/showcase/cfg-language-light.png" alt="A worked answer describing the language of the grammar S → aSc | b in five numbered steps, ending in the boxed answer L = {aⁿbcⁿ | n ≥ 0}, beside the parse tree of aabcc with the leaf b circled">
+</picture>
+
+A state diagram you can feed an input into:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/showcase/even-as-dfa-dark.png">
+  <img src="assets/showcase/even-as-dfa-light.png" alt="A DFA with states q0 and q1 for strings with an even number of a's, with the input tape aba below it, a five-step trace of aba beside it, and an input field to run the machine on other strings">
+</picture>
+
+A structure built up part by part:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/showcase/pda-parts-dark.png">
+  <img src="assets/showcase/pda-parts-light.png" alt="A pushdown automaton drawn part by part: the input tape aabb with the head on the first b, the finite control with states q0 to q3, and the stack holding X, X, $, with four numbered steps explaining each part">
+</picture>
+
+A real thing drawn layer by layer:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/showcase/bacterium-envelope-dark.png">
+  <img src="assets/showcase/bacterium-envelope-light.png" alt="A rod-shaped Gram-negative bacterium cut lengthwise, its envelope built from the inside out in four numbered steps: cytoplasm, inner membrane, cell wall in the periplasm, and outer membrane with its lipopolysaccharide fringe, each layer labelled with a leader line">
+</picture>
+
 ## Install
 
 You need Python 3.11 or newer (available as `python3`) and one of the agents below. For Codex and Antigravity, also install `pdftotext` (part of poppler: preinstalled on most Linux, `brew install poppler` on macOS) for the best PDF text; without it Mimir falls back to a simpler built-in reader.
@@ -164,6 +196,8 @@ Mimir is open source under the [Apache License 2.0](LICENSE). You can use, chang
 
 ## Credits
 
-Math sheets use [KaTeX](https://katex.org/) (MIT license), vendored in `assets/vendor/katex/`.
+Pages with math use [KaTeX](https://katex.org/) (MIT license), vendored in `assets/vendor/katex/`.
+
+The Skald house style bundles the fonts Familjen Grotesk, Atkinson Hyperlegible Next and Kalam (SIL Open Font License 1.1) in `assets/skald/fonts/`, each with its licence.
 
 `mimir-help` is modelled on Matt Pocock's [`ask-matt`](https://github.com/mattpocock/skills) router skill.
