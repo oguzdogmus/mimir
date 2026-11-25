@@ -39,11 +39,33 @@ def test_guide_is_a_plain_reference_file_with_every_part_the_spec_names():
     assert not text.startswith("---")  # plain reference file, no skill frontmatter
     heads = " | ".join(_headings(text))
     for part in ("feel", "composing", "tokens", "teaching highlight", "motion", "print",
-                 "meaning test", "figure kinds", "plots are computed", "field notes"):
+                 "meaning test", "figure kinds", "plots are computed", "cross-field recipes"):
         assert part in heads, (part, heads)
+    assert "field notes" not in heads  # #103: field conventions live in field packs
     for kind in ("depiction of a real thing", "formal notation", "plot of data or a function",
                  "mimir's own sketch"):
         assert kind in text.lower(), kind
+
+
+# Rules of one field that #87 put in the guide and #103 moved to field packs. The
+# examples that name a field's subject (a heart, a DFA) stay: they teach the look.
+FIELD_RULES = re.compile(
+    r"anatomy|anterior view|microbiolog|envelope order|length-to-width|not to scale"
+    r"|erd notation|time axis|input tape|automata|double circles?|start arrow from nowhere"
+    r"|textbook convention", re.I)
+
+
+def test_guide_holds_no_field_specific_rules():
+    text = " ".join(_guide().split())  # a rule may wrap across lines
+    hits = [text[max(m.start() - 40, 0):m.end() + 40] for m in FIELD_RULES.finditer(text)]
+    assert not hits, "field rules belong in field packs:\n" + "\n".join(hits)
+
+
+def test_guide_keeps_the_cross_field_graph_geometry():
+    section = _guide().lower().split("### cross-field recipes", 1)[1]
+    for recipe in ("arrowhead", "11 long and 8 wide", "edges between neighbours", "±25°",
+                   "0.45 × the centre distance", "self-loop", "−115°", "2.6r", "12 units above the apex"):
+        assert recipe in section, recipe
 
 
 def _blocks(lang: str) -> list[str]:

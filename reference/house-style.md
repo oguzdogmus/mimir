@@ -105,11 +105,12 @@ before or after it, as `<mimir-original path="<registry path>" page="N"></mimir-
 KaTeX does not reach inside SVG: there, write symbols as Unicode text in `.tex` or
 `.tex-i` (below).
 
-Input tapes (automata): put the tape inside the `figure`, under the SVG, so it pins
-with it: `<div class="tape-row"><span class="frame-word">input</span><ol class="tape"
-role="group" aria-label="Input tape"><li data-highlight="2">1</li>…</ol></div>`. The
-`…` after the last cell is drawn for you. Mark the symbol being read with
-`data-highlight` on its cell.
+A row of cells (a sequence the figure reads or indexes cell by cell, when the field
+pack draws one): put it inside the `figure`, under the SVG, so it pins with it:
+`<div class="tape-row"><span class="frame-word">input</span><ol class="tape"
+role="group" aria-label="Name of the row"><li data-highlight="2">1</li>…</ol></div>`.
+The `…` after the last cell is drawn for you. Mark the cell being read with
+`data-highlight` on it.
 
 Tables: plain `<table>` in `.table-wrap`; you get a teacher's value table (one line
 under the first row, one after the row heads, no box). `th scope="row"` for row heads,
@@ -164,7 +165,7 @@ washes for depictions: `--pig-ochre`, `--pig-moss`, `--pig-violet`, `--pig-sky`,
 (Atkinson Hyperlegible Next), `--font-hand` (Kalam), `--font-tex`. Space: `--sp-1` to
 `--sp-8`.
 
-Contrast: `--ink-faint` is the faintest text colour (step numbers, the tape's "…"); it
+Contrast: `--ink-faint` is the faintest text colour (step numbers, a cell row's "…"); it
 holds about 3.7:1 on the board in both themes. Never use `--rule` or `--fig-soft` for
 text you need read.
 
@@ -218,10 +219,10 @@ notation. The rough edge is only ever on marks, never on notation or text. The s
 shows a mark when its step is the newest one.
 
 - HTML: `data-highlight="N"` on the target (a `span` round an inline formula, a table
-  cell, a tape cell). The tokens draw two rough loops round it. A
+  cell, a cell of a row). The tokens draw two rough loops round it. A
   `span[data-highlight]` gets `margin: 0 .2em` whether or not the loop is shown, so
   write the punctuation right after the `</span>` with no space (`</span>, `), and
-  the text never jumps when the loop comes and goes. For a boxed cell (a tape cell),
+  the text never jumps when the loop comes and goes. For a boxed cell (a cell of a row),
   pull the loop's insets in to about `.3em` so it does not cut the next cell.
 - SVG: the mark is its own element next to the target, highlight on the mark:
   `<path class="mark-loop" data-highlight="N" pathLength="1" d="...">` round a thing (a
@@ -310,9 +311,9 @@ no controls or marks. Never carry meaning by the mark colour alone.
 
 Would someone who knows this field read a different meaning if this
 property changed? Then it is notation and the house style does not touch it. When
-unsure, it is notation. Notation comes from the course source first (the professor's
-slides, the fingerprint's notation section), then the field's standard textbook
-convention.
+unsure, it is notation. Notation comes from the course's own materials first (the
+fingerprint's notation section, the professor's slides and diagrams), then the course's
+field pack, then this core guide.
 
 ### The four figure kinds
 
@@ -344,29 +345,24 @@ The shell measures this and refuses a label that breaks it, naming the label.
 **Content.** Never add, solve, simplify, reorder or correct content; compose it.
 Labels are verbatim. Words you add are frame only (an axis name, "input").
 
-### Field notes
+### Cross-field recipes
 
-- Anatomy: `--arterial` and `--venous`; the standard anterior view.
-- Databases: one ERD notation per course, the course's own.
-- Signals: label the time axis with its units.
-- Automata: state names in `.tex-i`, edge symbols in `.tex`, accepting states as
-  double circles, the start arrow from nowhere, no "start" word. Keep loops round
-  states wide and tilted so they never read as a second circle. Geometry, in viewBox
-  units, for states of radius r on one row:
-  - *Arrowhead:* a filled triangle (`.ink-fill`), 11 long and 8 wide, its tip on the
-    target ring, pointing along the edge's end tangent; the edge path stops at the
-    arrowhead's base.
-  - *Edges between neighbours:* two arcs, the forward one above and the back one
-    below, each a quadratic curve leaving and entering the rings at ±25° from the
-    centre line, with its control point 0.45 × the centre distance above (or below)
-    the midpoint. Labels sit 12 units beyond the arc's apex.
-  - *Self-loop:* on top of the state. It leaves the ring at −115° and returns at −65°
-    (angles from the +x axis, +y down), as a cubic curve with both control points
-    2.6r above the centre and 0.9r either side of it. The arrowhead ends at −65°.
-    The label sits 12 units above the apex. Draw all loops the same way, so they are
-    symmetric.
-- Microbiology: keep the length-to-width ratio (on the outer membrane, the cell
-  proper; inner layers may be thinner and outer ones rounder) and the envelope order
-  from the inside out; say "not to scale" when layers are thickened. Label each layer
-  with the step's name as written; sub-parts named in the text (nucleoid, ribosomes)
-  may be drawn but stay unlabelled.
+Field conventions come from the course's field pack, not from this guide. Only recipes
+that several fields share live here.
+
+Graph geometry, for the state diagrams of computer science, electrical engineering and
+linguistics. Keep highlight loops round states wide and tilted so they never read as a
+second circle. Geometry, in viewBox units, for states of radius r on one row:
+
+- *Arrowhead:* a filled triangle (`.ink-fill`), 11 long and 8 wide, its tip on the
+  target ring, pointing along the edge's end tangent; the edge path stops at the
+  arrowhead's base.
+- *Edges between neighbours:* two arcs, the forward one above and the back one
+  below, each a quadratic curve leaving and entering the rings at ±25° from the
+  centre line, with its control point 0.45 × the centre distance above (or below)
+  the midpoint. Labels sit 12 units beyond the arc's apex.
+- *Self-loop:* on top of the state. It leaves the ring at −115° and returns at −65°
+  (angles from the +x axis, +y down), as a cubic curve with both control points
+  2.6r above the centre and 0.9r either side of it. The arrowhead ends at −65°.
+  The label sits 12 units above the apex. Draw all loops the same way, so they are
+  symmetric.

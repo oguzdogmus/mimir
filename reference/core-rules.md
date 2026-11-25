@@ -93,6 +93,7 @@ A short check of what the student can already solve in a course, before teaching
 2. Everything else in `notes/`: textbook, senior/alumni notes, video summaries, handwriting.
 3. Your own knowledge: only to fill critical gaps when course sources are unreachable, always declared.
 - Flag conflicts openly. Never silently override a higher source.
+- Figures follow the same order: the course's own materials (the fingerprint's notation section, the professor's slides and diagrams), then the course's field pack, then the core house style guide.
 
 ## Provenance labels
 The labels:
