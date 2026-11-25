@@ -16,6 +16,9 @@ SCRIPTS = ROOT_DIR / "scripts"
 FP = SCRIPTS / "fieldpack.py"
 WS = SCRIPTS / "workspace.py"
 
+sys.path.insert(0, str(SCRIPTS))
+import fieldpack  # noqa: E402 -- read for its limits only; behaviour is driven through the CLI
+
 TERM, COURSE = "2026-Fall", "MED101 Physiology"
 
 PACK = {
@@ -159,7 +162,7 @@ def _over_cap(p):
     (_without_source("recipes"), "recipes[1].source is required"),
     (_without_source("checklists"), "checklists[1].rules[2].source is required"),
     (_no_checklist, "figures[3] 'histology slide' has no accuracy checklist"),
-    (_over_cap, "over the 16000-character cap"),
+    (_over_cap, f"over the {fieldpack.MAX_PACK_CHARS}-character cap"),
 ])
 def test_a_bad_pack_is_refused_with_a_field_named_error_and_nothing_is_written(home, root, change, needle):
     bad = pack()
@@ -192,6 +195,24 @@ def test_save_refuses_a_symlinked_store(home, root, tmp_path):
 def test_every_command_needs_a_workspace(home):
     fails(home, "save", PACK, "no workspace at")
     fails(home, "list", {}, "no workspace at")
+
+
+@pytest.mark.parametrize("payload, where", [
+    (pack(title="T" * (fieldpack.TITLE_MAX_CHARS + 1)), "title"),
+    (pack(figures=[{"name": "n" * (fieldpack.TITLE_MAX_CHARS + 1), "kind": "plot"}]), "figures[1].name"),
+])
+def test_a_title_or_figure_name_over_the_limit_is_refused(home, root, payload, where):
+    fails(home, "save", payload, f"{where} has {fieldpack.TITLE_MAX_CHARS + 1} characters, over the "
+                                 f"{fieldpack.TITLE_MAX_CHARS}-character limit")
+
+
+def test_the_researcher_is_told_the_stores_own_limits():
+    """The field researcher's limits follow from the store's constants, so the two never drift apart."""
+    text = (ROOT_DIR / "helpers" / "field-researcher.md").read_text(encoding="utf-8")
+    assert f"one line of at most {fieldpack.TEXT_MAX_CHARS} characters" in text
+    assert f"the title and each figure name at most {fieldpack.TITLE_MAX_CHARS} characters" in text
+    assert f"`test_page.content` at most {fieldpack.CONTENT_MAX_CHARS} characters" in text
+    assert f"the stored pack at most {fieldpack.MAX_PACK_CHARS} characters" in text
 
 
 @pytest.mark.parametrize("payload, needle", [

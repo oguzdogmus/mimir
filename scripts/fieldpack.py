@@ -39,7 +39,8 @@ Pack
 ``field`` is the stable field name: lowercase letters and digits joined by
 single hyphens, at most FIELD_MAX_CHARS characters ("medicine",
 "civil-engineering"). Text values are one line without control characters,
-at most TEXT_MAX_CHARS characters, stored stripped::
+at most TEXT_MAX_CHARS characters (the title and the figures' names at most
+TITLE_MAX_CHARS), stored stripped::
 
     {"field": "medicine", "title": "Medicine",
      "figures": [{"name": "anatomical section", "kind": "depiction"}],
@@ -199,6 +200,7 @@ MAX_LINKS = 2
 FIGURE_KINDS = ("depiction", "formal notation", "plot", "own sketch")
 MAX_PACK_CHARS = 16000
 FIELD_MAX_CHARS = 40
+TITLE_MAX_CHARS = 80  # a pack's title and each of its figures' names
 TEXT_MAX_CHARS = 300
 CONTENT_MAX_CHARS = 2000
 MAX_TOPICS = 20
@@ -287,12 +289,12 @@ def check_pack(data: dict) -> dict:
     """The pack as it is stored; refuses anything the store does not know."""
     check_keys(data, {"field", "title", "figures", "conventions", "recipes", "checklists", "test_page"})
     field = parse_field(data)
-    title = _text(data.get("title"), "title", FIELD_MAX_CHARS * 2)
+    title = _text(data.get("title"), "title", TITLE_MAX_CHARS)
     figures, names = [], {}
     for n, value in enumerate(_list(data, "figures", True), 1):
         where = f"figures[{n}]"
         entry = _object(value, where, {"name", "kind"})
-        name = _text(entry.get("name"), f"{where}.name", FIELD_MAX_CHARS * 2)
+        name = _text(entry.get("name"), f"{where}.name", TITLE_MAX_CHARS)
         if entry.get("kind") not in FIGURE_KINDS:
             raise InputError(f"{where}.kind must be one of {', '.join(FIGURE_KINDS)}: {short(entry.get('kind'))}")
         if name.casefold() in names:

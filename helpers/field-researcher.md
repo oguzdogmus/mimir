@@ -43,7 +43,7 @@ Work field by field, never from one example field. A field with many diagrams (a
 4. Checklists: for every figure, 3 to 8 checks a checker can answer yes or no by looking at a finished figure. Aim them at the errors a careless drawer makes: positions and sides, proportions, orientation, the order of parts, symbol shapes, units, what must be aligned or labelled. For each depiction, one check states its key proportion as a number. Write each as a fact about a correct figure ("The inferior vena cava enters the right atrium from below.", "Each source segment sits in the same row as its translation.").
 5. Test page: fixed synthetic content for the pack's blind test page: one typical subject of the field, drawn as one of its figures, ideally the hardest one to get right. Describe in plain words what the figure shows and labels, at most 2000 characters. Invent it; it comes from no course. The checklist of that figure must check every fact of the test page a drawer could get wrong (a side, a direction of entry, a proportion, an order), one item each, so a checker can score the blind test page against it.
 
-Keep the pack compact: every builder reads it in full. Text values are one line of at most 300 characters (`test_page.content` may span lines), the title at most 80 characters, and the stored pack at most 16000 characters.
+Keep the pack compact: every builder reads it in full. Text values are one line of at most 300 characters, the title and each figure name at most 80 characters, `test_page.content` at most 2000 characters (it may span lines), and the stored pack at most 16000 characters.
 
 ## Save
 
