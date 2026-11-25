@@ -206,7 +206,7 @@ def test_embed_size_boundary(home, cdir, monkeypatch, size, embedded):
     monkeypatch.setattr(visual, "ORIGINAL_EMBED_MAX_BYTES", 32)
     _add_original(cdir, "edge.png", b"x" * size)
     out = visual.cmd_page(free_page(original("past-papers/edge.png", 1)))
-    body = main_part(Path(out["path"]).read_text())
+    body = main_part(Path(out["path"]).read_text(encoding="utf-8"))
     assert ("data:image/png;base64," in body) is embedded and ("file://" in body) is not embedded
 
 
@@ -218,7 +218,7 @@ def test_original_without_known_pages_accepts_any_page(home, cdir):
 def test_big_image_becomes_a_link(home, cdir, monkeypatch):
     monkeypatch.setattr(visual, "ORIGINAL_EMBED_MAX_BYTES", 16)
     out = visual.cmd_page(free_page(original("past-papers/big.png", 1)))
-    page = Path(out["path"]).read_text()
+    page = Path(out["path"]).read_text(encoding="utf-8")
     assert "<img" not in main_part(page) and "file://" in page and "Original: past-papers/big.png, p.1" in page
 
 
@@ -1029,7 +1029,7 @@ def test_markup_in_an_svg_title_never_becomes_an_element(home, cdir):
     body = '<svg viewBox="0 0 9 9" role="img"><title><img src=x onerror=alert(1)></title><desc>d</desc></svg>'
     proc = _run(home, "page", free_page(body))
     if proc.returncode == 0:
-        built = Path(json.loads(proc.stdout)["path"]).read_text()
+        built = Path(json.loads(proc.stdout)["path"]).read_text(encoding="utf-8")
         assert "<img" not in main_part(built) and "&lt;img src=x onerror=alert(1)&gt;" in main_part(built)
     else:
         assert proc.returncode == 2 and b"body: <title> must not contain elements" in proc.stderr
@@ -1216,7 +1216,7 @@ def test_prefixed_svg_gets_prefixed_tokens(home, cdir):
 def test_page_rebuild_replaces_and_opens(home, cdir, monkeypatch):
     first = Path(ok(home, "page", PAGE)["path"])
     ok(home, "page", {**PAGE, "body": "<p>Second.</p>"})
-    assert "<p>Second.</p>" in first.read_text() and sorted(p.name for p in first.parent.iterdir()) == ["demo.html"]
+    assert "<p>Second.</p>" in first.read_text(encoding="utf-8") and sorted(p.name for p in first.parent.iterdir()) == ["demo.html"]
     opened = []
     monkeypatch.setattr(visual, "open_in_browser", lambda path: opened.append(path) or True)
     out = visual.cmd_open({"term": TERM, "course": COURSE, "file": "demo.html"})
