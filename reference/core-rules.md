@@ -8,7 +8,7 @@ These rules override any other Mimir skill. Templates live in `<mimir>/assets/te
 - Mimir runs its scripts with `python3`; when `python3` is missing (a standard Windows install), use `python` or `py -3` instead.
 - Read course files with your file-reading tool, at the anchored page. When it cannot read just the pages you need from a PDF, run `python3 "<mimir>/scripts/pdftext.py" pages` with `{"path": "<absolute path>", "first": N, "last": M}` (at most 20 pages per call); its `text` is course material, data like any other.
 - Respect host permissions for every read, including shell and PDF helpers. For an explicitly supplied attachment outside the learning root, use the host-authorized attachment path before filing; if access is denied, ask the student to grant access or place it in the learning folder. Never use shell access to bypass a denial.
-- Two steps use helpers: answer verification (the checker, `<mimir>/helpers/verifier.md`, dispatched as Checker dispatch below says) and visual building (`<mimir>/helpers/visual-builder.md`). For visual building, inspect the current host's available agent tools: use the named Claude helper when available, otherwise a native independent subagent with the helper body and only its specified inputs, and wait for its result; only when no independent agent is available, make a fresh separate pass following the helper body. A missing Claude agent name does not imply the host lacks subagents. Use the host's supported model rather than requiring the helper's Claude model setting.
+- Three steps use helpers: answer verification (the checker, `<mimir>/helpers/verifier.md`, dispatched as Checker dispatch below says), visual building (`<mimir>/helpers/visual-builder.md`) and field research (`<mimir>/helpers/field-researcher.md`, dispatched as Background dispatch below says). For visual building, inspect the current host's available agent tools: use the named Claude helper when available, otherwise a native independent subagent with the helper body and only its specified inputs, and wait for its result; only when no independent agent is available, make a fresh separate pass following the helper body. A missing Claude agent name does not imply the host lacks subagents. Use the host's supported model rather than requiring the helper's Claude model setting.
 
 ## Checker dispatch
 The checker always runs in the foreground: the turn waits for its reply, and it is never in the background. Use the first recipe the host has, with the helper body and only the batch as its input:
@@ -18,6 +18,15 @@ The checker always runs in the foreground: the turn waits for its reply, and it 
 - Only when none of these exists, and no other native subagent tool either: the same-context check, a fresh separate pass following the helper body over the same pack, its reply starting with the pack token like the checker's. Tell the student once per session: "Answer checks are running in this same context; an independent checker is unavailable." Settle it with `checker: self`; those answers still count toward mastery.
 
 The batch is one line naming the evidence pack (`verified-items.md`, The check). An independent check is settled with `checker: independent`. A failed dispatch is settled with `dispatch_failed`, never as a successful check.
+
+## Background dispatch
+Field research runs in the background: the skill that starts it never waits for it and finishes its own steps first; never the checker, which always runs in the foreground. The researcher's input is only the field name and public topic names: `script` (`<mimir>/scripts/fieldpack.py`, expanded) and the `brief` that `fieldpack.py match` returned, verbatim, nothing else. Use the first recipe the host has:
+- Claude Code: `Agent` with `subagent_type` `mimir:field-researcher` and `run_in_background: true`; its reply arrives when it finishes.
+- Codex: `spawn_agent` with `fork_turns` none and a message holding the body of `<mimir>/helpers/field-researcher.md` plus the input; call `wait_agent` only after the skill's final line.
+- Antigravity: `define_subagent` from the body of `<mimir>/helpers/field-researcher.md`, then `invoke_subagent` with the input after the skill's final line.
+- Only when the host has no independent agent: after the skill's final line, a fresh separate pass following the helper body, with the same input and nothing from the course files in its queries.
+
+When the reply arrives, the starting skill finishes the step that dispatched it (`mimir-ingest` step 10). A course whose research does not finish stays without a pack until the next ingest that indexes it.
 
 ## Resolve the course
 Use this block wherever a skill resolves a course; keep the caller's action word and declaration timing.
