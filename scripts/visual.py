@@ -4,13 +4,20 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``verify.py`` (same folder). Run as::
 
-    python3 visual.py <page|svg|open>  < input.json
+    python3 visual.py <inputs|page|svg|open>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
 ``line``. Every path in the output is absolute. Every subcommand needs a workspace at
 the learning root (see ``workspace.py``) and an existing course folder; the
 term and course folders and the course ``.state/`` must not be symlinks.
+
+No builder draws without its field's guidance: ``inputs``, ``page`` and
+``svg`` refuse a course that uses no field pack (``fieldpack.py``), right
+after the course folder is found and before anything is checked or written,
+with "field pack missing for course <term>/<course>: run field research for
+its field first, then build again". A linked pack that is missing or damaged
+is refused too. ``open`` only opens a file already built.
 
 This script is the command line and owns the contract below; the work is
 split by job into sibling modules: ``visual_check.py`` (the SVG and page body
@@ -26,6 +33,20 @@ missing, neither ``out/`` nor the target may be a symlink, and the file is
 written atomically (a rebuild replaces it). ``name`` matches
 ``[a-z0-9]+(-[a-z0-9]+)*``, at most NAME_MAX_CHARS (60) characters. Errors
 name the field, e.g. ``body.original[2].page`` (lists are numbered from 1).
+
+inputs -- what the builder reads beside the core house style guide.
+    in : {"term": "2026-Fall", "course": "CS201 Theory"}
+    out: {"course_dir": "/home/u/learning/2026-Fall/CS201 Theory",
+          "packs": [{"field": "theory-of-computation", "title": "Theory of
+          computation", "path": "/home/u/learning/.state/field-packs/
+          theory-of-computation/pack.json"}],
+          "notation": "- Writes the transition function as delta(q, a) ...",
+          "line": "CS201 Theory: field pack theory-of-computation; notation
+          section included."}
+    ``packs`` are the course's field packs in link order, each checked as
+    ``fieldpack.py`` checks it on save. ``notation`` is the ``## Notation``
+    section of the course's ``.state/fingerprint.md``, or "" when there is
+    none ("no notation section." in ``line``). Writes nothing.
 
 page -- an offline page in the Skald house style from a body the builder wrote.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "even-zeros",
@@ -205,6 +226,7 @@ import tempfile
 import unicodedata
 from pathlib import Path
 
+import fieldpack
 import ingest
 import verify
 import visual_check
@@ -291,6 +313,29 @@ def _markup_field(value, field: str, what: str, max_bytes: int) -> bytes:
     return raw
 
 
+def _course_with_pack(term: str, course: str) -> tuple[Path, list[dict]]:
+    """The course folder and the field packs it uses; a course with no linked pack is refused."""
+    course_dir = verify._course_dir(term, course)
+    packs = fieldpack.course_packs(ingest._workspace_root(), course_dir)
+    if not packs:
+        raise InputError(f"field pack missing for course {term}/{course}: run field research for its field "
+                         "first, then build again")
+    return course_dir, packs
+
+
+# --- inputs --------------------------------------------------------------------------
+
+def cmd_inputs(data: dict) -> dict:
+    check_keys(data, {"term", "course"})
+    term, course = parse_term(data), parse_segment(data, "course")
+    course_dir, packs = _course_with_pack(term, course)
+    notation = verify._notation(course_dir)
+    fields = ", ".join(p["field"] for p in packs)
+    line = (f"{course}: field pack{'s' if len(packs) > 1 else ''} {fields}; "
+            f"{'notation section included' if notation else 'no notation section'}.")
+    return {"course_dir": str(course_dir), "packs": packs, "notation": notation, "line": line}
+
+
 # --- svg ---------------------------------------------------------------------------
 
 def build_svg(svg) -> str:
@@ -303,7 +348,7 @@ def build_svg(svg) -> str:
 def cmd_svg(data: dict) -> dict:
     check_keys(data, {"term", "course", "name", "svg"})
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
-    course_dir = verify._course_dir(term, course)
+    course_dir, _ = _course_with_pack(term, course)
     return _write_out(course_dir, name, "svg", build_svg(data.get("svg")).encode("utf-8"))
 
 
@@ -321,7 +366,7 @@ def cmd_page(data: dict) -> dict:
     example = visual_machine.parse_example(data)
     body = data.get("body")
     _markup_field(body, "body", "the page body as an HTML string", PAGE_BODY_MAX_BYTES)
-    course_dir = verify._course_dir(term, course)
+    course_dir, _ = _course_with_pack(term, course)
     index = course_dir / "INDEX.md"
     rows = {p: r for p, r in ingest.registry(index).items() if verify._inside(course_dir, p)}
     body_html, math, steps = visual_check.check_page_body(
@@ -354,6 +399,7 @@ def cmd_open(data: dict) -> dict:
 
 
 COMMANDS = {
+    "inputs": (cmd_inputs, "name the course's field packs and notation section; refuses a course with no pack"),
     "page": (cmd_page, "build an offline Skald page from a checked page body in <course>/.state/out/"),
     "svg": (cmd_svg, "check an SVG document and write it to <course>/.state/out/"),
     "open": (cmd_open, "open a built file in the default browser"),
@@ -362,7 +408,7 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("visual.py",
-                             ("Mimir visual builder. Subcommands: page, svg, open. Reads one JSON object on "
+                             ("Mimir visual builder. Subcommands: inputs, page, svg, open. Reads one JSON object on "
                               "stdin and prints one JSON object on stdout."),
                              COMMANDS, argv)
 

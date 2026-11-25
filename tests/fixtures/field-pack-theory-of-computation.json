@@ -1,0 +1,33 @@
+{
+ "field": "theory-of-computation",
+ "title": "Theory of computation",
+ "figure_kinds": [
+  {"name": "state diagram", "kind": "formal notation"},
+  {"name": "parse tree", "kind": "formal notation"}
+ ],
+ "conventions": [
+  {"rule": "A state is a circle labelled with its name; an accepting state is a double circle.",
+   "source": "Sipser, Introduction to the Theory of Computation, 3rd ed., ch. 1.1"},
+  {"rule": "The start state has an arrow pointing at it from nowhere.",
+   "source": "Sipser, Introduction to the Theory of Computation, 3rd ed., ch. 1.1"}
+ ],
+ "recipes": [
+  {"figure": "state diagram",
+   "rule": "Each transition is one arrow labelled with the symbols it reads, separated by commas.",
+   "source": "Sipser, Introduction to the Theory of Computation, 3rd ed., ch. 1.1"}
+ ],
+ "checklists": [
+  {"figure": "state diagram", "rules": [
+   {"rule": "Exactly one state has the start arrow.",
+    "source": "Sipser, Introduction to the Theory of Computation, 3rd ed., ch. 1.1"},
+   {"rule": "In a DFA every state has exactly one outgoing arrow for each input symbol.",
+    "source": "Sipser, Introduction to the Theory of Computation, 3rd ed., ch. 1.1"}
+  ]},
+  {"figure": "parse tree", "rules": [
+   {"rule": "The root is the start variable and the leaves, read left to right, spell the derived string.",
+    "source": "Sipser, Introduction to the Theory of Computation, 3rd ed., ch. 2.1"}
+  ]}
+ ],
+ "test_page": {"figure": "state diagram",
+  "content": "A DFA over {0, 1} that accepts strings with an even number of 0s: states q0 (start, accepting) and q1;\n0 moves between q0 and q1, 1 loops on each state."}
+}

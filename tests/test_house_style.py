@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from test_visual import link_pack
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 GUIDE = ROOT_DIR / "reference" / "house-style.md"
@@ -56,6 +57,7 @@ def home(tmp_path):
     for cmd, payload in (("init", {}), ("course", {"term": TERM, "course": COURSE})):
         subprocess.run([sys.executable, str(WS), cmd], input=json.dumps(payload).encode(),
                        capture_output=True, env=_env(home), check=True)
+    link_pack(home, TERM, COURSE)
     return home
 
 
