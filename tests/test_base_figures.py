@@ -18,6 +18,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT_DIR / "scripts"
 FP = SCRIPTS / "fieldpack.py"
 BF = SCRIPTS / "basefigure.py"
+FC = SCRIPTS / "figurecheck.py"
 VISUAL = SCRIPTS / "visual.py"
 WS = SCRIPTS / "workspace.py"
 PACK = json.loads((ROOT_DIR / "tests" / "fixtures" / "field-pack-microbiology.json").read_text(encoding="utf-8"))
@@ -87,8 +88,14 @@ def built(home: Path, svg: str = BASE, name: str = f"base-{SUBJECT}", course: st
     return Path(run_ok(VISUAL, home, "svg", {"term": TERM, "course": course, "name": name, "svg": svg})["path"])
 
 
-def save(path: Path, reply: str = PASS, subject: str = SUBJECT) -> dict:
-    return {"field": FIELD, "subject": subject, "figure": FIGURE, "path": str(path), "reply": reply}
+def checked(home: Path, path: Path, reply: str = PASS) -> str:
+    """The figure checker's reply on ``path``: the check token from its brief, then the verdicts."""
+    brief = run_ok(FC, home, "brief", {"field": FIELD, "figure": FIGURE, "path": str(path)})["brief"]
+    return brief.splitlines()[0].removeprefix("Check token: ") + "\n" + reply
+
+
+def save(home: Path, path: Path, reply: str = PASS, subject: str = SUBJECT) -> dict:
+    return {"field": FIELD, "subject": subject, "figure": FIGURE, "path": str(path), "reply": checked(home, path, reply)}
 
 
 def pack_base(root: Path, subject: str = SUBJECT) -> Path:
@@ -108,7 +115,7 @@ def snapshot(root: Path) -> dict:
 
 def test_a_built_figure_the_checker_passed_is_saved_in_its_pack_without_the_shell_tokens(home, root):
     """#101: saved only after the checker passes it; stored as the figure itself, without the 300 KB of tokens."""
-    out = run_ok(BF, home, "save", save(built(home)))
+    out = run_ok(BF, home, "save", save(home, built(home)))
     target = pack_base(root)
     assert out["path"] == str(target) and out["subject"] == SUBJECT and out["field"] == FIELD
     assert target.read_text(encoding="utf-8") == BASE
@@ -130,7 +137,7 @@ def test_a_figure_without_stable_part_ids_is_refused_and_not_saved(home, root, s
     """#101: every drawn shape belongs to a part with a stable id, or the figure is not saved."""
     path = built(home, svg)
     before = snapshot(root)
-    err = run_fails(BF, home, "save", save(path), needle)
+    err = run_fails(BF, home, "save", save(home, path), needle)
     assert str(path) in err
     assert snapshot(root) == before
 
@@ -141,14 +148,14 @@ def test_a_figure_that_fails_the_shell_svg_checks_is_refused_and_not_saved(home,
     path.write_text(path.read_text(encoding="utf-8").replace("</desc>", '</desc><image href="https://x.test/a.png"/>'),
                     encoding="utf-8")
     before = snapshot(root)
-    run_fails(BF, home, "save", save(path), "element <image> is not allowed")
+    run_fails(BF, home, "save", save(home, path), "element <image> is not allowed")
     assert snapshot(root) == before
 
 
 def test_a_figure_the_shell_did_not_build_is_refused(home, root, tmp_path):
     raw = tmp_path / "raw.svg"
     raw.write_text(BASE, encoding="utf-8")
-    run_fails(BF, home, "save", save(raw), "is not an SVG built by visual.py svg")
+    run_fails(BF, home, "save", save(home, raw), "is not an SVG built by visual.py svg")
     assert not pack_base(root).parent.exists()
 
 
@@ -161,17 +168,26 @@ def test_a_figure_that_fails_its_checklist_is_refused_and_not_saved(home, root, 
     """#101: saved only when every checklist item passes; the next need of the subject tries again."""
     path = built(home)
     before = snapshot(root)
-    err = run_fails(BF, home, "save", save(path, reply), needle)
+    err = run_fails(BF, home, "save", save(home, path, reply), needle)
     assert f"the base figure {SUBJECT} is not saved" in err
     assert snapshot(root) == before
-    run_ok(BF, home, "save", save(path))  # a later passing check saves it
+    run_ok(BF, home, "save", save(home, path))  # a later passing check saves it
+
+
+def test_a_reply_given_on_another_file_is_refused_and_nothing_is_saved(home, root):
+    """The checker's reply counts only for the file it checked: its check token is that file's."""
+    path = built(home)
+    other = built(home, BASE.replace("Gram-negative envelope</title>", "Envelope</title>"), name="other")
+    before = snapshot(root)
+    run_fails(BF, home, "save", {**save(home, path), "reply": checked(home, other)}, "check token")
+    assert snapshot(root) == before
 
 
 def test_a_subject_with_a_base_figure_is_not_saved_again(home, root):
     path = built(home)
-    run_ok(BF, home, "save", save(path))
+    run_ok(BF, home, "save", save(home, path))
     before = snapshot(root)
-    run_fails(BF, home, "save", save(path), f"already has a base figure {SUBJECT}")
+    run_fails(BF, home, "save", save(home, path), f"already has a base figure {SUBJECT}")
     assert snapshot(root) == before
 
 
@@ -184,7 +200,7 @@ def test_a_subject_with_a_base_figure_is_not_saved_again(home, root):
     ({"extra": 1}, "unknown field 'extra'"),
 ])
 def test_save_base_refuses_bad_input_naming_the_field(home, root, change, needle):
-    run_fails(BF, home, "save", {**save(built(home)), **change}, needle)
+    run_fails(BF, home, "save", {**save(home, built(home)), **change}, needle)
     assert not pack_base(root).parent.exists()
 
 
@@ -217,7 +233,7 @@ def test_a_subject_with_no_base_figure_is_missing(home, root):
 
 
 def test_a_saved_base_figure_is_found_for_every_course_of_its_field(home, root):
-    run_ok(BF, home, "save", save(built(home)))
+    run_ok(BF, home, "save", save(home, built(home)))
     for course in (COURSE, OTHER):
         out = run_ok(BF, home, "find", find(course=course))
         assert out["status"] == "found" and out["source"] == "pack" and out["field"] == FIELD
@@ -227,7 +243,7 @@ def test_a_saved_base_figure_is_found_for_every_course_of_its_field(home, root):
 
 def test_a_professors_diagram_is_the_courses_base_figure_before_the_packs_and_stays_in_the_course(home, root):
     """#101: the professor wins for that course only; the diagram never leaves the course folder."""
-    run_ok(BF, home, "save", save(built(home)))
+    run_ok(BF, home, "save", save(home, built(home)))
     store = snapshot(root / ".state")
     other = snapshot(root / TERM / OTHER)
     out = run_ok(BF, home, "save-course", local(professor_diagram(root)))
@@ -264,7 +280,7 @@ def test_a_professors_diagram_without_stable_part_ids_is_refused(home, root):
 
 
 def test_a_damaged_stored_base_figure_is_refused_naming_its_file(home, root):
-    run_ok(BF, home, "save", save(built(home)))
+    run_ok(BF, home, "save", save(home, built(home)))
     pack_base(root).write_text(BASE.replace('id="inner-membrane"', ""), encoding="utf-8")
     err = run_fails(BF, home, "find", find(), "belongs to no part")
     assert str(pack_base(root)) in err and "damaged" in err
@@ -290,7 +306,7 @@ def figure_in_page(svg: str) -> dict:
 
 @pytest.fixture
 def saved(home, root):
-    run_ok(BF, home, "save", save(built(home)))
+    run_ok(BF, home, "save", save(home, built(home)))
     return pack_base(root)
 
 

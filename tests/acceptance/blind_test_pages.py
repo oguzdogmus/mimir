@@ -109,7 +109,7 @@ def run_pack(out: Path, scripts: Path, pack: dict, builder: Callable[[dict], dic
                     {"field": pack["field"], "figure": page["figure"], "path": str(path)})
     checked = checker(brief["brief"], job)
     read = _script(scripts, fx["home"], "figurecheck.py", "read",
-                   {"field": pack["field"], "figure": page["figure"], "reply": checked["reply"]})
+                   {"field": pack["field"], "figure": page["figure"], "path": str(path), "reply": checked["reply"]})
     costs = [row["cost_usd"], checked.get("cost_usd")]
     return {**row, "items": len(read["items"]), "errors": len(read["failed"]), "failed": read["failed"],
             "failed_rules": [i["rule"] for i in read["items"] if i["verdict"] != "pass"],

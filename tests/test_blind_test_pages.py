@@ -69,9 +69,10 @@ def failing_checker(fails: dict) -> callable:
     """A stand-in checker failing the given item numbers per figure."""
     def check(brief: str, job: dict) -> dict:
         figure = brief.split("Figure: ", 1)[1].split(" (", 1)[0]
-        count = brief.count("\n") - 3
+        count = brief.count("\n") - 4  # the token, file, figure and checklist lines
         bad = fails.get(figure, ())
-        lines = [f"{n} | {'fail' if n in bad else 'pass'} | stand-in" for n in range(1, count + 1)]
+        lines = [brief.splitlines()[0].removeprefix("Check token: ")]
+        lines += [f"{n} | {'fail' if n in bad else 'pass'} | stand-in" for n in range(1, count + 1)]
         lines.append(f"overall | {'fail' if bad else 'pass'} | stand-in")
         return {"reply": "\n".join(lines), "seconds": 30.0, "cost_usd": 0.1, "models": ["opus"]}
     return check

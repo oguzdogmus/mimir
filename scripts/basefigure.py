@@ -40,8 +40,8 @@ Subcommands and examples (paths shown for root /home/u/learning)
 save -- save a base figure the figure checker passed to its field pack.
     in : {"field": "medicine", "subject": "human-heart", "figure":
           "anatomical section", "path": "/home/u/learning/2026-Fall/MED101
-          Physiology/.state/out/base-human-heart.svg", "reply": "1 | pass |
-          ...\\noverall | pass | ..."}
+          Physiology/.state/out/base-human-heart.svg", "reply": "<check
+          token>\\n1 | pass | ...\\noverall | pass | ..."}
     out: {"field": "medicine", "subject": "human-heart", "path": "/home/u/
           learning/.state/field-packs/medicine/base-figures/human-heart.svg",
           "parts": ["aorta", "right-atrium", ...], "line": "Base figure saved:
@@ -49,9 +49,11 @@ save -- save a base figure the figure checker passed to its field pack.
     ``path`` is the candidate as ``visual.py svg`` built it (with today's
     Skald tokens, which are taken off again, so the stored file is the figure
     itself). ``reply`` is the figure checker's reply on that file, read as
-    ``figurecheck.py read`` reads it for ``figure``; anything but an overall
-    pass exits 2 and saves nothing, so the next need of the subject tries
-    again.
+    ``figurecheck.py read`` reads it for ``figure`` and ``path``: it must
+    carry the check token of that very file, so a reply given on another
+    file, or on this one before it changed, is refused. Anything but an
+    overall pass exits 2 and saves nothing, so the next need of the subject
+    tries again.
 
 save-course -- save a professor's diagram as one course's own base figure.
     in : {"term": "2026-Fall", "course": "MED101 Physiology", "subject":
@@ -202,7 +204,7 @@ def cmd_save(data: dict) -> dict:
         raise InputError(f"path {path} is not an SVG built by visual.py svg; build the base figure through the "
                          "shell first")
     ids = _base_parts(svg, f"base figure {path}")
-    verdict = figurecheck.cmd_read({k: data.get(k) for k in ("field", "figure", "reply")})
+    verdict = figurecheck.cmd_read({k: data.get(k) for k in ("field", "figure", "path", "reply")})
     if verdict["overall"] != "pass":
         raise InputError(f"reply: {verdict['line'][:-1]}; the base figure {subject} is not saved")
     target = pack_base_path(root, field, subject)

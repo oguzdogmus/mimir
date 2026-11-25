@@ -24,19 +24,28 @@ brief -- the figure checker's input for one built figure.
           3 checklist items for anatomical section."}
     ``figure`` names one of the pack's figures, ignoring case. ``path``
     is the absolute path of an existing ``.svg`` or ``.html`` file, not a
-    symlink. ``brief`` is the text to dispatch: the figure's path, the pack's
-    figure with its figure kind and that figure's checklist, numbered from 1,
-    without sources. Nothing
-    else from the pack goes in.
+    symlink. ``brief`` is the text to dispatch: the check token, the figure's
+    path, the pack's figure with its figure kind and that figure's
+    checklist, numbered from 1, without sources. Nothing else from the pack
+    goes in. The check token is the first TOKEN_CHARS hex digits of a SHA-256
+    over the figure file's bytes, the field, the figure with its kind and the
+    checklist: the same file and checklist always give the same token, any
+    change to either a new one.
 
 read -- the figure checker's reply as one verdict per checklist item.
     in : {"field": "medicine", "figure": "anatomical section",
-          "reply": "1 | fail | ...\\n2 | pass | ...\\noverall | fail | ..."}
+          "path": "/abs/heart.html", "reply": "<check token>\\n1 | fail |
+          ...\\n2 | pass | ...\\noverall | fail | ..."}
     out: {"field": "medicine", "figure": "anatomical section", "items":
           [{"n": 1, "rule": "...", "verdict": "fail", "reason": "..."}],
           "overall": "fail", "failed": [1], "line": "Figure check failed:
           1 of 3 checklist items fail (1)."}
-    The reply's lines are ``N | verdict | reason`` per checklist item and
+    ``path`` is the figure the reply is about, as ``brief`` takes it. The
+    reply must hold a line with just the check token of that file and
+    checklist (backticks and asterisks around it are ignored), as the answer
+    key checker's reply holds its pack token (``verify.py settle``); a reply
+    without it, or with another file's token, exits 2. Only the lines after
+    the token line count: ``N | verdict | reason`` per checklist item and
     ``overall | verdict | reason``; the verdict is one of VERDICTS, in any
     case. Other lines (prose, fences) are ignored, the first line for each
     item counts, and the reason is made one line. Read fails closed: an item
@@ -52,6 +61,7 @@ nothing on stdout. An unexpected internal error exits 1 with
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -63,6 +73,7 @@ from workspace import InputError, check_keys, refuse_symlinks, short
 
 FIGURE_SUFFIXES = (".svg", ".html")
 VERDICTS = ("pass", "fail")
+TOKEN_CHARS = 12
 
 
 def _checklist(data: dict) -> tuple[str, dict, list[dict]]:
@@ -95,21 +106,35 @@ def _figure_path(data: dict) -> Path:
     return path
 
 
+def check_token(path: Path, field: str, figure: dict, items: list[dict]) -> str:
+    """The token that ties a checker's reply to the figure file and the checklist it was briefed on."""
+    digest = hashlib.sha256(path.read_bytes())
+    for value in (field, figure["name"], figure["kind"], *(i["rule"] for i in items)):
+        digest.update(b"\0" + value.encode("utf-8"))
+    return digest.hexdigest()[:TOKEN_CHARS]
+
+
 def cmd_brief(data: dict) -> dict:
     check_keys(data, {"field", "figure", "path"})
     field, figure, items = _checklist(data)
     path = _figure_path(data)
-    lines = [f"File: {path}", f"Figure: {figure['name']} ({figure['kind']})", "Checklist:"]
+    lines = [f"Check token: {check_token(path, field, figure, items)}", f"File: {path}",
+             f"Figure: {figure['name']} ({figure['kind']})", "Checklist:"]
     lines += [f"{i['n']}. {i['rule']}" for i in items]
     count = f"{len(items)} checklist item{'' if len(items) == 1 else 's'}"
     return {"field": field, "figure": figure["name"], "kind": figure["kind"], "path": str(path), "items": items,
             "brief": "\n".join(lines) + "\n", "line": f"Figure check brief: {count} for {figure['name']}."}
 
 
-def _reply_lines(reply: str) -> dict[str, tuple[str, str]]:
-    """{N or "overall": (verdict word, reason)}; the first line for each key counts."""
+def _reply_lines(reply: str, token: str, path: Path) -> dict[str, tuple[str, str]]:
+    """{N or "overall": (verdict word, reason)} from the lines after the one holding just ``token``."""
+    lines = reply.splitlines()
+    first = next((i for i, line in enumerate(lines) if line.strip().strip("`*").strip() == token), None)
+    if first is None:
+        raise InputError(f"reply: the reply has no line with the check token of {path} and its checklist; "
+                         "dispatch the figure checker with the brief for this file and pass its reply unchanged")
     found = {}
-    for line in reply.splitlines():
+    for line in lines[first + 1:]:
         parts = [p.strip() for p in line.strip().strip("`").split("|", 2)]
         if len(parts) == 3 and parts[0].casefold() not in found:
             found[parts[0].casefold()] = (parts[1].casefold(), parts[2])
@@ -117,11 +142,12 @@ def _reply_lines(reply: str) -> dict[str, tuple[str, str]]:
 
 
 def cmd_read(data: dict) -> dict:
-    check_keys(data, {"field", "figure", "reply"})
+    check_keys(data, {"field", "figure", "path", "reply"})
     field, figure, items = _checklist(data)
     if not isinstance(data.get("reply"), str):
         raise InputError("reply is required (the figure checker's reply text)")
-    found = _reply_lines(data["reply"])
+    path = _figure_path(data)
+    found = _reply_lines(data["reply"], check_token(path, field, figure, items), path)
     results = []
     for item in items:
         verdict, reason = found.get(str(item["n"]), ("fail", "no reply line"))
