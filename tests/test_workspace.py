@@ -494,7 +494,7 @@ def test_internal_error_exits_1(home, monkeypatch, capsys):
         raise KeyError("bug")
 
     monkeypatch.setitem(ws.COMMANDS, "root", (boom, "x"))
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}")))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}"), encoding="utf-8"))
     assert ws.main(["root"]) == 1
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -731,7 +731,7 @@ def test_failed_old_tree_delete_is_a_warning(home, tmp_path, monkeypatch, capsys
         return real_rmtree(path, *args, **kwargs)
 
     monkeypatch.setattr(ws.shutil, "rmtree", stuck_rmtree)
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps({"to": str(target)}).encode())))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps({"to": str(target)}).encode()), encoding="utf-8"))
     assert ws.main(["relocate"]) == 0
     monkeypatch.undo()
     captured = capsys.readouterr()
@@ -747,7 +747,7 @@ def test_failed_old_tree_delete_is_a_warning(home, tmp_path, monkeypatch, capsys
 # --- root pointer writes ------------------------------------------------------------
 
 def _main(monkeypatch, capsys, cmd: str, payload: dict) -> tuple[int, str, str]:
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(payload).encode())))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(payload).encode()), encoding="utf-8"))
     code = ws.main([cmd])
     out, err = capsys.readouterr()
     return code, out, err

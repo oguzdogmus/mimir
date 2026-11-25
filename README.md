@@ -188,7 +188,7 @@ Priorities come from hands-on testing and may change. There are no promised date
 
 ## Development
 
-Run the tests from a clone with `uv run --with pytest pytest tests -q`. The manual cross-platform check before a release is in [`RELEASE.md`](RELEASE.md). Issues and their labels are described in [`docs/agents/`](docs/agents/).
+Run the tests from a clone with `uv run --with pytest --with pytest-xdist pytest tests -q -n auto` (in parallel; without `--with pytest-xdist` and `-n auto` they run one by one) and the lint with `uvx ruff@0.17.6 check`. Once per clone, `git config core.hooksPath .githooks` turns on the repo's commit hook, which refuses a merge committed with git's leftover `# Conflicts:` block. Coding rules are in [`CODING_STANDARDS.md`](CODING_STANDARDS.md). The manual cross-platform check before a release is in [`RELEASE.md`](RELEASE.md). Issues and their labels are described in [`docs/agents/`](docs/agents/).
 
 ## License
 

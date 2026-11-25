@@ -154,19 +154,19 @@ def read_input(raw: bytes) -> dict:
     return data
 
 
-def _short(value) -> str:
+def short(value) -> str:
     text = value if isinstance(value, str) else json.dumps(value, default=str)
     text = text if len(text) <= 40 else text[:37] + "..."
     return repr(text)
 
 
-def _check_keys(data: dict, allowed: set[str]) -> None:
+def check_keys(data: dict, allowed: set[str]) -> None:
     extra = sorted(set(data) - allowed)
     if extra:
-        raise InputError(f"unknown field {_short(extra[0])}")
+        raise InputError(f"unknown field {short(extra[0])}")
 
 
-def _has_control(text: str) -> bool:
+def has_control(text: str) -> bool:
     """True for control characters and lone surrogates (which cannot be encoded)."""
     return any(unicodedata.category(c) in ("Cc", "Cs") for c in text)
 
@@ -179,11 +179,11 @@ def parse_path(data: dict, field: str) -> Path:
     value = data.get(field)
     if not isinstance(value, str) or not value.strip():
         raise InputError(f"{field} is required (a path string)")
-    if _has_control(value):
+    if has_control(value):
         raise InputError(f"{field} contains control characters or lone surrogates")
     path = _abs_path(value)
     if not path.is_absolute():
-        raise InputError(f"{field} must be an absolute path or start with ~: {_short(value)}")
+        raise InputError(f"{field} must be an absolute path or start with ~: {short(value)}")
     return path
 
 
@@ -192,15 +192,15 @@ def parse_segment(data: dict, field: str) -> str:
     if not isinstance(value, str) or not value:
         raise InputError(f"{field} is required (a folder name)")
     if (value.startswith(".") or ".." in value or value != value.strip()
-            or _has_control(value) or any(c in _UNSAFE_CHARS for c in value)):
-        raise InputError(f"{field} is not a safe folder name: {_short(value)}")
+            or has_control(value) or any(c in _UNSAFE_CHARS for c in value)):
+        raise InputError(f"{field} is not a safe folder name: {short(value)}")
     return value
 
 
 def parse_term(data: dict) -> str:
     term = parse_segment(data, "term")
     if not _TERM.fullmatch(term):
-        raise InputError(f"term must be YYYY-<word>, e.g. 2026-Fall: {_short(term)}")
+        raise InputError(f"term must be YYYY-<word>, e.g. 2026-Fall: {short(term)}")
     return term
 
 
@@ -214,7 +214,7 @@ def term_key(term: str) -> tuple:
 def parse_role(data: dict) -> str:
     role = data.get("role")
     if role not in _ROLES:
-        raise InputError(f"role must be one of {', '.join(_ROLES)}: {_short(role)}")
+        raise InputError(f"role must be one of {', '.join(_ROLES)}: {short(role)}")
     return role
 
 
@@ -234,7 +234,7 @@ def resolve_root() -> tuple[Path, str]:
     if not pointer.is_file():
         return default_root(), "default"
     lines = pointer.read_text(encoding="utf-8", errors="replace").strip().splitlines()
-    if len(lines) != 1 or _has_control(lines[0]) or not _abs_path(lines[0].strip()).is_absolute():
+    if len(lines) != 1 or has_control(lines[0]) or not _abs_path(lines[0].strip()).is_absolute():
         raise InputError(f"pointer file {pointer} must hold one absolute path "
                          "(run init with an explicit root to rewrite it)")
     return _abs_path(lines[0].strip()), "pointer"
@@ -427,7 +427,7 @@ def _is_memory_file(source: Path, root: Path) -> bool:
 # --- Subcommands -------------------------------------------------------------------
 
 def cmd_root(data: dict) -> dict:
-    _check_keys(data, set())
+    check_keys(data, set())
     root, source = resolve_root()
     exists = has_tree(root)
     setup_done = read_setup_done(root)
@@ -442,7 +442,7 @@ def cmd_root(data: dict) -> dict:
 
 
 def cmd_init(data: dict) -> dict:
-    _check_keys(data, {"root"})
+    check_keys(data, {"root"})
     if "root" in data:
         root = parse_path(data, "root")
         check_safe_root(root, "root")
@@ -464,7 +464,7 @@ def cmd_init(data: dict) -> dict:
 
 
 def cmd_course(data: dict) -> dict:
-    _check_keys(data, {"term", "course"})
+    check_keys(data, {"term", "course"})
     term, course = parse_term(data), parse_segment(data, "course")
     root, _ = resolve_root()
     created: list[str] = []
@@ -475,7 +475,7 @@ def cmd_course(data: dict) -> dict:
 
 
 def cmd_file(data: dict) -> dict:
-    _check_keys(data, {"source", "term", "course", "role"})
+    check_keys(data, {"source", "term", "course", "role"})
     source = parse_path(data, "source")
     term, course, role = parse_term(data), parse_segment(data, "course"), parse_role(data)
     if source.is_symlink() or not source.is_file():
@@ -514,7 +514,7 @@ def cmd_file(data: dict) -> dict:
 
 
 def cmd_relocate(data: dict) -> dict:
-    _check_keys(data, {"to"})
+    check_keys(data, {"to"})
     target = parse_path(data, "to")
     check_safe_root(target, "to")
     current, _ = resolve_root()
@@ -589,7 +589,7 @@ def _fail(prog: str, message: str, code: int = 2) -> int:
     return code
 
 
-class _Parser(argparse.ArgumentParser):
+class Parser(argparse.ArgumentParser):
     """Usage errors print one ``<script>: <msg>`` line and exit 2."""
 
     def error(self, message: str):
@@ -604,7 +604,7 @@ def run_cli(prog: str, description: str, commands: dict, argv: list[str] | None 
     dict and returns the output dict. ``InputError`` and ``OSError`` exit 2,
     anything else exits 1 as an internal error; never a traceback.
     """
-    parser = _Parser(prog=prog, description=description)
+    parser = Parser(prog=prog, description=description)
     names = ",".join(commands)
     sub = parser.add_subparsers(dest="command", required=True, metavar=f"{{{names}}}")
     for name, (_, help_text) in commands.items():

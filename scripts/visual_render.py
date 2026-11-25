@@ -86,7 +86,7 @@ def original_html(value, where: str, rows: dict, course_dir: Path, index: Path) 
     page = verify._page(value["page"], f"{where}.page")
     row = rows.get(rel)
     if row is None:
-        raise InputError(f"{where}.path: {workspace._short(rel)} has no registry row inside the course in {index}")
+        raise InputError(f"{where}.path: {workspace.short(rel)} has no registry row inside the course in {index}")
     pages = row[1]
     if pages is not None and page > pages:
         raise InputError(f"{where}.page: page {page} is past the last page of {rel} ({pages})")

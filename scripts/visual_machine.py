@@ -30,18 +30,18 @@ def _symbol(value, where: str, epsilon: bool) -> str:
     """One input or stack symbol: a single character that is not a space; "" is ε when allowed."""
     if isinstance(value, str) and value == "" and epsilon:
         return value
-    if (not isinstance(value, str) or len(value) != 1 or value.isspace() or workspace._has_control(value)
+    if (not isinstance(value, str) or len(value) != 1 or value.isspace() or workspace.has_control(value)
             or ord(value) > 0xFFFF):
         also = ' or "" for ε' if epsilon else ""
         raise InputError(f"{where} must be one character that is not a space and not outside the Basic "
-                         f"Multilingual Plane (e.g. not an emoji){also}: {workspace._short(value)}")
+                         f"Multilingual Plane (e.g. not an emoji){also}: {workspace.short(value)}")
     return value
 
 
 def _state(value, where: str, states: list[str]) -> str:
     name = verify._text(value, where, STATE_NAME_MAX_CHARS)
     if name not in states:
-        raise InputError(f"{where}: {workspace._short(name)} is not one of machine.states")
+        raise InputError(f"{where}: {workspace.short(name)} is not one of machine.states")
     return name
 
 
@@ -52,7 +52,7 @@ def parse_machine(value) -> dict:
     verify._keys(value, {"kind", "states", "start", "accept", "transitions", "stack_start"}, "machine")
     kind = value.get("kind")
     if kind not in _MACHINE_KINDS:
-        raise InputError(f"machine.kind must be one of {', '.join(_MACHINE_KINDS)}: {workspace._short(kind)}")
+        raise InputError(f"machine.kind must be one of {', '.join(_MACHINE_KINDS)}: {workspace.short(kind)}")
     pda = kind == "pda"
     raw_states = value.get("states")
     if not isinstance(raw_states, list) or not raw_states:
@@ -63,7 +63,7 @@ def parse_machine(value) -> dict:
     for i, item in enumerate(raw_states, 1):
         name = verify._text(item, f"machine.states[{i}]", STATE_NAME_MAX_CHARS)
         if name in states:
-            raise InputError(f"machine.states[{i}]: {workspace._short(name)} is listed twice")
+            raise InputError(f"machine.states[{i}]: {workspace.short(name)} is listed twice")
         states.append(name)
     if "start" not in value:
         raise InputError("machine.start is required")
@@ -75,7 +75,7 @@ def parse_machine(value) -> dict:
     for i, item in enumerate(raw_accept, 1):
         name = _state(item, f"machine.accept[{i}]", states)
         if name in accept:
-            raise InputError(f"machine.accept[{i}]: {workspace._short(name)} is listed twice")
+            raise InputError(f"machine.accept[{i}]: {workspace.short(name)} is listed twice")
         accept.append(name)
     if pda:
         if "stack_start" not in value:
@@ -113,17 +113,17 @@ def parse_machine(value) -> dict:
             move["push"] = push
         if kind in ("dfa", "tree"):
             if (move["from"], move["read"]) in seen:
-                raise InputError(f"{where}: a second move from {workspace._short(move['from'])} on "
-                                 f"{workspace._short(move['read'])} (a {kind} has at most one)")
+                raise InputError(f"{where}: a second move from {workspace.short(move['from'])} on "
+                                 f"{workspace.short(move['read'])} (a {kind} has at most one)")
             seen.add((move["from"], move["read"]))
         moves.append(move)
     if kind == "tree":
         parents = {name: [m["from"] for m in moves if m["to"] == name] for name in states}
         if parents[start]:
-            raise InputError(f"machine.transitions: the root {workspace._short(start)} of a tree has an incoming edge")
+            raise InputError(f"machine.transitions: the root {workspace.short(start)} of a tree has an incoming edge")
         for name in states:
             if name != start and len(parents[name]) != 1:
-                raise InputError(f"machine.transitions: tree node {workspace._short(name)} has {len(parents[name])} "
+                raise InputError(f"machine.transitions: tree node {workspace.short(name)} has {len(parents[name])} "
                                  "incoming edges; every node but the root has exactly one")
         reached, queue = {start}, [start]
         while queue:
@@ -134,7 +134,7 @@ def parse_machine(value) -> dict:
                     queue.append(m["to"])
         lost = [name for name in states if name not in reached]
         if lost:
-            raise InputError(f"machine.transitions: tree node {workspace._short(lost[0])} cannot be reached "
+            raise InputError(f"machine.transitions: tree node {workspace.short(lost[0])} cannot be reached "
                              "from the root")
     out = {"kind": kind, "states": states, "start": start, "accept": accept, "transitions": moves}
     if pda:

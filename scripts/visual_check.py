@@ -69,7 +69,7 @@ def check_svg(raw: bytes) -> ET.Element:
     encoding = _ENCODING.search(decl.group(0)) if decl else None
     if encoding and encoding.group(1).lower() not in ("utf-8", "utf8"):
         raise InputError(f"svg: the XML declaration's encoding must be UTF-8 (the file is written as UTF-8), "
-                         f"not {workspace._short(encoding.group(1))}")
+                         f"not {workspace.short(encoding.group(1))}")
     if encoding:  # expat knows only the "utf-8" spelling; browsers read "utf8" the same way
         start = decl.start() + encoding.start(1)
         text = text[:start] + "utf-8" + text[decl.start() + encoding.end(1):]
@@ -105,7 +105,7 @@ def check_svg(raw: bytes) -> ET.Element:
             if name.lower().startswith("on"):
                 raise InputError(f"svg: event attribute {name} on <{local}> is not allowed")
             if name.lower() == "href" and not value.startswith("#"):
-                raise InputError(f"svg: {where} must start with # (no external links): {workspace._short(value)}")
+                raise InputError(f"svg: {where} must start with # (no external links): {workspace.short(value)}")
             _check_css_text(value, where)
         if local == "style":
             _check_css_text("".join(element.itertext()), "<style>")
@@ -168,7 +168,7 @@ class _PageBody(HTMLParser):
         seen, parts = set(), []
         for name, value in attrs:
             if not _PAGE_ATTR_NAME.fullmatch(name):
-                self._fail(f"<{tag}> has a malformed attribute name {workspace._short(name)}")
+                self._fail(f"<{tag}> has a malformed attribute name {workspace.short(name)}")
             if name in seen:
                 self._fail(f"<{tag}> has the attribute {name} twice")
             seen.add(name)
@@ -178,7 +178,7 @@ class _PageBody(HTMLParser):
             where = f"<{tag}> attribute {name}"
             if svg:
                 if name.endswith("href") and not value.startswith("#"):
-                    self._fail(f"{where} must start with # (no external links): {workspace._short(value)}")
+                    self._fail(f"{where} must start with # (no external links): {workspace.short(value)}")
                 _check_css_text(value, where, "body")
                 name = _SVG_CASE.get(name, name)
             else:
@@ -186,14 +186,14 @@ class _PageBody(HTMLParser):
                 if not (allowed or name.startswith(("aria-", "data-"))):
                     self._fail(f"attribute {name} on <{tag}> is not allowed")
                 if name == "href" and not value.startswith("#"):
-                    self._fail(f"{where} must start with # (no links out of the page): {workspace._short(value)}")
+                    self._fail(f"{where} must start with # (no links out of the page): {workspace.short(value)}")
                 if name == "style":
                     _check_css_text(value, where, "body")
             if name == "id":
                 if value in self.ids:
-                    self._fail(f"id {workspace._short(value)} is used twice")
+                    self._fail(f"id {workspace.short(value)} is used twice")
                 if _RESERVED_ID.match(value):
-                    self._fail(f"id {workspace._short(value)} is reserved for the page (mimir-..., sk-...)")
+                    self._fail(f"id {workspace.short(value)} is reserved for the page (mimir-..., sk-...)")
                 self.ids.add(value)
                 if svg:
                     self.svg_ids.add(value)
@@ -209,7 +209,7 @@ class _PageBody(HTMLParser):
                 value = values[name] or ""
                 if not (_STEP_NUMBER.fullmatch(value) and int(value) <= STEPS_MAX):
                     self._fail(f"<{tag}> attribute {name} must be a whole number from 1 to {STEPS_MAX}: "
-                               f"{workspace._short(value)}")
+                               f"{workspace.short(value)}")
                 numbers[name] = int(value)
         if "data-highlight" in numbers:
             self.highlights.setdefault(numbers["data-highlight"], tag)
@@ -321,7 +321,7 @@ class _PageBody(HTMLParser):
     def finish(self) -> str:
         if "<" in self.rawdata:  # close() would drop it silently (an unclosed quote, tag or comment)
             self._fail("the body ends inside an unfinished tag, comment or declaration: "
-                       f"{workspace._short(self.rawdata)}")
+                       f"{workspace.short(self.rawdata)}")
         self.close()
         if self.stack:
             self._fail(f"<{self.stack[-1]['name']}> is not closed")
@@ -347,6 +347,6 @@ def check_page_body(body: str, original, states: list[str] = ()) -> tuple[str, b
     out = parser.finish()
     for i, name in enumerate(states, 1):
         if f"state-{i}" not in parser.svg_ids:
-            raise InputError(f'body: no element with id "state-{i}" for machine.states[{i}] {workspace._short(name)} '
+            raise InputError(f'body: no element with id "state-{i}" for machine.states[{i}] {workspace.short(name)} '
                              "inside an inline <svg>")
     return out, parser.math, bool(parser.steps)

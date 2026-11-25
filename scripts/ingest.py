@@ -117,7 +117,7 @@ import zlib
 from pathlib import Path
 
 import workspace
-from workspace import (InputError, _check_keys, _has_control, _short, parse_path, parse_segment,
+from workspace import (InputError, check_keys, has_control, short, parse_path, parse_segment,
                        parse_term)
 
 ARCHIVE_MAX_DEPTH = 3
@@ -295,13 +295,13 @@ def _is_zip_name(name: str) -> bool:
 
 def _member_parts(name: str) -> list[str] | str:
     """Clean path parts of a zip member, or a refusal reason."""
-    if _has_control(name):
+    if has_control(name):
         return "unsafe archive: member name with control characters"
     if name.startswith(("/", "\\")) or re.match(r"[A-Za-z]:", name):
-        return f"unsafe archive: absolute member {_short(name)}"
+        return f"unsafe archive: absolute member {short(name)}"
     parts = [p for p in re.split(r"[/\\]", name) if p not in ("", ".")]
     if ".." in parts:
-        return f"unsafe archive: member {_short(name)} leaves the folder"
+        return f"unsafe archive: member {short(name)} leaves the folder"
     return parts
 
 
@@ -321,7 +321,7 @@ def _check_archive(zf: zipfile.ZipFile, budget: dict) -> list[tuple[zipfile.ZipI
         if isinstance(parts, str):
             return parts
         if stat.S_ISLNK(info.external_attr >> 16):
-            return f"unsafe archive: symlink member {_short(info.filename)}"
+            return f"unsafe archive: symlink member {short(info.filename)}"
         if info.flag_bits & 0x1:
             return "encrypted archive"
         plan.append((info, parts))
@@ -435,7 +435,7 @@ def _walk(inbox: Path, out: dict) -> None:
             _skip(out, folder, _unreadable(exc))
             continue
         for entry in entries:
-            if _has_control(entry.name):
+            if has_control(entry.name):
                 _skip(out, entry, "unsafe file name")
                 continue
             try:
@@ -443,7 +443,7 @@ def _walk(inbox: Path, out: dict) -> None:
             except OSError as exc:
                 _skip(out, entry, _unreadable(exc))
         try:
-            entries = [e for e in _listing(folder) if not _has_control(e.name)]  # with new folders
+            entries = [e for e in _listing(folder) if not has_control(e.name)]  # with new folders
         except OSError as exc:
             _skip(out, folder, _unreadable(exc))
             continue
@@ -473,7 +473,7 @@ def _courses(root: Path) -> list[dict]:
             continue
         for course in courses:
             if (not _ignored(course.name) and not course.is_symlink() and course.is_dir()
-                    and (course / "INDEX.md").is_file() and not _has_control(course.name)):
+                    and (course / "INDEX.md").is_file() and not has_control(course.name)):
                 out.append({"term": term.name, "course": course.name, "course_dir": str(course)})
     return out
 
@@ -483,7 +483,7 @@ def _plural(n: int, word: str) -> str:
 
 
 def cmd_scan(data: dict) -> dict:
-    _check_keys(data, set())
+    check_keys(data, set())
     root = _workspace_root()
     inbox = root / "_inbox"
     out: dict = {"items": [], "skipped": [], "unpacked": []}
@@ -541,7 +541,7 @@ def _line_field(entry: dict, field: str, where: str, required: bool) -> str:
     value = entry.get(field, "")
     if not isinstance(value, str):
         raise InputError(f"{where}: {field} must be a string")
-    if _has_control(value):
+    if has_control(value):
         raise InputError(f"{where}: {field} must be one line without control characters")
     value = value.strip()
     if required and not value:
@@ -662,7 +662,7 @@ def _write_atomic(index: Path, text: str) -> None:
 
 
 def cmd_index(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "files"})
+    check_keys(data, {"term", "course", "files"})
     term, course = parse_term(data), parse_segment(data, "course")
     files = data.get("files")
     if not isinstance(files, list) or not files:
@@ -679,7 +679,7 @@ def cmd_index(data: dict) -> dict:
         where = f"files[{n}]"
         if not isinstance(entry, dict):
             raise InputError(f"{where} must be an object")
-        _check_keys(entry, {"path", "topics"})
+        check_keys(entry, {"path", "topics"})
         path, rel, role = _course_file(entry, course_dir, where)
         found = plan[rel][2] if rel in plan else detect(path)
         if isinstance(found, str):
@@ -692,17 +692,17 @@ def cmd_index(data: dict) -> dict:
             twhere = f"{where}.topics[{k}]"
             if not isinstance(t, dict):
                 raise InputError(f"{twhere} must be an object")
-            _check_keys(t, {"topic", "anchor"})
+            check_keys(t, {"topic", "anchor"})
             topic = _line_field(t, "topic", twhere, required=True)
             anchor = _line_field(t, "anchor", twhere, required=False)
             if anchor and found["kind"] == "pdf":
                 m = re.fullmatch(r"page=([1-9][0-9]*)", anchor)
                 if not m:
-                    raise InputError(f"{twhere}: a PDF anchor is page=N: {_short(anchor)}")
+                    raise InputError(f"{twhere}: a PDF anchor is page=N: {short(anchor)}")
                 if found["pages"] is not None and int(m.group(1)) > found["pages"]:
                     raise InputError(f"{twhere}: page {m.group(1)} is past the last page ({found['pages']})")
             elif anchor and re.search(r"\s", anchor):
-                raise InputError(f"{twhere}: an anchor is a heading slug without spaces: {_short(anchor)}")
+                raise InputError(f"{twhere}: an anchor is a heading slug without spaces: {short(anchor)}")
             target = f"{rel}#{anchor}" if anchor else rel
             cell = f"| {_cell(topic)} | {_cell(target)} |"
             if cell not in cells:

@@ -123,7 +123,7 @@ from pathlib import Path
 
 import ingest
 import workspace
-from workspace import InputError, _check_keys, _has_control, _short, parse_segment, parse_term
+from workspace import InputError, check_keys, has_control, short, parse_segment, parse_term
 
 FINGERPRINT_MAX_LINES = 60
 ENTRY_MAX_CHARS = 160
@@ -143,7 +143,7 @@ _PRIOR_LINE = re.compile(r"([^/]+)/([^/]+), (same professor(?: \(assumed\))?|ano
 def _line(value, where: str, required: bool, limit: int | None = ENTRY_MAX_CHARS) -> str:
     if not isinstance(value, str):
         raise InputError(f"{where} must be a string")
-    if _has_control(value):
+    if has_control(value):
         raise InputError(f"{where} must be one line without control characters")
     value = value.strip()
     if required and not value:
@@ -211,15 +211,15 @@ def _sources(entry: dict, where: str, current: dict, prior: dict | None, prior_n
             try:
                 datetime.date.fromisoformat(m.group(1))
             except ValueError:
-                raise InputError(f"{swhere}: not a valid debrief date: {_short(text)}") from None
+                raise InputError(f"{swhere}: not a valid debrief date: {short(text)}") from None
             src = {"text": text, "kind": "debrief", "role": "debrief", "fidelity": "text"}
         elif text.startswith(_PRIOR):
             path = text[len(_PRIOR):].strip()
             if prior is None:
-                raise InputError(f"{swhere}: {_short(text)} needs prior_term: to say same professor "
+                raise InputError(f"{swhere}: {short(text)} needs prior_term: to say same professor "
                                  f"{prior_note}")
             if path not in prior["rows"]:
-                raise InputError(f"{swhere}: {_short(path)} has no registry row in {prior['index']}")
+                raise InputError(f"{swhere}: {short(path)} has no registry row in {prior['index']}")
             role, _, fidelity = prior["rows"][path]
             text = _PRIOR + path
             src = {"text": text, "kind": "prior", "role": role, "fidelity": fidelity}
@@ -227,7 +227,7 @@ def _sources(entry: dict, where: str, current: dict, prior: dict | None, prior_n
             role, _, fidelity = current["rows"][text]
             src = {"text": text, "kind": "current", "role": role, "fidelity": fidelity}
         else:
-            raise InputError(f"{swhere}: {_short(text)} has no registry row in {current['index']} "
+            raise InputError(f"{swhere}: {short(text)} has no registry row in {current['index']} "
                              "(use a course-relative path, prior-term:<path> or debrief YYYY-MM-DD)")
         if all(s["text"] != src["text"] for s in out):
             out.append(src)
@@ -266,7 +266,7 @@ def source_context(root: Path, course_dir: Path, fp_text: str | None) -> tuple[d
     index = course_dir / "INDEX.md"
     current = {"index": index, "rows": ingest.registry(index)}
     prior = None
-    prior_note = f"(it says {_short(prior_value)})" if prior_value else "(it is blank; run retake first)"
+    prior_note = f"(it says {short(prior_value)})" if prior_value else "(it is blank; run retake first)"
     if parsed and parsed[2]:
         link = course_dir / ".state" / _LINK
         prior_state = root / parsed[0] / parsed[1] / ".state"
@@ -280,7 +280,7 @@ def source_context(root: Path, course_dir: Path, fp_text: str | None) -> tuple[d
 
 def cmd_write(data: dict) -> dict:
     keys = {"term", "course", "professor", *(k for k, _ in _SECTIONS), _TABLE[0]}
-    _check_keys(data, keys)
+    check_keys(data, keys)
     term, course = parse_term(data), parse_segment(data, "course")
     professor = _line(data["professor"], "professor", required=False) if "professor" in data else None
     root = ingest._workspace_root()
@@ -305,7 +305,7 @@ def cmd_write(data: dict) -> dict:
             where = f"{key}[{n}]"
             if not isinstance(entry, dict):
                 raise InputError(f"{where} must be an object")
-            _check_keys(entry, {"text", "sources"})
+            check_keys(entry, {"text", "sources"})
             text = _no_markers(_line(entry.get("text"), f"{where}.text", required=True), f"{where}.text")
             blocks[key].append((text, _sources(entry, where, current, prior, prior_note)))
     rows: list[tuple[str, str, list[dict]]] = []
@@ -316,7 +316,7 @@ def cmd_write(data: dict) -> dict:
         where = f"{_TABLE[0]}[{n}]"
         if not isinstance(entry, dict):
             raise InputError(f"{where} must be an object")
-        _check_keys(entry, {"type", "sources", "marks"})
+        check_keys(entry, {"type", "sources", "marks"})
         qtype = _no_markers(_line(entry.get("type"), f"{where}.type", required=True), f"{where}.type")
         marks = _no_markers(_line(entry.get("marks", ""), f"{where}.marks", required=False), f"{where}.marks")
         rows.append((qtype, marks, _sources(entry, where, current, prior, prior_note)))
@@ -401,7 +401,7 @@ def _make_link(target: str, link: Path, prior_state: Path) -> None:
     except OSError as exc:
         if getattr(exc, "winerror", None) != 1314:  # ERROR_PRIVILEGE_NOT_HELD
             raise
-        import _winapi
+        import _winapi  # noqa: PLC2701 -- the stdlib has no public call for a junction
         _winapi.CreateJunction(str(prior_state.resolve()), str(link))
 
 
@@ -430,11 +430,11 @@ def _decide(professor: str, prior_prof: str) -> tuple[bool, bool, str]:
 
 
 def cmd_retake(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "prior_term", "prior_course", "professor"})
+    check_keys(data, {"term", "course", "prior_term", "prior_course", "professor"})
     term, course = parse_term(data), parse_segment(data, "course")
     prior_term = parse_segment(data, "prior_term")
     if not workspace._TERM.fullmatch(prior_term):
-        raise InputError(f"prior_term must be YYYY-<word>, e.g. 2026-Fall: {_short(prior_term)}")
+        raise InputError(f"prior_term must be YYYY-<word>, e.g. 2026-Fall: {short(prior_term)}")
     prior_course = parse_segment(data, "prior_course")
     if "professor" not in data:
         raise InputError("professor is required (a name, or \"\" when none was found)")

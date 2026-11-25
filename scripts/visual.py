@@ -213,7 +213,7 @@ import visual_machine
 import visual_open
 import visual_render
 import workspace
-from workspace import InputError, _check_keys, _has_control, _short, parse_segment, parse_term
+from workspace import InputError, check_keys, has_control, parse_segment, parse_term, short
 
 NAME_MAX_CHARS = 60
 TITLE_MAX_CHARS = 120
@@ -233,7 +233,7 @@ def _name(data: dict) -> str:
         raise InputError("name is required (lowercase letters, digits and single hyphens)")
     if len(value) > NAME_MAX_CHARS or not _NAME.fullmatch(value):
         raise InputError(f"name must match [a-z0-9]+(-[a-z0-9]+)* and be at most {NAME_MAX_CHARS} "
-                         f"characters: {_short(value)}")
+                         f"characters: {short(value)}")
     return value
 
 
@@ -301,7 +301,7 @@ def build_svg(svg) -> str:
 
 
 def cmd_svg(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "name", "svg"})
+    check_keys(data, {"term", "course", "name", "svg"})
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
     course_dir = verify._course_dir(term, course)
     return _write_out(course_dir, name, "svg", build_svg(data.get("svg")).encode("utf-8"))
@@ -310,7 +310,7 @@ def cmd_svg(data: dict) -> dict:
 # --- page ----------------------------------------------------------------------------
 
 def cmd_page(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "name", "title", "body", "machine", "example"})
+    check_keys(data, {"term", "course", "name", "title", "body", "machine", "example"})
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
     if "title" not in data:
         raise InputError("title is required")
@@ -336,13 +336,13 @@ def cmd_page(data: dict) -> dict:
 # --- open --------------------------------------------------------------------------
 
 def cmd_open(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "file"})
+    check_keys(data, {"term", "course", "file"})
     term, course = parse_term(data), parse_segment(data, "course")
     value = data.get("file")
     if not isinstance(value, str) or not value:
         raise InputError("file is required (<name>.html or <name>.svg)")
-    if _has_control(value) or not _FILE.fullmatch(value) or len(value.rsplit(".", 1)[0]) > NAME_MAX_CHARS:
-        raise InputError(f"file must be <name>.html or <name>.svg with a valid name: {_short(value)}")
+    if has_control(value) or not _FILE.fullmatch(value) or len(value.rsplit(".", 1)[0]) > NAME_MAX_CHARS:
+        raise InputError(f"file must be <name>.html or <name>.svg with a valid name: {short(value)}")
     course_dir = verify._course_dir(term, course)
     out = _out_dir(course_dir, create=False)
     path = out / value
