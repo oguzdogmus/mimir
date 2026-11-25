@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Gram-negative bacterium</title>
+<link rel="stylesheet" href="../../vendor/katex/katex.min.css">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* depiction colours (conventional textbook tones), one set per theme */
+  :root {
+    --cyto: #dbe7f1; --nucleoid: #4f6795; --ribo: #6d5f98; --plasmid: #4f6795;
+    --membrane: #d7b46a; --membrane-line: #f6ecd3; --porin: #a7803a; --lps: #b48c45;
+    --periplasm: #edf0e4; --pg: #6c9867;
+    --capsule: rgba(132, 162, 184, 0.30); --capsule-edge: #8ea7b9;
+    --appendage: #6c7682;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --cyto: #233547; --nucleoid: #9fb5e2; --ribo: #b6a7e0; --plasmid: #9fb5e2;
+      --membrane: #b8924f; --membrane-line: #3d3426; --porin: #e0bd78; --lps: #c9a25e;
+      --periplasm: #222c2b; --pg: #8fbf89;
+      --capsule: rgba(140, 172, 196, 0.17); --capsule-edge: #5f7889;
+      --appendage: #9aa5b1;
+    }
+  }
+  :root[data-theme="dark"] {
+    --cyto: #233547; --nucleoid: #9fb5e2; --ribo: #b6a7e0; --plasmid: #9fb5e2;
+    --membrane: #b8924f; --membrane-line: #3d3426; --porin: #e0bd78; --lps: #c9a25e;
+    --periplasm: #222c2b; --pg: #8fbf89;
+    --capsule: rgba(140, 172, 196, 0.17); --capsule-edge: #5f7889;
+    --appendage: #9aa5b1;
+  }
+  .cell svg .fig-label { font-size: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="sk-head">
+    <p class="sk-label">[diagram, made by Mimir, simplified]</p>
+    <h1>A Gram-negative bacterium, built layer by layer</h1>
+    <p class="sk-lede"><i>Escherichia coli</i> is a rod-shaped, Gram-negative bacterium.
+      Click through to build its cell from the inside out.</p>
+  </header>
+
+  <figure class="sk-figure sk-pin cell">
+    <svg viewBox="0 26 560 354" role="img" aria-labelledby="bac-t bac-d">
+      <title id="bac-t">Cell of a rod-shaped Gram-negative bacterium</title>
+      <desc id="bac-d">A rod with rounded ends, about two and a half times as long as it is wide. From the inside out: cytoplasm with the nucleoid, ribosomes and plasmids; the plasma membrane; the periplasm with a thin peptidoglycan layer; the outer membrane with lipopolysaccharide and porins; a capsule; and flagella and pili on the surface. Envelope layers are drawn much thicker than they are.</desc>
+
+      <!-- step 6: flagella and pili (drawn first so they emerge from under the envelope) -->
+      <g data-step="6" data-highlight="6">
+        <g fill="none" stroke="var(--appendage)" stroke-linecap="round" stroke-linejoin="round">
+          <path class="sk-draw" pathLength="1" stroke-width="2" d="M116.4 181.3 L114.9 180.3 L113.7 179.0 L112.5 177.5 L111.3 176.0 L110.0 174.7 L108.5 173.9 L106.7 173.5 L104.6 173.8 L102.3 174.5 L99.8 175.5 L97.4 176.3 L95.4 176.5 L93.7 176.0 L92.3 174.8 L91.3 173.0 L90.6 170.7 L90.0 168.0 L89.5 165.3 L88.9 162.7 L88.1 160.6 L87.0 159.0 L85.5 158.1 L83.6 157.9 L81.5 158.3 L79.1 159.1 L76.5 160.2 L74.0 161.2 L71.6 162.0 L69.5 162.4 L67.7 162.1 L66.2 161.2 L65.1 159.5 L64.3 157.3 L63.7 154.8 L63.2 152.0 L62.6 149.4 L61.9 147.1 L60.9 145.3 L59.5 144.2 L57.8 143.8 L55.7 144.0 L53.3 144.7 L50.8 145.8 L48.3 146.8 L45.8 147.8 L43.6 148.3 L41.7 148.2 L40.1 147.4 L38.9 146.0 L38.0 144.0 L37.4 141.5 L36.9 138.8 L36.3 136.1 L35.7 133.7 L34.7 131.7 L33.5 130.4 L31.8 129.8 L29.9 129.8 L27.6 130.4 L25.1 131.3"/>
+          <path class="sk-draw" pathLength="1" stroke-width="2" d="M112.3 227.6 L110.6 227.7 L108.8 227.4 L106.9 227.0 L105.1 226.5 L103.3 226.3 L101.6 226.6 L100.0 227.5 L98.5 228.9 L97.1 231.0 L95.7 233.3 L94.3 235.4 L92.8 236.7 L91.2 237.4 L89.4 237.3 L87.5 236.5 L85.5 235.1 L83.4 233.4 L81.3 231.5 L79.3 229.9 L77.3 228.7 L75.5 228.2 L73.7 228.4 L72.1 229.3 L70.7 231.0 L69.3 233.1 L67.9 235.5 L66.6 237.9 L65.2 240.0 L63.7 241.6 L62.1 242.5 L60.4 242.6 L58.5 242.0 L56.6 240.8 L54.5 239.1 L52.4 237.3 L50.4 235.6 L48.4 234.2 L46.5 233.5 L44.7 233.4 L43.1 234.2 L41.6 235.6 L40.2 237.6 L38.8 240.0 L37.5 242.4 L36.1 244.6 L34.7 246.4 L33.1 247.5 L31.4 247.9 L29.6 247.5 L27.6 246.4 L25.6 244.9 L23.5 243.1 L21.4 241.3 L19.4 239.8 L17.5 238.8 L15.7 238.6 L14.0 239.1 L12.5 240.3 L11.0 242.2 L9.7 244.4"/>
+          <path class="sk-draw" pathLength="1" stroke-width="2" d="M443.6 181.3 L445.3 180.8 L447.1 180.7 L449.0 180.7 L450.9 180.8 L452.7 180.6 L454.3 180.0 L455.7 178.8 L456.9 177.1 L457.8 174.8 L458.7 172.3 L459.6 169.9 L460.8 168.3 L462.3 167.3 L464.0 167.0 L466.1 167.4 L468.3 168.3 L470.7 169.6 L473.1 171.0 L475.5 172.1 L477.6 172.9 L479.6 173.0 L481.2 172.5 L482.6 171.2 L483.7 169.3 L484.6 166.9 L485.4 164.3 L486.2 161.7 L487.1 159.3 L488.2 157.5 L489.6 156.2 L491.3 155.8 L493.2 156.0 L495.4 156.8 L497.8 158.0 L500.2 159.3 L502.6 160.6 L504.8 161.5 L506.8 161.8 L508.6 161.5 L510.0 160.4 L511.2 158.7 L512.1 156.5 L513.0 153.9 L513.8 151.2 L514.6 148.8 L515.7 146.7 L517.0 145.3 L518.5 144.6 L520.4 144.6 L522.5 145.2 L524.9 146.3 L527.3 147.7 L529.7 149.0 L532.0 150.0 L534.0 150.5 L535.9 150.4 L537.4 149.6 L538.7 148.1 L539.7 146.0 L540.5 143.5"/>
+          <path class="sk-draw" pathLength="1" stroke-width="2" d="M443.6 238.7 L445.2 239.4 L446.7 240.4 L448.2 241.6 L449.7 242.9 L451.2 243.8 L452.8 244.3 L454.7 244.3 L456.7 243.6 L458.8 242.4 L461.0 240.9 L463.2 239.7 L465.2 239.1 L466.9 239.2 L468.5 240.0 L469.9 241.6 L471.0 243.7 L472.1 246.2 L473.2 248.8 L474.3 251.1 L475.6 253.1 L477.0 254.4 L478.6 255.0 L480.5 254.8 L482.5 254.0 L484.7 252.7 L487.0 251.1 L489.2 249.5 L491.4 248.2 L493.4 247.4 L495.3 247.3 L496.9 248.0 L498.3 249.3 L499.5 251.3 L500.6 253.7 L501.7 256.3 L502.8 258.7 L504.0 260.8 L505.4 262.3 L507.0 263.1 L508.7 263.2 L510.7 262.6 L512.9 261.4 L515.1 259.8 L517.4 258.2 L519.6 256.8 L521.7 255.9 L523.6 255.6 L525.2 256.0 L526.7 257.1 L528.0 258.9 L529.1 261.2 L530.2 263.7 L531.3 266.3 L532.5 268.5 L533.8 270.2 L535.3 271.2 L537.0 271.5 L538.9 271.1 L541.0 270.1 L543.3 268.6"/>
+          <!-- pili: short, thin, straight -->
+          <path stroke-width="1.2" d="M212 144 V116 M285 144 V116 M352 144 V116 M222 276 V304 M272 276 V304 M335 276 V304 M150.1 150.2 L138.3 124.8 M112 210 H84 M135.6 260.6 L117.6 282 M417 157.5 L432.6 136.3 M448 210 H476 M393.6 276.9 L398.3 302.6"/>
+        </g>
+      </g>
+
+      <!-- step 5: capsule -->
+      <g data-step="5" data-highlight="5">
+        <rect x="101" y="133" width="358" height="154" rx="77" fill="none" stroke="var(--capsule)" stroke-width="18"/>
+        <rect x="92" y="124" width="376" height="172" rx="86" fill="none" stroke="var(--capsule-edge)" stroke-width="1" stroke-dasharray="2 4"/>
+      </g>
+
+      <!-- step 4: outer membrane, with LPS bristles outside and porins across it -->
+      <g data-step="4" data-highlight="4">
+        <rect x="107.5" y="139.5" width="345" height="141" rx="70.5" fill="none" stroke="var(--lps)" stroke-width="4" stroke-dasharray="1.1 2.6"/>
+        <rect x="113.5" y="145.5" width="333" height="129" rx="64.5" fill="none" stroke="var(--membrane)" stroke-width="7"/>
+        <rect x="113.5" y="145.5" width="333" height="129" rx="64.5" fill="none" stroke="var(--membrane-line)" stroke-width="1"/>
+        <g fill="var(--porin)">
+          <rect x="226.4" y="141" width="3.2" height="9" rx="1.4"/><rect x="230.4" y="141" width="3.2" height="9" rx="1.4"/>
+          <rect x="316.4" y="141" width="3.2" height="9" rx="1.4"/><rect x="320.4" y="141" width="3.2" height="9" rx="1.4"/>
+          <rect x="308.4" y="270" width="3.2" height="9" rx="1.4"/><rect x="312.4" y="270" width="3.2" height="9" rx="1.4"/>
+        </g>
+      </g>
+
+      <!-- step 3: periplasm with a thin peptidoglycan layer -->
+      <g data-step="3" data-highlight="3">
+        <rect x="124" y="156" width="312" height="108" rx="54" fill="none" stroke="var(--periplasm)" stroke-width="14"/>
+        <rect x="124" y="156" width="312" height="108" rx="54" fill="none" stroke="var(--pg)" stroke-width="3"/>
+      </g>
+
+      <!-- step 2: plasma (inner) membrane, a bilayer -->
+      <g data-step="2" data-highlight="2">
+        <rect x="134.5" y="166.5" width="291" height="87" rx="43.5" fill="none" stroke="var(--membrane)" stroke-width="7"/>
+        <rect x="134.5" y="166.5" width="291" height="87" rx="43.5" fill="none" stroke="var(--membrane-line)" stroke-width="1"/>
+      </g>
+
+      <!-- step 1: cytoplasm, nucleoid, ribosomes, plasmids -->
+      <g data-step="1" data-highlight="1">
+        <rect x="138" y="170" width="284" height="80" rx="40" fill="var(--cyto)"/>
+        <path fill="none" stroke="var(--nucleoid)" stroke-width="1.6" stroke-linejoin="round" d="M332.0 211.0 L334.9 211.4 L337.4 211.5 L339.0 211.3 L339.5 211.0 L338.9 210.6 L337.4 210.3 L335.2 210.2 L332.6 210.3 L330.2 210.8 L328.1 211.5 L326.5 212.5 L325.7 213.6 L325.3 214.9 L325.2 216.0 L325.1 217.1 L324.8 218.0 L323.9 218.6 L322.4 219.0 L320.3 219.3 L317.9 219.4 L315.3 219.6 L313.0 219.8 L311.2 220.1 L310.1 220.5 L309.8 221.1 L310.2 221.8 L311.1 222.6 L312.0 223.3 L312.6 223.9 L312.6 224.2 L311.7 224.3 L309.8 224.1 L307.0 223.6 L303.5 222.9 L299.7 222.1 L296.0 221.5 L292.8 221.0 L290.3 220.9 L288.6 221.2 L287.8 221.9 L287.6 223.1 L287.7 224.5 L287.6 226.1 L287.2 227.7 L286.0 229.0 L284.0 229.9 L281.3 230.3 L278.0 230.0 L274.5 229.1 L271.0 227.6 L268.1 225.6 L265.7 223.5 L264.2 221.4 L263.3 219.6 L262.9 218.3 L262.7 217.6 L262.4 217.6 L261.6 218.3 L260.3 219.6 L258.3 221.2 L255.8 223.0 L253.1 224.8 L250.5 226.1 L248.2 226.9 L246.7 227.0 L245.9 226.4 L246.0 225.0 L246.7 223.1 L247.8 220.8 L248.8 218.4 L249.4 216.1 L249.2 214.2 L248.0 212.8 L245.9 212.0 L242.9 211.9 L239.3 212.3 L235.7 213.2 L232.4 214.3 L229.8 215.3 L228.1 216.1 L227.4 216.5 L227.6 216.3 L228.5 215.6 L229.9 214.3 L231.2 212.7 L232.3 210.8 L232.9 208.9 L232.9 207.2 L232.6 205.9 L232.0 205.0 L231.5 204.7 L231.3 204.8 L231.7 205.3 L232.7 206.1 L234.3 206.8 L236.3 207.3 L238.4 207.4 L240.3 207.0 L241.5 206.0 L242.0 204.5 L241.5 202.6 L240.2 200.4 L238.4 198.3 L236.4 196.4 L234.5 194.9 L233.3 194.0 L233.1 193.8 L233.9 194.2 L235.8 195.2 L238.6 196.6 L241.9 198.1 L245.3 199.5 L248.5 200.6 L251.2 201.1 L253.1 201.0 L254.2 200.1 L254.8 198.6 L255.0 196.6 L255.2 194.2 L255.7 191.8 L256.8 189.5 L258.6 187.7 L261.0 186.5 L263.9 186.1 L266.9 186.3 L269.8 187.3 L272.3 188.8 L274.1 190.5 L275.1 192.4 L275.6 194.1 L275.6 195.4 L275.6 196.2 L275.7 196.4 L276.5 195.9 L278.0 195.0 L280.3 193.7 L283.3 192.2 L286.8 190.7 L290.3 189.4 L293.6 188.4 L296.2 187.9 L297.9 187.9 L298.8 188.3 L298.9 189.1 L298.5 190.2 L297.9 191.4 L297.7 192.5 L298.0 193.5 L299.2 194.3 L301.4 194.8 L304.4 195.0 L307.9 195.1 L311.7 195.1 L315.3 195.1 L318.5 195.1 L320.8 195.3 L322.3 195.6 L322.9 196.1 L323.0 196.8 L322.7 197.6 L322.5 198.4 L322.5 199.1 L323.0 199.6 L324.0 199.9 L325.5 200.1 L327.1 200.1 L328.6 200.0 L329.7 199.8 L330.2 199.8 L329.9 199.9 L328.9 200.3 L327.5 201.0 L325.9 202.0 L324.4 203.2 L323.5 204.7 L323.5 206.3 L324.5 207.8 L326.4 209.1 L329.0 210.2 Z"/>
+        <g fill="var(--ribo)">
+          <circle cx="166" cy="200" r="2.4"/><circle cx="182" cy="226" r="2.4"/><circle cx="202" cy="188" r="2.4"/>
+          <circle cx="212" cy="214" r="2.4"/><circle cx="222" cy="238" r="2.4"/><circle cx="250" cy="180" r="2.4"/>
+          <circle cx="306" cy="180" r="2.4"/><circle cx="296" cy="238" r="2.4"/><circle cx="330" cy="236" r="2.4"/>
+          <circle cx="352" cy="190" r="2.4"/><circle cx="362" cy="226" r="2.4"/><circle cx="378" cy="238" r="2.4"/>
+          <circle cx="392" cy="196" r="2.4"/><circle cx="350" cy="214" r="2.4"/><circle cx="195" cy="242" r="2.4"/>
+        </g>
+        <g fill="none" stroke="var(--plasmid)" stroke-width="1.5">
+          <circle cx="403" cy="215" r="6"/><circle cx="160" cy="216" r="5"/>
+        </g>
+      </g>
+
+      <!-- labels with leader lines, revealed with their layers -->
+      <g class="leader-set">
+        <g data-step="1">
+          <path class="leader" d="M250 351 V243 M300 321 L283 232 M370 351 L362.4 229.5 M432 321 L404.3 221.8"/>
+          <circle class="leader-dot" cx="250" cy="243" r="2"/><circle class="leader-dot" cx="283" cy="232" r="2"/>
+          <circle class="leader-dot" cx="362.4" cy="229.5" r="2"/><circle class="leader-dot" cx="404.3" cy="221.8" r="2"/>
+          <text class="fig-label" x="250" y="371" text-anchor="middle">Cytoplasm</text>
+          <text class="fig-label" x="300" y="341" text-anchor="middle">Nucleoid</text>
+          <text class="fig-label" x="370" y="371" text-anchor="middle">Ribosome</text>
+          <text class="fig-label" x="432" y="341" text-anchor="middle">Plasmid</text>
+        </g>
+        <g data-step="2">
+          <path class="leader" d="M162 321 L186 254"/>
+          <circle class="leader-dot" cx="186" cy="254" r="2"/>
+          <text class="fig-label" x="160" y="341" text-anchor="middle">Plasma membrane</text>
+        </g>
+        <g data-step="3">
+          <path class="leader" d="M380 60 V152 M458 90 L396 157"/>
+          <circle class="leader-dot" cx="380" cy="152" r="2"/><circle class="leader-dot" cx="396" cy="157" r="2"/>
+          <text class="fig-label" x="380" y="54" text-anchor="middle">Periplasm</text>
+          <text class="fig-label" x="464" y="84" text-anchor="middle">Peptidoglycan</text>
+        </g>
+        <g data-step="4">
+          <path class="leader" d="M250 60 V145 M320 90 V140"/>
+          <circle class="leader-dot" cx="250" cy="145" r="2"/><circle class="leader-dot" cx="320" cy="140" r="2"/>
+          <text class="fig-label" x="250" y="54" text-anchor="middle">Outer membrane</text>
+          <text class="fig-label" x="320" y="84" text-anchor="middle">Porin</text>
+        </g>
+        <g data-step="5">
+          <path class="leader" d="M180 90 V131"/>
+          <circle class="leader-dot" cx="180" cy="131" r="2"/>
+          <text class="fig-label" x="180" y="84" text-anchor="middle">Capsule</text>
+        </g>
+        <g data-step="6">
+          <path class="leader" d="M50 60 V145 M56 351 L117.6 282"/>
+          <circle class="leader-dot" cx="50" cy="145.6" r="2"/><circle class="leader-dot" cx="117.6" cy="282" r="2"/>
+          <text class="fig-label" x="50" y="54" text-anchor="middle">Flagellum</text>
+          <text class="fig-label" x="56" y="371" text-anchor="middle">Pilus</text>
+        </g>
+      </g>
+    </svg>
+    <figcaption>Not to scale: the envelope layers are drawn much thicker than they are, as in textbook diagrams.</figcaption>
+  </figure>
+
+  <ol class="sk-steps">
+    <li data-step="1"><p><span class="sk-term">Cytoplasm.</span> The gel-like interior holds the nucleoid (the region with the single
+      circular chromosome), ribosomes, and often small DNA rings called plasmids.</p></li>
+    <li data-step="2"><p><span class="sk-term">Plasma membrane (inner membrane).</span> A phospholipid bilayer that controls what
+      enters and leaves the cell.</p></li>
+    <li data-step="3"><p><span class="sk-term">Periplasm and peptidoglycan.</span> A thin layer of peptidoglycan sits in the
+      periplasmic space between the two membranes. It is far thinner than in Gram-positive
+      bacteria, which is why Gram-negative cells do not keep the crystal violet stain.</p></li>
+    <li data-step="4"><p><span class="sk-term">Outer membrane.</span> A second bilayer whose outer leaflet carries
+      lipopolysaccharide (LPS); porins in it let small molecules through.</p></li>
+    <li data-step="5"><p><span class="sk-term">Capsule.</span> Many strains add a slimy polysaccharide capsule that helps them
+      avoid the host's immune system.</p></li>
+    <li data-step="6"><p><span class="sk-term">Flagella and pili.</span> Flagella spread over the surface turn like propellers to
+      swim; the shorter, thinner pili (fimbriae) help the cell stick to surfaces.</p></li>
+  </ol>
+
+  <div id="mimir-controls"></div>
+</main>
+<script src="../../vendor/katex/katex.min.js"></script>
+<script src="../../vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../shell.js"></script>
+</body>
+</html>

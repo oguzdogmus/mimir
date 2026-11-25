@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 0 100 137" class="mm-svg" focusable="false" aria-hidden="true">
+<style>
+.mimir-mascot {
+  --mm-skin: #f9dcc6;
+  --mm-skin-deep: #efbd9f;
+  --mm-nose: #e79c85;
+  --mm-blush: #e4837f;
+  --mm-beard: #ece7df;
+  --mm-brow: #92826f;
+  --mm-line: #463229;
+  --mm-gold: #ffd24a;
+  --mm-eye: #fff8e8;
+  --mm-edge: #fbf8f1;
+}
+.mimir-mascot .mm-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.mimir-mascot .mm-edge-p { fill: var(--mm-edge); stroke: var(--mm-edge); stroke-width: 7; stroke-linejoin: round; stroke-linecap: round; }
+.mimir-mascot .mm-edge-t { fill: var(--mm-edge); stroke: var(--mm-edge); stroke-width: 3.4; stroke-linejoin: round; stroke-linecap: round; }
+.mimir-mascot .mm-ln { stroke: var(--mm-line); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.mimir-mascot .mm-w2 { stroke-width: 2; }
+.mimir-mascot .mm-w18 { stroke-width: 1.8; }
+.mimir-mascot .mm-w16 { stroke-width: 1.6; }
+.mimir-mascot .mm-w34 { stroke-width: 3.4; }
+.mimir-mascot .mm-nofill { fill: none; }
+.mimir-mascot .mm-skin { fill: var(--mm-skin); }
+.mimir-mascot .mm-deep { fill: var(--mm-skin-deep); }
+.mimir-mascot .mm-nose { fill: var(--mm-nose); }
+.mimir-mascot .mm-beard { fill: var(--mm-beard); }
+.mimir-mascot .mm-gold { fill: var(--mm-gold); }
+.mimir-mascot .mm-eye { fill: var(--mm-eye); }
+.mimir-mascot .mm-ink { fill: var(--mm-line); }
+.mimir-mascot .mm-hole { fill: var(--mm-line); opacity: .5; }
+.mimir-mascot .mm-blush { fill: var(--mm-blush); }
+.mimir-mascot .mm-brow-l { fill: var(--mm-brow); stroke: var(--mm-line); stroke-width: 1.9; stroke-linejoin: round; stroke-linecap: round; }
+.mimir-mascot .mm-mk { fill: var(--mm-accent); stroke: var(--mm-line); stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
+/* moods: the active mood's face parts and mark are shown; no data-mood counts as curious */
+.mimir-mascot[data-mood]:not([data-mood="curious"]) .mm-curious,
+.mimir-mascot:not([data-mood="explaining"]) .mm-explaining,
+.mimir-mascot:not([data-mood="thinking"]) .mm-thinking,
+.mimir-mascot:not([data-mood="surprised"]) .mm-surprised,
+.mimir-mascot:not([data-mood="pleased"]) .mm-pleased,
+.mimir-mascot:not([data-mood="proud"]) .mm-proud { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  [data-motion="gentle"] .mimir-mascot .mm-face,
+  [data-motion="gentle"] .mimir-mascot .mm-mark,
+  [data-motion="full"] .mimir-mascot .mm-face,
+  [data-motion="full"] .mimir-mascot .mm-mark { transition: opacity 200ms ease; }
+  [data-motion="full"] .mimir-mascot .mm-bob { animation: mm-bob 3.4s ease-in-out infinite; }
+  [data-motion="full"] .mimir-mascot .mm-blink { transform-box: fill-box; transform-origin: center; animation: mm-blink 5.5s infinite; }
+  @keyframes mm-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.2px); } }
+  @keyframes mm-blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.12); } }
+}
+</style>
+
+<!-- sticker edge, behind everything -->
+<g class="mm-edge">
+  <path class="mm-edge-p" d="M48 30C39.6 30 32 34.6 28 41.8C26 45.6 25 51.2 25 57.2C25 68 28.6 88.4 35.6 93C39 95.2 43.2 96 48 96C52.8 96 57 95.2 60.4 93C67.4 88.4 71 68 71 57.2C71 51.2 70 45.6 68 41.8C64 34.6 56.4 30 48 30Z"/>
+  <ellipse class="mm-edge-p" cx="21.6" cy="62" rx="5.6" ry="8.8" transform="rotate(-8 21.6 62)"/>
+  <ellipse class="mm-edge-p" cx="74.4" cy="62" rx="5.6" ry="8.8" transform="rotate(8 74.4 62)"/>
+  <path class="mm-edge-p" d="M24.4 70C20.8 79 19.4 88.4 20.4 94.8C21 100 23 103.8 25.4 105.6C24.2 114.0 24.4 116.4 25.3 117.8C26.8 120.2 30.8 120.2 32.3 117.8C33.2 116.4 33.4 114.0 33.4 105.4C33.8 118.0 34.0 120.4 34.9 121.8C36.4 124.2 40.4 124.2 41.9 121.8C42.8 120.4 43.0 118.0 43.0 105.4C43.4 122.0 43.6 124.4 44.5 125.8C46.0 128.2 50.0 128.2 51.5 125.8C52.4 124.4 52.6 122.0 52.6 105.4C53.0 118.0 53.2 120.4 54.1 121.8C55.6 124.2 59.6 124.2 61.1 121.8C62.0 120.4 62.2 118.0 62.2 105.4C62.6 114.0 62.8 116.4 63.7 117.8C65.2 120.2 69.2 120.2 70.7 117.8C71.6 116.4 71.8 114.0 71.8 105.4C73 103.4 75 99.6 75.6 94.8C76.6 88.4 75.2 79 71.6 70C69.6 79 66 86 60 89.4C56.4 91.8 52.8 92.8 48 92.8C43.2 92.8 39.6 91.8 36 89.4C30 86 26.4 79 24.4 70Z"/>
+  <path class="mm-edge-p" d="M30.6 44.4C26.4 38.4 22.4 30.4 19.6 24C19 21 21.2 19.4 23 21.4C28 26.6 34.6 33.4 41.4 38.8C38.2 42 34 44.4 30.6 44.4Z"/>
+  <path class="mm-edge-p" d="M65.4 44.4C69.6 38.4 73.6 30.4 76.4 24C77 21 74.8 19.4 73 21.4C68 26.6 61.4 33.4 54.6 38.8C57.8 42 62 44.4 65.4 44.4Z"/>
+  <circle class="mm-edge-t" cx="26.9" cy="116.2" r="3.3"/>
+  <circle class="mm-edge-t" cx="37.8" cy="123.4" r="3.5"/>
+  <circle class="mm-edge-t" cx="46.4" cy="128.6" r="3.8"/>
+  <circle class="mm-edge-t" cx="58.1" cy="122.4" r="3.5"/>
+  <circle class="mm-edge-t" cx="69.2" cy="114.6" r="3.3"/>
+</g>
+
+<!-- ears -->
+<ellipse class="mm-skin mm-ln" cx="21.6" cy="62" rx="5.6" ry="8.8" transform="rotate(-8 21.6 62)"/>
+<path class="mm-ln mm-nofill mm-w2" d="M22 56.6C19.2 58.8 19.2 65.4 22.2 68"/>
+<ellipse class="mm-skin mm-ln" cx="74.4" cy="62" rx="5.6" ry="8.8" transform="rotate(8 74.4 62)"/>
+<path class="mm-ln mm-nofill mm-w2" d="M74 56.6C76.8 58.8 76.8 65.4 73.8 68"/>
+
+<!-- head -->
+<path class="mm-skin mm-ln" d="M48 30C39.6 30 32 34.6 28 41.8C26 45.6 25 51.2 25 57.2C25 68 28.6 88.4 35.6 93C39 95.2 43.2 96 48 96C52.8 96 57 95.2 60.4 93C67.4 88.4 71 68 71 57.2C71 51.2 70 45.6 68 41.8C64 34.6 56.4 30 48 30Z"/>
+
+<!-- plain gold horns on the crown -->
+<path class="mm-gold mm-ln" d="M30.6 44.4C26.4 38.4 22.4 30.4 19.6 24C19 21 21.2 19.4 23 21.4C28 26.6 34.6 33.4 41.4 38.8C38.2 42 34 44.4 30.6 44.4Z"/>
+<path class="mm-gold mm-ln" d="M65.4 44.4C69.6 38.4 73.6 30.4 76.4 24C77 21 74.8 19.4 73 21.4C68 26.6 61.4 33.4 54.6 38.8C57.8 42 62 44.4 65.4 44.4Z"/>
+
+<!-- beard: long, grey, split into five braids -->
+<path class="mm-beard mm-ln" d="M24.4 70C20.8 79 19.4 88.4 20.4 94.8C21 100 23 103.8 25.4 105.6C24.2 114.0 24.4 116.4 25.3 117.8C26.8 120.2 30.8 120.2 32.3 117.8C33.2 116.4 33.4 114.0 33.4 105.4C33.8 118.0 34.0 120.4 34.9 121.8C36.4 124.2 40.4 124.2 41.9 121.8C42.8 120.4 43.0 118.0 43.0 105.4C43.4 122.0 43.6 124.4 44.5 125.8C46.0 128.2 50.0 128.2 51.5 125.8C52.4 124.4 52.6 122.0 52.6 105.4C53.0 118.0 53.2 120.4 54.1 121.8C55.6 124.2 59.6 124.2 61.1 121.8C62.0 120.4 62.2 118.0 62.2 105.4C62.6 114.0 62.8 116.4 63.7 117.8C65.2 120.2 69.2 120.2 70.7 117.8C71.6 116.4 71.8 114.0 71.8 105.4C73 103.4 75 99.6 75.6 94.8C76.6 88.4 75.2 79 71.6 70C69.6 79 66 86 60 89.4C56.4 91.8 52.8 92.8 48 92.8C43.2 92.8 39.6 91.8 36 89.4C30 86 26.4 79 24.4 70Z"/>
+
+<!-- gold rings at every braid end -->
+<g class="mm-ring">
+  <ellipse class="mm-beard mm-ln mm-w16" cx="26.9" cy="119.4" rx="1.5" ry="2.2"/>
+  <circle class="mm-gold mm-ln mm-w16" cx="26.9" cy="116.2" r="3.3"/>
+  <circle class="mm-hole" cx="26.9" cy="116.2" r="1.3"/>
+</g>
+<g class="mm-ring">
+  <ellipse class="mm-beard mm-ln mm-w16" cx="37.8" cy="126.60000000000001" rx="1.5" ry="2.2"/>
+  <circle class="mm-gold mm-ln mm-w16" cx="37.8" cy="123.4" r="3.5"/>
+  <circle class="mm-hole" cx="37.8" cy="123.4" r="1.4"/>
+</g>
+<g class="mm-ring">
+  <ellipse class="mm-beard mm-ln mm-w16" cx="46.4" cy="131.79999999999998" rx="1.5" ry="2.2"/>
+  <circle class="mm-gold mm-ln mm-w16" cx="46.4" cy="128.6" r="3.8"/>
+  <circle class="mm-hole" cx="46.4" cy="128.6" r="1.5"/>
+</g>
+<g class="mm-ring">
+  <ellipse class="mm-beard mm-ln mm-w16" cx="58.1" cy="125.60000000000001" rx="1.5" ry="2.2"/>
+  <circle class="mm-gold mm-ln mm-w16" cx="58.1" cy="122.4" r="3.5"/>
+  <circle class="mm-hole" cx="58.1" cy="122.4" r="1.4"/>
+</g>
+<g class="mm-ring">
+  <ellipse class="mm-beard mm-ln mm-w16" cx="69.2" cy="117.8" rx="1.5" ry="2.2"/>
+  <circle class="mm-gold mm-ln mm-w16" cx="69.2" cy="114.6" r="3.3"/>
+  <circle class="mm-hole" cx="69.2" cy="114.6" r="1.3"/>
+</g>
+
+<!-- curious -->
+<g class="mm-mark mm-curious" transform="translate(48.6 13) scale(1.3) translate(-48.6 -13)"><g class="mm-bob">
+  <path class="mm-mk" d="M43.4 10.2C43.2 6.6 46 4.4 49.4 4.8C53.2 5.2 55.2 8.4 53.6 11.2C52.6 13 50.6 13.6 50.2 15.4L50.2 17L48.4 17L48.4 15C48.8 12.6 51 11.6 51.6 9.8C52.2 7.8 50.6 6.6 48.8 6.6C46.8 6.6 45.2 8 45.2 10.2Z"/>
+  <circle class="mm-mk" cx="49.3" cy="21.4" r="2.1"/>
+</g></g>
+<g class="mm-face mm-curious">
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(0 -5.6) rotate(3 30 54)"/>
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(96 1.6) scale(-1 1) rotate(11 30 54)"/>
+  <g class="mm-blink">
+    <ellipse class="mm-eye mm-ln mm-w18" cx="37.5" cy="59" rx="6.3" ry="5.5" transform="rotate(9 37.5 59)"/>
+    <ellipse class="mm-eye mm-ln mm-w18" cx="58.5" cy="59" rx="6.3" ry="5.5" transform="rotate(-9 58.5 59)"/>
+    <ellipse class="mm-gold" cx="37.5" cy="57.6" rx="4" ry="4.2"/>
+    <ellipse class="mm-gold" cx="58.5" cy="57.6" rx="4" ry="4.2"/>
+    <circle class="mm-ink" cx="37.5" cy="57.2" r="2" />
+    <circle class="mm-ink" cx="58.5" cy="57.2" r="2"/>
+    <circle class="mm-eye" cx="36.4" cy="55.8" r=".9"/>
+    <circle class="mm-eye" cx="57.4" cy="55.8" r=".9"/>
+  </g>
+  <ellipse class="mm-ink" cx="49" cy="81.6" rx="3.8" ry="3.2"/>
+</g>
+
+<!-- explaining -->
+<g class="mm-face mm-explaining">
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(0 -3.8) rotate(-5 30 54)"/>
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(96 1.8) scale(-1 1) rotate(6 30 54)"/>
+  <g class="mm-blink">
+    <ellipse class="mm-eye mm-ln mm-w18" cx="37.5" cy="59" rx="6.1" ry="5.3" transform="rotate(9 37.5 59)"/>
+    <ellipse class="mm-eye mm-ln mm-w18" cx="58.5" cy="59" rx="6.1" ry="5.3" transform="rotate(-9 58.5 59)"/>
+    <ellipse class="mm-gold" cx="37.5" cy="57.8" rx="3.6" ry="3.8"/>
+    <ellipse class="mm-gold" cx="58.5" cy="57.8" rx="3.6" ry="3.8"/>
+    <circle class="mm-ink" cx="37.5" cy="57.4" r="2"/>
+    <circle class="mm-ink" cx="58.5" cy="57.4" r="2"/>
+    <circle class="mm-eye" cx="36.4" cy="56" r=".9"/>
+    <circle class="mm-eye" cx="57.4" cy="56" r=".9"/>
+  </g>
+  <path class="mm-ink mm-ln" d="M40.4 78.4H55.6C55.6 85.2 51.8 87.2 48 87.2C44.2 87.2 40.4 85.2 40.4 78.4Z"/>
+  <path class="mm-blush" d="M44.4 83.2C45.8 81.4 50.2 81.4 51.6 83.2C50.2 85 45.8 85 44.4 83.2Z"/>
+</g>
+
+<!-- thinking -->
+<g class="mm-mark mm-thinking" transform="translate(48 13) scale(1.35) translate(-48 -13)"><g class="mm-bob">
+  <circle class="mm-mk" cx="33.6" cy="14.4" r="2"/>
+  <circle class="mm-mk" cx="40.6" cy="9.4" r="2.3"/>
+  <circle class="mm-mk" cx="47.6" cy="5.4" r="2.9"/>
+</g></g>
+<g class="mm-face mm-thinking">
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(0 1.4) rotate(9 30 54)"/>
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(96 -3.2) scale(-1 1) rotate(-7 30 54)"/>
+  <g class="mm-blink">
+    <ellipse class="mm-eye mm-ln mm-w18" cx="37.5" cy="59" rx="5.7" ry="4.9" transform="rotate(9 37.5 59)"/>
+    <ellipse class="mm-eye mm-ln mm-w18" cx="58.5" cy="59" rx="5.7" ry="4.9" transform="rotate(-9 58.5 59)"/>
+    <ellipse class="mm-gold" cx="35.6" cy="57.2" rx="3.1" ry="3.2"/>
+    <ellipse class="mm-gold" cx="56.6" cy="57.2" rx="3.1" ry="3.2"/>
+    <circle class="mm-ink" cx="35.2" cy="56.6" r="1.8"/>
+    <circle class="mm-ink" cx="56.2" cy="56.6" r="1.8"/>
+    <circle class="mm-eye" cx="34.3" cy="55.6" r=".8"/>
+    <circle class="mm-eye" cx="55.3" cy="55.6" r=".8"/>
+  </g>
+  <path class="mm-ink mm-ln" d="M42.4 80.4C45.4 79.2 50.6 79.6 53.6 81.4C50.6 84.4 45 84 42.4 80.4Z"/>
+</g>
+
+<!-- surprised -->
+<g class="mm-face mm-surprised">
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(0 -6.4) rotate(-3 30 54)"/>
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(96 -6.4) scale(-1 1) rotate(-3 30 54)"/>
+  <g class="mm-blink">
+    <ellipse class="mm-eye mm-ln mm-w2" cx="37" cy="58.6" rx="7" ry="7.2"/>
+    <ellipse class="mm-eye mm-ln mm-w2" cx="59" cy="58.6" rx="7" ry="7.2"/>
+    <circle class="mm-gold" cx="37" cy="58.6" r="2.2"/>
+    <circle class="mm-gold" cx="59" cy="58.6" r="2.2"/>
+    <circle class="mm-ink" cx="37" cy="58.6" r="1.2"/>
+    <circle class="mm-ink" cx="59" cy="58.6" r="1.2"/>
+  </g>
+  <ellipse class="mm-ink mm-ln mm-w16" cx="48" cy="83.4" rx="4.4" ry="6"/>
+</g>
+
+<!-- pleased -->
+<g class="mm-face mm-pleased">
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(0 2.2) rotate(-4 30 54)"/>
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(96 2.2) scale(-1 1) rotate(-4 30 54)"/>
+  <path class="mm-ln mm-nofill mm-w34" d="M33.2 63.8Q37.6 57.6 42 63.8"/>
+  <path class="mm-ln mm-nofill mm-w34" d="M54 63.8Q58.4 57.6 62.8 63.8"/>
+  <path class="mm-ln mm-nofill mm-w34" d="M41 80Q48 87.2 55 80"/>
+</g>
+
+<!-- proud -->
+<g class="mm-mark mm-proud" transform="translate(48.4 13) scale(1.32) translate(-48.4 -13)"><g class="mm-bob">
+  <path class="mm-mk" d="M36.6 7.8L37.6 10L39.8 11L37.6 12L36.6 14.2L35.6 12L33.4 11L35.6 10Z"/>
+  <path class="mm-mk" d="M60.4 9.4L61.2 11.2L63 12L61.2 12.8L60.4 14.6L59.6 12.8L57.8 12L59.6 11.2Z"/>
+  <path class="mm-mk" d="M36.4 17.2L37 18.4L38.2 19L37 19.6L36.4 20.8L35.8 19.6L34.6 19L35.8 18.4Z"/>
+  <path class="mm-mk" d="M60.6 17.4L61.2 18.6L62.4 19.2L61.2 19.8L60.6 21L60 19.8L58.8 19.2L60 18.6Z"/>
+  <path class="mm-mk" d="M46.6 4.4L50.2 4.4L49.3 15L47.5 15Z"/>
+  <circle class="mm-mk" cx="48.4" cy="19.6" r="2.15"/>
+</g></g>
+<g class="mm-face mm-proud">
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(0 1.6) rotate(-6 30 54)"/>
+  <path class="mm-brow-l" d="M29.8 50.8C30.8 44.8 36.4 43 43.4 44.4C44.2 44.8 44 46.4 42.8 46.8C37 48 33 50.2 31.4 52.8C30.4 53 29.6 52.2 29.8 50.8Z" transform="translate(96 1.6) scale(-1 1) rotate(-6 30 54)"/>
+  <path class="mm-ln mm-nofill mm-w34" d="M33.2 63.6Q37.6 57.4 42 63.6"/>
+  <path class="mm-ln mm-nofill mm-w34" d="M54 63.6Q58.4 57.4 62.8 63.6"/>
+  <path class="mm-eye mm-ln mm-w16" d="M39.6 78H56.4A9.2 10 0 0 1 39.6 78Z"/>
+  <path class="mm-ln mm-nofill mm-w16" d="M41.2 81.2H54.8"/>
+  <path class="mm-blush" d="M44.2 84.8C45.6 83 50.4 83 51.8 84.8C50.4 86.6 45.6 86.6 44.2 84.8Z"/>
+</g>
+
+<!-- moustache, beads and nose on top -->
+<path class="mm-beard mm-ln mm-w2" d="M46.6 70.6C42.2 71 36.8 73.4 32.2 77C29.8 79 28.2 81.6 29.8 83.6C31.6 85.6 35 83.6 37.4 81.2C40.4 78.4 43.6 77 47 77.4Z"/>
+<path class="mm-beard mm-ln mm-w2" d="M49.4 70.6C53.8 71 59.2 73.4 63.8 77C66.2 79 67.8 81.6 66.2 83.6C64.4 85.6 61 83.6 58.6 81.2C55.6 78.4 52.4 77 49 77.4Z"/>
+<path class="mm-ln mm-nofill mm-w16" d="M34.2 81.8L34.6 83.2M61.8 81.8L61.4 83.2"/>
+<ellipse class="mm-gold mm-ln mm-w16" cx="34.8" cy="85.8" rx="1.7" ry="2.8"/>
+<ellipse class="mm-gold mm-ln mm-w16" cx="61.2" cy="85.8" rx="1.7" ry="2.8"/>
+<circle class="mm-eye" cx="35.8" cy="80.8" r=".5"/>
+<circle class="mm-eye" cx="58.6" cy="80.8" r=".5"/>
+<path class="mm-deep" d="M48 56.6C46.6 56.6 45.6 57.8 45.2 60C44.8 62.2 43.6 63.6 42.4 65C41.2 66.6 41.8 68.6 43.6 69.2C45 69.6 46.4 69.4 48 69.4C49.6 69.4 51 69.6 52.4 69.2C54.2 68.6 54.8 66.6 53.6 65C52.4 63.6 51.2 62.2 50.8 60C50.4 57.8 49.4 56.6 48 56.6Z"/>
+<path class="mm-nose" d="M43.4 66.2C43.4 63.8 45.4 62.4 48 62.4C50.6 62.4 52.6 63.8 52.6 66.2C52.6 68 50.8 69 48 69C45.2 69 43.4 68 43.4 66.2Z" opacity=".45"/>
+<path class="mm-ln mm-nofill mm-w2" d="M42.2 65.4C41.2 66.8 41.8 68.6 43.6 69.2C45 69.6 46.4 69.4 48 69.4C49.6 69.4 51 69.6 52.4 69.2C54.2 68.6 54.8 66.8 53.8 65.4"/>
+</svg>

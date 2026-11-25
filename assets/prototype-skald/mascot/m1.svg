@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 142" role="img" aria-label="Mimir">
+<style>
+.mimir-mascot .mm-ln{stroke:var(--mm-ink);stroke-width:4;stroke-linejoin:round;stroke-linecap:round}
+.mimir-mascot .mm-skin{fill:color-mix(in srgb,var(--mm-accent) 18%,color-mix(in srgb,var(--mm-ink) 9%,var(--mm-paper)))}
+.mimir-mascot .mm-nose{fill:color-mix(in srgb,var(--mm-accent) 48%,color-mix(in srgb,var(--mm-ink) 9%,var(--mm-paper)))}
+.mimir-mascot .mm-beard{fill:color-mix(in srgb,var(--mm-ink) 8%,var(--mm-paper))}
+.mimir-mascot .mm-blush{fill:color-mix(in srgb,var(--mm-accent) 55%,var(--mm-paper))}
+.mimir-mascot .mm-ink{fill:var(--mm-ink)}
+.mimir-mascot .mm-paper{fill:var(--mm-paper)}
+.mimir-mascot .mm-acc{fill:var(--mm-accent)}
+.mimir-mascot .mm-brow{fill:none;stroke:var(--mm-ink);stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+.mimir-mascot .mm-st{fill:none;stroke:var(--mm-ink);stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round}
+.mimir-mascot .mm-mk-o{fill:none;stroke:var(--mm-ink);stroke-width:14;stroke-linecap:round;stroke-linejoin:round}
+.mimir-mascot .mm-mk-i{fill:none;stroke:var(--mm-accent);stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+.mimir-mascot[data-mood]:not([data-mood="curious"]) .mm-curious,
+.mimir-mascot:not([data-mood="explaining"]) .mm-explaining,
+.mimir-mascot:not([data-mood="thinking"]) .mm-thinking,
+.mimir-mascot:not([data-mood="surprised"]) .mm-surprised,
+.mimir-mascot:not([data-mood="pleased"]) .mm-pleased,
+.mimir-mascot:not([data-mood="proud"]) .mm-proud{opacity:0}
+@media (prefers-reduced-motion:no-preference){
+.mimir-mascot:is([data-motion="gentle"] *,[data-motion="full"] *) .mm-face,
+.mimir-mascot:is([data-motion="gentle"] *,[data-motion="full"] *) .mm-mark{transition:opacity .2s ease}
+.mimir-mascot:is([data-motion="full"] *) .mm-bob{animation:mm1-bob 3s ease-in-out infinite}
+.mimir-mascot:is([data-motion="full"] *) .mm-blink{transform-box:fill-box;transform-origin:center;animation:mm1-blink 5.5s infinite}
+.mimir-mascot:is([data-motion="full"] *)[data-mood="curious"] .mm-face.mm-curious,
+.mimir-mascot:is([data-motion="full"] *)[data-mood="explaining"] .mm-face.mm-explaining,
+.mimir-mascot:is([data-motion="full"] *)[data-mood="thinking"] .mm-face.mm-thinking,
+.mimir-mascot:is([data-motion="full"] *)[data-mood="surprised"] .mm-face.mm-surprised,
+.mimir-mascot:is([data-motion="full"] *)[data-mood="pleased"] .mm-face.mm-pleased,
+.mimir-mascot:is([data-motion="full"] *)[data-mood="proud"] .mm-face.mm-proud{animation:mm1-nod .45s ease-out}
+@keyframes mm1-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+@keyframes mm1-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.12)}}
+@keyframes mm1-nod{0%{transform:translateY(0)}40%{transform:translateY(2px)}100%{transform:translateY(0)}}
+}
+</style>
+<g transform="translate(0,8)">
+  <ellipse class="mm-skin mm-ln" cx="30" cy="66" rx="6" ry="8"/>
+  <ellipse class="mm-skin mm-ln" cx="90" cy="66" rx="6" ry="8"/>
+  <path class="mm-skin mm-ln" d="M29,84 C27,50 41,30 60,30 C79,30 93,50 91,84 Z"/>
+  <ellipse class="mm-blush" cx="38.5" cy="75" rx="6" ry="4"/>
+  <ellipse class="mm-blush" cx="81.5" cy="75" rx="6" ry="4"/>
+  <path class="mm-beard mm-ln" d="M28.0,63.3 A13.5,13.5 0 0 0 15.7,81.2 A12.9,12.9 0 0 0 15.5,102.0 A13.4,13.4 0 0 0 27.3,120.1 A14.4,14.4 0 0 0 48.0,130.6 A14.9,14.9 0 0 0 72.0,130.6 A14.4,14.4 0 0 0 92.7,120.1 A13.4,13.4 0 0 0 104.5,102.0 A12.9,12.9 0 0 0 104.3,81.2 A13.5,13.5 0 0 0 92.0,63.3 C90,80 78,88 60,89 C42,88 30,80 28,63.3 Z"/>
+
+  <g class="mm-face mm-curious">
+    <path class="mm-st" d="M53,101 Q60,106 67,101"/>
+  </g>
+  <g class="mm-face mm-explaining">
+    <path class="mm-ink mm-ln" d="M52,99 Q60,98 68,99 Q67,110 60,110 Q53,110 52,99 Z"/>
+    <path class="mm-acc" d="M56,107.5 Q60,104.5 64,107.5 Q62,109 60,109 Q58,109 56,107.5 Z"/>
+  </g>
+  <g class="mm-face mm-thinking">
+    <path class="mm-st" d="M56,104 Q60,101 64,103 Q68,105 72,100"/>
+  </g>
+  <g class="mm-face mm-surprised">
+    <ellipse class="mm-ink" cx="60" cy="105" rx="5" ry="6.5"/>
+  </g>
+  <g class="mm-face mm-pleased">
+    <path class="mm-st" d="M49,99.5 Q60,109 71,99.5"/>
+  </g>
+  <g class="mm-face mm-proud">
+    <path class="mm-ink mm-ln" d="M48,98 Q60,100 72,98 Q70,113 60,113 Q50,113 48,98 Z"/>
+    <path class="mm-paper" d="M51,100 Q60,101.5 69,100 L68.4,103 Q60,104.5 51.6,103 Z"/>
+  </g>
+
+  <path class="mm-beard mm-ln" d="M60,84 C52,79 40,81 36,90 C41,97 53,97 60,91 C67,97 79,97 84,90 C80,81 68,79 60,84 Z"/>
+  <circle class="mm-nose mm-ln" cx="60" cy="79" r="9.5"/>
+
+  <g class="mm-face mm-curious">
+    <path class="mm-brow" d="M39,55 Q46,51 53,55"/>
+    <path class="mm-brow" d="M67,58 Q74,56 81,58"/>
+    <g class="mm-blink"><circle class="mm-ink" cx="46" cy="67" r="4.4"/><circle class="mm-ink" cx="74" cy="67" r="4.4"/></g>
+  </g>
+  <g class="mm-face mm-explaining">
+    <path class="mm-brow" d="M39,54 Q46,47 53,53"/>
+    <path class="mm-brow" d="M67,59 L81,58"/>
+    <g class="mm-blink"><circle class="mm-ink" cx="46" cy="67" r="4.4"/><circle class="mm-ink" cx="74" cy="67" r="4.4"/></g>
+  </g>
+  <g class="mm-face mm-thinking">
+    <path class="mm-brow" d="M39,59 L53,57.5"/>
+    <path class="mm-brow" d="M67,54 Q74,50 81,54"/>
+    <g class="mm-blink"><circle class="mm-ink" cx="49" cy="64" r="4.4"/><circle class="mm-ink" cx="77" cy="64" r="4.4"/></g>
+  </g>
+  <g class="mm-face mm-surprised">
+    <path class="mm-brow" d="M39,52 Q46,45 53,51"/>
+    <path class="mm-brow" d="M67,51 Q74,45 81,52"/>
+    <circle class="mm-ink" cx="46" cy="66" r="5.8"/><circle class="mm-ink" cx="74" cy="66" r="5.8"/>
+    <circle class="mm-paper" cx="44" cy="64" r="1.9"/><circle class="mm-paper" cx="72" cy="64" r="1.9"/>
+  </g>
+  <g class="mm-face mm-pleased">
+    <path class="mm-brow" d="M39,58 Q46,55 53,58"/>
+    <path class="mm-brow" d="M67,58 Q74,55 81,58"/>
+    <path class="mm-st" d="M42,69 Q46,64 50,69"/><path class="mm-st" d="M70,69 Q74,64 78,69"/>
+  </g>
+  <g class="mm-face mm-proud">
+    <path class="mm-brow" d="M39,55 Q46,51 53,55"/>
+    <path class="mm-brow" d="M67,55 Q74,51 81,55"/>
+    <path class="mm-st" d="M41,69 Q46,63 51,69"/><path class="mm-st" d="M69,69 Q74,63 79,69"/>
+  </g>
+</g>
+
+<g class="mm-mark mm-curious" transform="translate(94,14) rotate(14)">
+  <g class="mm-bob">
+    <path class="mm-mk-o" d="M-7,-5 C-7,-13 7,-14 7,-6 C7,0 0,0 0,5"/>
+    <circle class="mm-ink" cx="0" cy="14" r="7"/>
+    <path class="mm-mk-i" d="M-7,-5 C-7,-13 7,-14 7,-6 C7,0 0,0 0,5"/>
+    <circle class="mm-acc" cx="0" cy="14" r="4"/>
+  </g>
+</g>
+<g class="mm-mark mm-proud" transform="translate(94,14) rotate(12)">
+  <g class="mm-bob">
+    <path class="mm-mk-o" d="M0,-10 L0,4"/>
+    <circle class="mm-ink" cx="0" cy="14" r="7"/>
+    <path class="mm-mk-i" d="M0,-10 L0,4"/>
+    <circle class="mm-acc" cx="0" cy="14" r="4"/>
+  </g>
+</g>
+<g class="mm-mark mm-thinking" transform="translate(0,0)">
+  <g class="mm-bob">
+    <circle class="mm-acc mm-ln" cx="85" cy="31" r="3" style="stroke-width:2.5"/>
+    <circle class="mm-acc mm-ln" cx="93" cy="20.5" r="4.4" style="stroke-width:2.5"/>
+    <circle class="mm-acc mm-ln" cx="104" cy="8.5" r="6.2" style="stroke-width:2.5"/>
+  </g>
+</g>
+</svg>

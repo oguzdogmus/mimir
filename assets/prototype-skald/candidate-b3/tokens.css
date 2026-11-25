@@ -1,0 +1,525 @@
+/*
+ * Skald, candidate B3: "Chalk and slate". PROTOTYPE (issue #87), throwaway.
+ * Design tokens and base rules injected under every Mimir page.
+ * Dark theme: a deep blue-grey slate lecture board, chalk-white text, yellow and sky-blue chalk.
+ * Light theme: a cool pale whiteboard, teal-black marker text, a blue marker for the pen.
+ * Builders compose the body freely with the classes documented in guide.md.
+ */
+
+/* ---------- Fonts (OFL, bundled in ../fonts) ---------- */
+@font-face {
+  font-family: "Familjen Grotesk"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url("../fonts/familjen-grotesk-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Familjen Grotesk"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url("../fonts/familjen-grotesk-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 200 800; font-display: swap;
+  src: url("../fonts/atkinson-hyperlegible-next-latin-wght.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 200 800; font-display: swap;
+  src: url("../fonts/atkinson-hyperlegible-next-latin-ext-wght.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible Next"; font-style: italic; font-weight: 200 800; font-display: swap;
+  src: url("../fonts/atkinson-hyperlegible-next-latin-wght-italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible Next"; font-style: italic; font-weight: 200 800; font-display: swap;
+  src: url("../fonts/atkinson-hyperlegible-next-latin-ext-wght-italic.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Kalam"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/kalam-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Kalam"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/kalam-latin-ext-400.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Kalam"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../fonts/kalam-latin-700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Kalam"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../fonts/kalam-latin-ext-700.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---------- Tokens: light (whiteboard, marker ink) ---------- */
+:root {
+  color-scheme: light;
+  --board: #eef2f1;            /* the page: a cool pale whiteboard */
+  --board-deep: #e3e9e8;       /* sunk areas: tape cells, sticky figure */
+  --ledge: #dae1e0;            /* the marker tray (step controls) */
+  --ledge-edge: #b9c4c3;
+  --ink: #11282b;              /* teal-black marker */
+  --ink-soft: #445a5d;
+  --ink-faint: #6b7f81;
+  --rule: #c3cfce;
+  --mark: #2148b0;             /* the teaching pen: blue marker */
+  --mark-wash: rgba(33, 72, 176, .2);
+  --mark-blend: multiply;
+  --mark-filter: url(#sk-marker);
+  --mark-width: 2.8;
+  --second: #0b7653;           /* second pen: green marker (answers, curves) */
+
+  /* figures */
+  --fig-ink: #11282b;          /* the one neutral ink for formal notation */
+  --fig-soft: #6c8183;         /* axes, grids, leader lines, ghosts */
+  --fig-paper: var(--board);   /* knock-outs and halos */
+  --fig-curve: var(--second);  /* default curve colour in plots */
+  /* pigments and washes for depictions and Mimir's own sketches */
+  --pig-ochre: #a8741c;  --wash-ochre: #f2e3bf;
+  --pig-moss: #4f7a3a;   --wash-moss: #dce8d0;
+  --pig-violet: #5b4a9a; --wash-violet: #e3def2;
+  --pig-sky: #2f6f97;    --wash-sky: #d3e5ee;
+  --arterial: #b3261e;   --venous: #2f4f9e;   /* only where the field uses them */
+
+  /* type */
+  --font-title: "Familjen Grotesk", "Arial Narrow", system-ui, sans-serif;
+  --font-text: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, sans-serif;
+  --font-hand: "Kalam", "Segoe Print", "Comic Neue", cursive;
+  --font-tex: "KaTeX_Main", "KaTeX_Math", "Times New Roman", serif;
+  --fs-small: .875rem;
+  --fs-body: 1.0625rem;
+  --fs-intro: 1.125rem;
+  --fs-h3: 1.2rem;
+  --fs-h2: clamp(1.35rem, 1.2rem + .6vw, 1.65rem);
+  --fs-title: clamp(1.8rem, 1.35rem + 1.9vw, 2.7rem);
+  --lh-body: 1.6;
+
+  /* space */
+  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem; --sp-5: 1.5rem;
+  --sp-6: 2rem; --sp-7: 3rem; --sp-8: 4.5rem;
+  --gutter: clamp(1rem, .5rem + 2.2vw, 3rem);
+  --page: 78rem;               /* widest the board gets */
+  --measure: 38rem;            /* longest reading line */
+
+  /* motion */
+  --ease-chalk: cubic-bezier(.3, .6, .2, 1);
+  --t-settle: .6s;
+  --t-draw: 1.1s;
+
+  /* step-control progress */
+  --cur: 0; --tot: 1;
+
+  /* the mascot (the shell places him; these say where). 1200 px and up: 104 px,
+     fixed above the ledge at the right edge of the page column, in a lane no content
+     enters. Below 1200 px: 56 px, sitting on the ledge right of the Next button. */
+  --mimir-mascot-size-wide: 104px;
+  --mimir-mascot-right: max(var(--gutter), (100vw - var(--page)) / 2);
+  --mascot-lane: calc(var(--mimir-mascot-size-wide) + var(--sp-4));
+}
+
+/* ---------- Tokens: dark (blue-grey slate board, chalk) ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --board: #131a22; --board-deep: #1a232d; --ledge: #0c1117; --ledge-edge: #2a3644;
+    --ink: #e6eaee; --ink-soft: #aab5c0; --ink-faint: #73828f; --rule: #2f3d4b;
+    --mark: #f0d77a; --mark-wash: rgba(240, 215, 122, .2); --mark-blend: screen;
+    --mark-filter: url(#sk-chalk); --mark-width: 3.6;
+    --second: #93c5dd;
+    --fig-ink: #e6eaee; --fig-soft: #8b9bab;
+    --pig-ochre: #e2c06f; --wash-ochre: #3a3a25;
+    --pig-moss: #a9c98a;  --wash-moss: #263a2c;
+    --pig-violet: #b9a8e6; --wash-violet: #2c2d40;
+    --pig-sky: #93c5dd;   --wash-sky: #203a44;
+    --arterial: #ea6a5e;  --venous: #86a6ea;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --board: #131a22; --board-deep: #1a232d; --ledge: #0c1117; --ledge-edge: #2a3644;
+  --ink: #e6eaee; --ink-soft: #aab5c0; --ink-faint: #73828f; --rule: #2f3d4b;
+  --mark: #f0d77a; --mark-wash: rgba(240, 215, 122, .2); --mark-blend: screen;
+  --mark-filter: url(#sk-chalk); --mark-width: 3.6;
+  --second: #93c5dd;
+  --fig-ink: #e6eaee; --fig-soft: #8b9bab;
+  --pig-ochre: #e2c06f; --wash-ochre: #3a3a25;
+  --pig-moss: #a9c98a;  --wash-moss: #263a2c;
+  --pig-violet: #b9a8e6; --wash-violet: #2c2d40;
+  --pig-sky: #93c5dd;   --wash-sky: #203a44;
+  --arterial: #ea6a5e;  --venous: #86a6ea;
+}
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; background: var(--board); }
+body {
+  margin: 0;
+  background-color: var(--board);
+  color: var(--ink);
+  font: 400 var(--fs-body)/var(--lh-body) var(--font-text);
+  -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
+}
+/* the board surface: faint dust and the ghost of an earlier wipe */
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background:
+    radial-gradient(42% 26% at 18% 12%, var(--dust, rgba(17, 40, 43, .025)), transparent 70%),
+    radial-gradient(38% 30% at 86% 74%, var(--dust, rgba(17, 40, 43, .02)), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .55 0 0 0 0 .55 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+:root[data-theme="dark"] body::before { --dust: rgba(230, 234, 238, .04); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body::before { --dust: rgba(230, 234, 238, .04); } }
+
+/* the shared filters live in a hidden <svg class="sk-defs"> each page carries */
+.sk-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+::selection { background: var(--mark-wash); }
+a { color: var(--second); text-underline-offset: .2em; }
+p { margin: 0 0 var(--sp-4); }
+strong, b { font-weight: 700; }
+em, i { font-style: italic; }
+
+h1, h2, h3 {
+  font-family: var(--font-title); color: var(--ink); font-weight: 600;
+  line-height: 1.1; letter-spacing: -.008em; margin: 0 0 var(--sp-4); text-wrap: balance;
+}
+h1 { font-size: var(--fs-title); max-width: 24em; }
+h2 { font-size: var(--fs-h2); }
+h3 { font-size: var(--fs-h3); }
+
+/* ---------- The page ---------- */
+main {
+  --pad: max(var(--gutter), (100% - var(--page)) / 2);
+  padding: clamp(1.5rem, 1rem + 3vw, 4rem) var(--pad) 0;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  overflow-x: clip;
+}
+/* the mascot's lane: on a wide screen no content may sit in the rightmost strip of the
+   page column, at any scroll position (he is fixed there); the ledge still runs full
+   width. Below 1200 px he sits on the ledge instead (see Step controls). */
+@media (min-width: 1200px) {
+  main { padding-right: calc(var(--pad) + var(--mascot-lane)); }
+  #mimir-controls { margin-right: calc(-1 * var(--mascot-lane)); }
+}
+
+/* The heading block: a small chalked tag, the title, the intro. */
+.head { margin-bottom: clamp(1.75rem, 1rem + 3vw, 3.5rem); max-width: 52rem; }
+.tag {
+  display: inline-block; margin: 0 0 var(--sp-3);
+  font: 400 1rem/1.3 var(--font-hand); color: var(--ink-soft); letter-spacing: .01em;
+}
+.intro { font-size: var(--fs-intro); color: var(--ink-soft); max-width: var(--measure); margin: var(--sp-2) 0 0; }
+.intro .katex { color: var(--ink); }
+h1.question { font-size: clamp(1.45rem, 1.15rem + 1.3vw, 2.1rem); font-weight: 500; line-height: 1.3; max-width: 34em; }
+h1.question .katex { font-size: 1.04em; white-space: nowrap; }
+
+/* ---------- The board: figure as the centrepiece, the work beside it ---------- */
+.board {
+  --seam: clamp(1.25rem, .5rem + 1.6vw, 2.5rem);
+  display: grid; align-items: start;
+  grid-template-columns: minmax(0, 1.6fr) minmax(17rem, 1fr);
+  gap: var(--seam);
+}
+/* the seam between two board panels */
+.board > .work { border-left: 1.5px solid var(--rule); padding-left: var(--seam); align-self: stretch; }
+.board.work-first > .work { border-left: 0; border-right: 1.5px solid var(--rule); padding: 0 var(--seam) 0 0; }
+.board > figure { margin: 0; position: sticky; top: var(--sp-5); }
+.board.work-first { grid-template-columns: minmax(18rem, 1fr) minmax(0, 1.25fr); }
+.board.work-first > .work { order: -1; }
+.board > .work { min-width: 0; }
+
+/* Board work: numbered steps written in a column */
+.step {
+  display: grid; grid-template-columns: 2.1rem minmax(0, 1fr); column-gap: var(--sp-3);
+  padding: 0 0 var(--sp-5); scroll-margin: 2rem 0 6rem;
+}
+.step > * { grid-column: 2; min-width: 0; }
+.step > .n {
+  grid-column: 1; grid-row: 1 / span 9;
+  font: 700 1.45rem/1.05 var(--font-hand); color: var(--ink-faint);
+  padding-top: .1rem; transition: color .5s var(--ease-chalk);
+}
+.step > .n::after { content: "."; }
+.step[data-latest] > .n { color: var(--mark); }
+.step > :last-child, .step .body > :last-child { margin-bottom: 0; }
+.runin { font-family: var(--font-title); font-weight: 600; font-size: 1.06em; letter-spacing: .002em; }
+
+/* The answer: boxed by hand, as on a board */
+.answer {
+  position: relative; display: inline-block; margin: var(--sp-4) 0 0 .3rem; max-width: calc(100% - .9rem);
+  padding: .55rem .95rem .6rem;
+  font: 500 1.14rem/1.45 var(--font-title); color: var(--ink);
+}
+.answer::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  border: 2px solid var(--second); border-radius: 3px 6px 4px 7px / 6px 3px 7px 4px;
+  transform: rotate(-.7deg); filter: var(--mark-filter);
+}
+.answer::after {
+  content: ""; position: absolute; inset: 4px -5px -4px 3px; pointer-events: none;
+  border: 1.4px solid var(--second); border-left-color: transparent; border-top-color: transparent;
+  border-radius: 6px 3px 8px 3px; transform: rotate(.6deg); opacity: .65; filter: var(--mark-filter);
+}
+
+/* ---------- Figures ---------- */
+figure { margin: var(--sp-5) 0; }
+figure svg, svg.fig { display: block; width: 100%; height: auto; overflow: visible; }
+figcaption, .caption {
+  font: 400 .98rem/1.45 var(--font-hand); color: var(--ink-soft); margin-top: var(--sp-3); max-width: 34rem;
+}
+.frame-word { font: 400 1rem/1.2 var(--font-hand); color: var(--ink-soft); }
+
+svg text { font-family: var(--font-text); fill: var(--fig-ink); font-weight: 500; }
+svg .tex, svg text.tex { font-family: var(--font-tex); font-weight: 400; }
+svg .tex-i { font-family: "KaTeX_Math", var(--font-tex); font-style: normal; }
+svg .label { font-family: var(--font-hand); font-weight: 700; fill: var(--ink); }
+svg .small { font-family: var(--font-text); font-weight: 500; fill: var(--ink-soft); }
+svg .anchor { fill: var(--fig-soft); }
+svg .ghost { fill: none; stroke: var(--fig-soft); stroke-width: 1.5; stroke-dasharray: 4 6; }
+/* figures never grow past 36rem, so two SVG text sizes (desktop, phone) are enough */
+figure > svg { display: block; max-width: 36rem; margin-inline: auto; }
+/* the input tape: ol.tape > li cells; the reading cell carries data-highlight */
+.tape-row { display: flex; align-items: center; gap: 1.25rem; margin: var(--sp-3) 0 0; }
+ol.tape { list-style: none; display: flex; margin: 0; padding: 0; }
+ol.tape li { width: 2.6rem; height: 2.6rem; display: grid; place-items: center; margin: 0 -2px 0 0;
+  border: 2px solid var(--ink-soft); font: 400 1.45rem/1 var(--font-tex); }
+ol.tape li:nth-child(2) { border-radius: 2px 3px 1px 2px; }
+ol.tape::after { content: "\2026"; width: 2.4rem; display: grid; place-items: center;
+  color: var(--ink-faint); font: 400 1.2rem/1 var(--font-text); }
+ol.tape li[data-highlight-on]::after { inset: -.3em -.35em -.28em -.3em; }
+ol.tape li[data-highlight-on]::before { inset: -.22em -.3em -.34em -.36em; }
+svg .ink { stroke: var(--fig-ink); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+svg .ink-fill { fill: var(--fig-ink); stroke: none; }
+svg .soft { stroke: var(--fig-soft); fill: none; }
+svg .soft-fill { fill: var(--fig-soft); }
+svg .curve { stroke: var(--fig-curve); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+svg .leader { stroke: var(--fig-soft); fill: none; stroke-width: 1.3; stroke-linecap: round; }
+svg .knock { fill: var(--fig-paper); }
+svg .halo { paint-order: stroke; stroke: var(--fig-paper); stroke-width: 5px; stroke-linejoin: round; }
+
+/* Tables: a value table as a teacher draws it, one cross of lines, no box */
+.table-wrap { overflow-x: auto; margin: var(--sp-4) 0; scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+table { border-collapse: collapse; font-variant-numeric: tabular-nums lining-nums; }
+th, td { padding: .5em .85em; text-align: center; }
+th { font: 400 1rem/1.2 var(--font-hand); color: var(--ink-soft); text-align: left; padding-left: 0; }
+th[scope="row"] { border-right: 2px solid var(--fig-soft); }
+tr:first-child > * { border-bottom: 2px solid var(--fig-soft); }
+
+/* Small inline pieces */
+.sym {
+  display: inline-block; min-width: 1.5em; padding: 0 .3em; text-align: center;
+  font: 500 1em/1.35 var(--font-tex);
+  border: 1.5px solid var(--ink-faint); border-radius: 3px;
+}
+.katex { font-size: 1.07em; }
+.katex-display { margin: var(--sp-4) 0; overflow-x: auto; overflow-y: hidden; padding: var(--sp-2) 0;
+  scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- The teaching highlight: a chalk (or marker) loop ---------- */
+span[data-highlight] { display: inline-block; margin: 0 .2em; }
+/* HTML targets: two rough loops drawn round the target, never recolouring it */
+[data-highlight-on]:not(svg, svg *) { position: relative; z-index: 0; }
+[data-highlight-on]:not(svg, svg *)::before,
+[data-highlight-on]:not(svg, svg *)::after {
+  content: ""; position: absolute; pointer-events: none; z-index: -1;
+  border: 2.4px solid var(--mark); filter: var(--mark-filter);
+}
+[data-highlight-on]:not(svg, svg *)::after {
+  inset: -.42em -.72em -.36em -.58em;
+  border-radius: 40% 46% 38% 48% / 56% 44% 52% 40%;
+  transform: rotate(-2.4deg);
+}
+[data-highlight-on]:not(svg, svg *)::before {
+  inset: -.3em -.64em -.5em -.7em; border-width: 1.6px;
+  border-top-color: transparent; border-left-color: transparent;
+  border-radius: 54% 46% 52% 48% / 42% 58% 40% 60%;
+  transform: rotate(3.4deg); opacity: .8;
+}
+/* inline math sits in running text: keep the loop tight sideways so it does not
+   swallow the neighbouring punctuation */
+span[data-highlight-on]::after { inset: -.42em -.45em -.36em -.4em; }
+span[data-highlight-on]::before { inset: -.3em -.4em -.5em -.45em; }
+/* SVG targets: the mark is its own element beside the target.
+   .mark-loop  a rough loop round a thing (state, point, label, layer)
+   .mark-swipe a broad smear under a line (edge, part of a curve)   */
+svg .mark-loop, svg .mark-swipe { display: none; pointer-events: none; }
+svg .mark-loop[data-highlight-on], svg .mark-swipe[data-highlight-on] { display: inline; }
+svg .mark-loop { fill: none; stroke: var(--mark); stroke-width: var(--mark-width); stroke-linecap: round; stroke-linejoin: round; filter: var(--mark-filter); }
+svg .mark-swipe { fill: none; stroke: var(--mark-wash); stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; mix-blend-mode: var(--mark-blend); filter: var(--mark-filter); }
+/* fallback for an SVG target without its own mark: a soft glow in the pen colour */
+svg [data-highlight-on]:not(.mark-loop, .mark-swipe) {
+  filter: drop-shadow(0 0 1px var(--mark)) drop-shadow(0 0 4px var(--mark-wash));
+}
+
+/* ---------- Step controls: the board's ledge ---------- */
+:root[data-step-current="1"]{--cur:1} :root[data-step-current="2"]{--cur:2} :root[data-step-current="3"]{--cur:3}
+:root[data-step-current="4"]{--cur:4} :root[data-step-current="5"]{--cur:5} :root[data-step-current="6"]{--cur:6}
+:root[data-step-current="7"]{--cur:7} :root[data-step-current="8"]{--cur:8} :root[data-step-current="9"]{--cur:9}
+:root[data-step-current="10"]{--cur:10} :root[data-step-current="11"]{--cur:11} :root[data-step-current="12"]{--cur:12}
+:root[data-step-total="1"]{--tot:1} :root[data-step-total="2"]{--tot:2} :root[data-step-total="3"]{--tot:3}
+:root[data-step-total="4"]{--tot:4} :root[data-step-total="5"]{--tot:5} :root[data-step-total="6"]{--tot:6}
+:root[data-step-total="7"]{--tot:7} :root[data-step-total="8"]{--tot:8} :root[data-step-total="9"]{--tot:9}
+:root[data-step-total="10"]{--tot:10} :root[data-step-total="11"]{--tot:11} :root[data-step-total="12"]{--tot:12}
+
+#mimir-controls {
+  position: sticky; bottom: 0; z-index: 5; margin-top: auto;
+  display: flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-3) 0 max(var(--sp-3), env(safe-area-inset-bottom));
+}
+main > :nth-last-child(2) { margin-bottom: var(--sp-7); }
+#mimir-controls:empty { display: none; }
+#mimir-controls::after {            /* the tray, full width */
+  content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: -100vw; right: -100vw;
+  background: var(--ledge); border-top: 1px solid var(--ledge-edge);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent);
+}
+#mimir-controls::before {           /* a chalk line across the ledge: how far the lesson is */
+  content: ""; position: absolute; left: 0; top: -1px; height: 3px;
+  width: calc(100% * var(--cur) / var(--tot)); background: var(--mark); border-radius: 2px;
+  transition: width .5s var(--ease-chalk);
+}
+#mimir-controls button {
+  font: 600 .98rem/1 var(--font-text); letter-spacing: .005em;
+  min-height: 2.85rem; padding: 0 1.15rem; border-radius: 4px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: .5rem;
+  transition: background-color .2s, color .2s, border-color .2s;
+}
+#mimir-back { background: transparent; color: var(--ink-soft); border: 1.5px solid var(--rule); }
+#mimir-back::before { content: "←"; font-weight: 500; }
+#mimir-back:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-faint); }
+#mimir-next { order: 3; margin-left: auto; background: var(--ink); color: var(--board); border: 1.5px solid var(--ink); }
+#mimir-next::after { content: "→"; font-weight: 500; }
+#mimir-next:hover:not(:disabled) { background: var(--mark); border-color: var(--mark); }
+#mimir-controls button:disabled { opacity: .35; cursor: default; }
+#mimir-controls button:focus-visible { outline: 2.5px solid var(--mark); outline-offset: 3px; }
+#mimir-progress { order: 2; font: 700 1.15rem/1 var(--font-hand); color: var(--ink-soft); white-space: nowrap; }
+/* phone and narrow desktop: the mascot sits on the ledge, right of Next, 56 px wide */
+@media (max-width: 1199px) {
+  :root {
+    --mimir-mascot-size: 56px; --mimir-mascot-size-wide: 56px;
+    --mimir-mascot-bottom: max(2px, env(safe-area-inset-bottom));
+    --mimir-mascot-right: var(--gutter);
+  }
+  #mimir-controls { padding-right: calc(56px + var(--sp-3)); }
+}
+#mimir-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
+
+/* ---------- Narrow screens: one column, the figure pinned above the work ---------- */
+@media (max-width: 900px) {
+  .board, .board.work-first { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+  .board > .work, .board.work-first > .work { border: 0; padding: 0; }
+  .board:not(.work-first) > figure {
+    z-index: 2; top: 0; margin: 0 calc(-1 * var(--pad)); padding: var(--sp-3) var(--pad);
+    background: var(--board); border-bottom: 1.5px solid var(--rule);
+  }
+  .board:not(.work-first) > figure > figcaption { display: none; }
+  .board > .work .step { scroll-margin-top: var(--sticky-fig, 16rem); }
+  .board.work-first > figure { position: static; }
+  .step { grid-template-columns: 1.7rem minmax(0, 1fr); column-gap: var(--sp-2); }
+  .step .katex-display { margin-left: -1.7rem; }
+  .step .katex-display > .katex { font-size: .98em; }
+  th, td { padding: .45em .45em; }
+  #mimir-controls { gap: var(--sp-2); }
+  #mimir-controls button { padding: 0 .9rem; }
+}
+/* a figure caption that hides with the pinned figure on phone shows again below the work */
+.caption-phone { display: none; }
+@media (max-width: 900px) { .caption-phone { display: block; } }
+
+/* ---------- Motion ---------- */
+@property --sweep { syntax: "<angle>"; inherits: false; initial-value: 360deg; }
+@keyframes sk-settle { from { opacity: 0; transform: translateY(.3rem); } to { opacity: 1; transform: none; } }
+@keyframes sk-fade   { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sk-write  { from { clip-path: inset(-1em 100% -1em -1em); } to { clip-path: inset(-1em -1em -1em -1em); } }
+@keyframes sk-draw   { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes sk-wash   { from { fill-opacity: 0; } }
+@keyframes sk-circle { from { --sweep: 0deg; } to { --sweep: 360deg; } }
+
+/* none: nothing moves; every step still appears */
+:root[data-motion="none"] *, :root[data-motion="none"] *::before, :root[data-motion="none"] *::after {
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+/* gentle: the newest step fades up; figure parts and the mark fade in */
+:root[data-motion="gentle"] [data-latest]:not(svg, svg *) { animation: sk-settle var(--t-settle) var(--ease-chalk) both; }
+:root[data-motion="gentle"] svg [data-latest],
+:root[data-motion="gentle"] svg [data-highlight-on],
+:root[data-motion="gentle"] [data-highlight-on]:not(svg, svg *)::before,
+:root[data-motion="gentle"] [data-highlight-on]:not(svg, svg *)::after { animation: sk-fade .8s ease both; }
+/* full: the newest step is written left to right, strokes with pathLength="1" are drawn,
+   washes fill in after their outline, and the mark is drawn round its target */
+:root[data-motion="full"] [data-latest]:not(svg, svg *) { animation: sk-write .8s var(--ease-chalk) backwards; }
+:root[data-motion="full"] svg [data-latest] { animation: sk-fade .35s ease both; }
+:root[data-motion="full"] [data-latest] [pathLength="1"],
+:root[data-motion="full"] svg [data-latest][pathLength="1"] {
+  stroke-dasharray: 1 1; animation: sk-draw var(--t-draw) var(--ease-chalk) both;
+}
+:root[data-motion="full"] svg [data-latest] .wash { animation: sk-wash .8s .6s ease both; }
+:root[data-motion="full"] svg .mark-loop[data-highlight-on],
+:root[data-motion="full"] svg .mark-swipe[data-highlight-on] {
+  stroke-dasharray: 1 1; animation: sk-draw .85s .45s var(--ease-chalk) both;
+}
+:root[data-motion="full"] [data-highlight-on]:not(svg, svg *)::before,
+:root[data-motion="full"] [data-highlight-on]:not(svg, svg *)::after {
+  -webkit-mask: conic-gradient(from 210deg, #000 var(--sweep), transparent 0);
+  mask: conic-gradient(from 210deg, #000 var(--sweep), transparent 0);
+  animation: sk-circle .75s .3s var(--ease-chalk) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Print: a clean handout, no board ---------- */
+@media print {
+  @page { margin: 16mm 14mm; }
+  html:root:not([data-print-x]) {
+    color-scheme: light;
+    --board: #fff; --board-deep: #fff; --ink: #000; --ink-soft: #333; --ink-faint: #666;
+    --rule: #999; --fig-ink: #000; --fig-soft: #555; --fig-paper: #fff; --second: #000;
+    --wash-ochre: #f6efdc; --wash-moss: #edf3e7; --wash-violet: #efecf6; --wash-sky: #e9f1f5;
+    --pig-ochre: #7a5410; --pig-moss: #3b5c2b; --pig-violet: #463a7a; --pig-sky: #24557a;
+    --fig-curve: #000;
+  }
+  html, body { background: #fff !important; color: #000; }
+  body { font-size: 10.5pt; }
+  body::before { display: none; }
+  html.mimir-js [data-step]:not([data-revealed]) { display: revert !important; }
+  html.mimir-js .step[data-step]:not([data-revealed]) { display: grid !important; }
+  html.mimir-js svg .mark-loop, html.mimir-js svg .mark-swipe { display: none !important; }
+  [data-highlight-on]::before, [data-highlight-on]::after { display: none !important; }
+  svg [data-highlight-on] { filter: none !important; }
+  #mimir-controls { display: none !important; }
+  * { animation: none !important; transition: none !important; }
+  main { min-height: 0; padding: 0; }
+  .board, .board.work-first { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8mm; }
+  .board > figure { position: static; background: none; border: 0; margin: 0; padding: 0; }
+  .board > figure > figcaption { display: block; }
+  .caption-phone { display: none; }
+  .step, figure, table { break-inside: avoid; }
+  .step > .n { color: #000 !important; }
+  .answer::before, .answer::after { filter: none; }
+}

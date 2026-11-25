@@ -1,0 +1,499 @@
+/*
+ * Skald, candidate B2: "Risograph zine". PROTOTYPE (issue #87), throwaway.
+ * Design tokens and base rules injected under every Mimir page.
+ * Two spot inks on uncoated grey stock: the BLUE drum prints the content
+ * (text, notation, curves); the PINK drum is the storyteller's pen and the
+ * frame (stickers, tabs, halftones). Builders compose the body with the
+ * classes documented in guide.md.
+ */
+
+/* ---------- Fonts (all SIL OFL, licences next to the files) ---------- */
+@font-face {
+  font-family: "Bricolage Grotesque"; font-style: normal; font-weight: 200 800; font-stretch: 75% 100%;
+  font-display: swap; src: url("../fonts/bricolage-grotesque-latin-vf.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Bricolage Grotesque"; font-style: normal; font-weight: 200 800; font-stretch: 75% 100%;
+  font-display: swap; src: url("../fonts/bricolage-grotesque-latin-ext-vf.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Instrument Sans"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url("../fonts/instrument-sans-latin-vf.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Instrument Sans"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url("../fonts/instrument-sans-latin-ext-vf.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Shantell Sans"; font-style: normal; font-weight: 300 800; font-display: swap;
+  src: url("../fonts/shantell-sans-latin-vf.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Shantell Sans"; font-style: normal; font-weight: 300 800; font-display: swap;
+  src: url("../fonts/shantell-sans-latin-ext-vf.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---------- Tokens: light (blue + fluorescent pink on grey uncoated stock) ---------- */
+:root {
+  color-scheme: light;
+  --stock: #f3f5f7;           /* uncoated pale grey, never cream */
+  --ink: #2f4fa2;             /* drum 1, riso medium blue: text, notation, curves */
+  --ink-soft: #4a61a6;        /* small and secondary text (still >= 4.5:1) */
+  --ink-faint: #8c9cbf;       /* 50% screen of the blue */
+  --rule: #b3bdd0;            /* 30% screen of the blue */
+  --pink: #ff48b0;            /* drum 2, fluorescent pink: the pen and the frame. Never text. */
+  --over: #2f1670;            /* blue printed over pink: the overprint violet */
+  --tint-ink: #dce1e8;        /* 12% blue: plates */
+  --tint-pink: #edcfdd;       /* 18% pink */
+  --blend: multiply;          /* inks overprint by multiplying on light stock */
+  --pen: var(--pink);
+  --pen-wash: rgba(255, 72, 176, .34);
+  --mis-x: 3px; --mis-y: -2px; /* misregistration of the pink drum (decoration only) */
+
+  /* figures */
+  --fig-ink: var(--ink);      /* the one neutral ink for notation: the blue drum, never pink */
+  --fig-soft: #6f83b3;        /* 65% blue: axes, grids, leaders, ghosts */
+  --fig-paper: var(--stock);  /* knock-outs and halos */
+  --fig-plate: var(--tint-ink);
+  --fig-curve: var(--ink);
+  /* the two drums and their overprints, for depictions and Mimir's own sketches */
+  --dep-a: #2f4fa2;  --dep-a-mid: #8c9cbf;  --dep-a-tint: #cad0db;
+  --dep-b: #ff48b0;  --dep-b-mid: #ed99c6;  --dep-b-tint: #edcfdd;
+  --dep-ov: #2f1670; --dep-ov-mid: #8c64a1; --dep-ov-tint: #cab5cf;
+  /* conventional colours, only where the field uses them */
+  --arterial: #d4214f; --venous: #2f4fa2;
+
+  /* type */
+  --font-display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --font-text: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-hand: "Shantell Sans", "Comic Neue", "Segoe Print", cursive;
+  --font-tex: "KaTeX_Main", "KaTeX_Math", "Times New Roman", serif;
+  --fs-tiny: .78rem;
+  --fs-small: .875rem;
+  --fs-body: 1.0625rem;
+  --fs-lede: clamp(1.12rem, 1rem + .45vw, 1.32rem);
+  --fs-h3: clamp(1.2rem, 1.05rem + .5vw, 1.45rem);
+  --fs-h2: clamp(1.6rem, 1.2rem + 1.6vw, 2.4rem);
+  --fs-title: clamp(2.7rem, 1.2rem + 5.6vw, 6.4rem);
+  --lh-body: 1.6;
+
+  /* space (a 4-based scale) */
+  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem; --sp-5: 1.5rem;
+  --sp-6: 2rem; --sp-7: 3rem; --sp-8: 4.5rem;
+  --gutter: clamp(1rem, .5rem + 2vw, 2.5rem);
+  --page: 66rem;              /* the sheet */
+  --measure: 38rem;           /* the reading column */
+  --wide: 50rem;              /* plates and tables inside a step */
+  --tab: 2.75rem;             /* step sticker size */
+
+  /* halftone screens (frame only) */
+  --dots-pink: radial-gradient(circle closest-side, var(--pink) 0 58%, transparent 66%);
+  --dots-ink:  radial-gradient(circle closest-side, var(--ink) 0 52%, transparent 60%);
+
+  /* motion */
+  --ease-ink: cubic-bezier(.2, .7, .2, 1);
+  --t-settle: .6s;
+  --t-draw: 1.1s;
+}
+
+/* ---------- Tokens: dark (the same zine on black stock; inks bright, overprints screen) ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --stock: #131a22;
+    --ink: #a8bfff; --ink-soft: #93a9ec; --ink-faint: #586aa2; --rule: #303750;
+    --pink: #ff5db9; --over: #e2b6ff;
+    --tint-ink: #1d2531; --tint-pink: #392131;
+    --blend: screen;
+    --pen-wash: rgba(255, 93, 185, .38);
+    --fig-ink: #a8bfff; --fig-soft: #6f82bd; --fig-curve: #a8bfff;
+    --dep-a: #7c9cff;  --dep-a-mid: #414d73; --dep-a-tint: #252a3b;
+    --dep-b: #ff5db9;  --dep-b-mid: #71355a; --dep-b-tint: #392131;
+    --dep-ov: #e2b6ff; --dep-ov-mid: #8d679c; --dep-ov-tint: #483652;
+    --arterial: #ff5d7f; --venous: #7c9cff;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --stock: #131a22;
+  --ink: #a8bfff; --ink-soft: #93a9ec; --ink-faint: #586aa2; --rule: #303750;
+  --pink: #ff5db9; --over: #e2b6ff;
+  --tint-ink: #1d2531; --tint-pink: #392131;
+  --blend: screen;
+  --pen-wash: rgba(255, 93, 185, .38);
+  --fig-ink: #a8bfff; --fig-soft: #6f82bd; --fig-curve: #a8bfff;
+  --dep-a: #7c9cff;  --dep-a-mid: #414d73; --dep-a-tint: #252a3b;
+  --dep-b: #ff5db9;  --dep-b-mid: #71355a; --dep-b-tint: #392131;
+  --dep-ov: #e2b6ff; --dep-ov-mid: #8d679c; --dep-ov-tint: #483652;
+  --arterial: #ff5d7f; --venous: #7c9cff;
+}
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--stock);
+  color: var(--ink);
+  font: 400 var(--fs-body)/var(--lh-body) var(--font-text);
+  -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
+  overflow-x: clip;
+}
+/* riso grain: ink speckle and paper tooth over everything, very faint */
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+  opacity: .55; mix-blend-mode: var(--blend);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.15' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .55 0 0 0 0 .56 0 0 0 0 .6 0 0 0 -1.6 1.05'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+:root[data-theme="dark"] body::after { opacity: .22; filter: invert(1); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body::after { opacity: .22; filter: invert(1); } }
+
+::selection { background: var(--pen-wash); }
+a { color: var(--ink); text-decoration-color: var(--pink); text-decoration-thickness: 2px; text-underline-offset: .2em; }
+p { margin: 0 0 var(--sp-4); }
+strong, b { font-weight: 650; }
+
+h1, h2, h3 {
+  font-family: var(--font-display); color: var(--ink); font-stretch: 75%;
+  font-weight: 760; line-height: .98; letter-spacing: -.01em; margin: 0 0 var(--sp-4);
+  text-wrap: balance;
+}
+h1 { font-size: var(--fs-title); font-weight: 800; line-height: .9; letter-spacing: -.022em; }
+h2 { font-size: var(--fs-h2); }
+h3 { font-size: var(--fs-h3); font-weight: 700; font-stretch: 85%; }
+
+/* ---------- The sheet ---------- */
+main {
+  width: min(100% - 2 * var(--gutter), var(--page));
+  margin: 0 auto;
+  padding-top: clamp(1.5rem, .8rem + 3vw, 3.5rem);
+  min-height: 100vh;
+  position: relative;
+}
+main > * { max-width: var(--measure); }
+main > .wide, main > .masthead, main > .spread, main > hr, main > #mimir-controls { max-width: none; }
+main > .step { max-width: calc(var(--wide) + var(--tab) + var(--sp-5)); }
+.step > *, .body > * { max-width: var(--measure); }
+.step > .num { max-width: none; }
+.step .wide, .step figure, .step .table-wrap, .step .verdict { max-width: var(--wide); }
+
+/* Masthead: provenance tab, poster title, standfirst */
+.masthead { position: relative; isolation: isolate; padding: var(--sp-6) 0 var(--sp-5); }
+.masthead::before {          /* a pink halftone moon, cropped by the sheet's top right edge */
+  content: ""; position: absolute; z-index: -1; pointer-events: none;
+  right: calc(-1 * var(--gutter) - 4rem); top: calc(-1 * clamp(1.5rem, .8rem + 3vw, 3.5rem) - 5rem);
+  width: clamp(12rem, 6rem + 26vw, 26rem); aspect-ratio: 1; border-radius: 50%;
+  background: var(--dots-pink) 0 0 / 7px 7px;
+  -webkit-mask: radial-gradient(circle at 30% 70%, #000 34%, rgba(0,0,0,.25) 70.5%, transparent 71%);
+  mask: radial-gradient(circle at 30% 70%, #000 34%, rgba(0,0,0,.25) 70.5%, transparent 71%);
+  mix-blend-mode: var(--blend);
+}
+.masthead > * { max-width: 52rem; position: relative; }
+.masthead h1 { margin-bottom: var(--sp-5); }
+.tab {                        /* the provenance label: a pink sticker, slightly crooked */
+  display: inline-block; position: relative; margin: 0 0 var(--sp-5);
+  font: 600 var(--fs-tiny)/1.25 var(--font-display); font-stretch: 85%; letter-spacing: .04em;
+  color: var(--over); background: var(--pink); padding: .42em .7em .38em;
+  transform: rotate(-1.6deg); transform-origin: left bottom;
+}
+.tab::after {                /* the blue keyline, printed off register */
+  content: ""; position: absolute; inset: 0; border: 1.5px solid var(--ink);
+  transform: translate(calc(-1 * var(--mis-x)), calc(-1 * var(--mis-y)));
+  mix-blend-mode: var(--blend); pointer-events: none;
+}
+:root[data-theme="dark"] .tab { color: #1a0f22; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tab { color: #1a0f22; } }
+.lede { font-size: var(--fs-lede); line-height: 1.5; max-width: 40rem; color: var(--ink); }
+.lede > :last-child { margin-bottom: 0; }
+
+/* the section break: one pink pen squiggle */
+hr {
+  border: 0; height: 12px; margin: var(--sp-3) 0 var(--sp-6); width: min(100%, 22rem);
+  background: var(--pink); mix-blend-mode: var(--blend);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 352 12' preserveAspectRatio='none'%3E%3Cpath d='M2 7C14 2 22 2 32 6S52 11 64 6S84 1 96 5S116 10 128 6S148 2 160 5S180 10 192 6S212 1 224 5S244 10 256 6S276 2 288 6S308 10 320 6S340 3 350 4' fill='none' stroke='%23000' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 352 12' preserveAspectRatio='none'%3E%3Cpath d='M2 7C14 2 22 2 32 6S52 11 64 6S84 1 96 5S116 10 128 6S148 2 160 5S180 10 192 6S212 1 224 5S244 10 256 6S276 2 288 6S308 10 320 6S340 3 350 4' fill='none' stroke='%23000' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
+}
+
+/* ---------- Steps: a numbered block with a sticker ---------- */
+.step {
+  display: grid; grid-template-columns: var(--tab) minmax(0, 1fr); column-gap: var(--sp-5);
+  align-items: start; padding: var(--sp-5) 0 var(--sp-4);
+  scroll-margin: 5rem 0 7rem;
+}
+.step > * { grid-column: 2; min-width: 0; }
+.step > .num { grid-column: 1; grid-row: 1 / span 6; }
+.num {                        /* the step sticker: a blue tab, the pink drum slightly off */
+  position: relative; z-index: 0;
+  width: var(--tab); height: var(--tab); display: grid; place-items: center;
+  font: 800 1.55rem/1 var(--font-display); font-stretch: 75%; font-variant-numeric: lining-nums;
+  color: var(--stock);
+  transform: rotate(-3deg);
+}
+.step:nth-of-type(even) > .num { transform: rotate(2.2deg); }
+.num::before, .num::after { content: ""; position: absolute; inset: 0; z-index: -1; }
+.num::before { background: var(--pink); transform: translate(var(--mis-x), var(--mis-y)); }  /* pink drum, off register */
+.num::after  { background: var(--ink); }                                                    /* blue drum */
+[data-latest] > .num { color: var(--over); }
+[data-latest] > .num::after { background: var(--pink); }
+[data-latest] > .num::before { background: none; border: 2px solid var(--ink); z-index: 1;
+  transform: translate(calc(-1 * var(--mis-x)), calc(-1 * var(--mis-y))); mix-blend-mode: var(--blend); }
+:root[data-theme="dark"] [data-latest] > .num { color: #1a0f22; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) [data-latest] > .num { color: #1a0f22; } }
+.body > :last-child, .step > p:last-child { margin-bottom: 0; }
+.step p:first-of-type { margin-top: .45rem; }
+.runin { font-family: var(--font-display); font-weight: 750; font-stretch: 82%; font-size: 1.12em; letter-spacing: -.005em; }
+
+/* the answer line: a printed pink slab with a blue keyline off register */
+.verdict {
+  position: relative; isolation: isolate; margin: var(--sp-5) 0 var(--sp-2);
+  padding: var(--sp-4) var(--sp-5); background: var(--pink); color: var(--over);
+  font: 700 var(--fs-h3)/1.3 var(--font-display); font-stretch: 85%;
+}
+.verdict::after { content: ""; position: absolute; inset: 0; border: 2px solid var(--ink); transform: translate(calc(-1 * var(--mis-x)), calc(-1 * var(--mis-y))); mix-blend-mode: var(--blend); pointer-events: none; }
+.verdict .katex { font-size: 1em; }
+:root[data-theme="dark"] .verdict { color: #1a0f22; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .verdict { color: #1a0f22; } }
+
+.aside { font-size: var(--fs-small); color: var(--ink-soft); border-left: 3px solid var(--pink); padding-left: var(--sp-3); }
+
+/* Spread: a printed plate beside a run of steps (the plate sticks while steps change) */
+.spread {
+  display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: var(--sp-7); align-items: start;
+}
+.spread > figure { position: sticky; top: var(--sp-5); margin: 0; z-index: 1; }
+.spread > .run .step { grid-template-columns: var(--tab) minmax(0, 1fr); column-gap: var(--sp-4); padding: var(--sp-3) 0 var(--sp-4); }
+.spread > .run .step:first-child { padding-top: 0; }
+
+/* ---------- Figures: printed plates ---------- */
+figure { margin: var(--sp-5) 0; }
+figure svg, svg.fig { display: block; width: 100%; height: auto; overflow: visible; }
+.plate { background: var(--fig-plate); padding: clamp(.75rem, .4rem + 1.5vw, 1.5rem); position: relative; }
+figcaption, .caption {
+  font: 400 var(--fs-small)/1.45 var(--font-hand); color: var(--ink-soft); margin-top: var(--sp-3);
+}
+figcaption::before { content: ""; display: inline-block; width: 1.4em; height: .5em; margin-right: .5em; vertical-align: .1em; background: var(--pink); mix-blend-mode: var(--blend); transform: rotate(-4deg); }
+svg text { font-family: var(--font-text); fill: var(--fig-ink); font-weight: 500; }
+svg .tex, svg text.tex { font-family: var(--font-tex); font-weight: 400; }
+svg .tex-i { font-family: "KaTeX_Math", var(--font-tex); font-style: normal; }
+svg .label { font-family: var(--font-hand); font-weight: 520; }
+svg .small { font-family: var(--font-text); font-weight: 500; fill: var(--fig-soft); }
+svg .ink { stroke: var(--fig-ink); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+svg .ink-fill { fill: var(--fig-ink); stroke: none; }
+svg .soft { stroke: var(--fig-soft); fill: none; }
+svg .soft-fill { fill: var(--fig-soft); }
+svg .curve { stroke: var(--fig-curve); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+svg .leader { stroke: var(--fig-ink); fill: none; stroke-width: 1.2; }
+svg .knock { fill: var(--fig-paper); }
+svg .halo { paint-order: stroke; stroke: var(--fig-paper); stroke-width: 5px; stroke-linejoin: round; }
+
+/* Tables: heavy blue rules, no vertical rules */
+.table-wrap { overflow-x: auto; margin: var(--sp-4) 0; scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+table { border-collapse: collapse; font-variant-numeric: tabular-nums lining-nums; border-top: 3px solid var(--ink); border-bottom: 3px solid var(--ink); }
+th, td { padding: .55em .9em; text-align: center; }
+th { font: 700 var(--fs-small)/1.2 var(--font-display); font-stretch: 85%; letter-spacing: .02em; text-align: left; }
+tr + tr > * { border-top: 1.5px dotted var(--ink-faint); }
+
+/* Small inline pieces */
+.sym {
+  display: inline-block; min-width: 1.5em; padding: 0 .32em; margin: 0 .12em; text-align: center;
+  font: 700 1em/1.35 var(--font-display); font-stretch: 85%;
+  border: 1.5px solid var(--ink); background: var(--tint-ink);
+}
+.hand { font-family: var(--font-hand); font-weight: 500; }
+.katex { font-size: 1.08em; }
+.katex-display { margin: var(--sp-4) 0; overflow-x: auto; overflow-y: hidden; padding: var(--sp-2) 0;
+  scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- The teaching highlight: the pink pen ---------- */
+/* A loop drawn by hand in the pink drum, around the target, overprinting it.
+   It never recolours the target: it is a separate mark. */
+span[data-highlight] { display: inline-block; margin: 0 .3em 0 .34em; }
+[data-highlight-on]:not(svg, svg *) { position: relative; z-index: 0; }
+[data-highlight-on]:not(svg, svg *)::after {
+  content: ""; position: absolute; pointer-events: none; z-index: 2;
+  inset: -.4em -.36em -.38em -.34em;
+  background: var(--pen); mix-blend-mode: var(--blend);
+  --loop: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 60' preserveAspectRatio='none'%3E%3Cpath d='M62 6C80 6 97 14 97 29S80 55 52 55S3 48 3 31S22 4 50 4S93 10 95 22' fill='none' stroke='%23000' stroke-width='2.6' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  -webkit-mask: var(--loop) 0 0 / 100% 100% no-repeat;
+  mask: var(--loop) 0 0 / 100% 100% no-repeat;
+  transform: rotate(-2.5deg);
+}
+/* SVG targets: draw the mark as its own element next to the target.
+   .mark-loop  a rough pen loop around a thing (state, point, label, layer)
+   .mark-swipe a broad translucent stroke under a line (edge, curve part)  */
+svg .mark-loop, svg .mark-swipe { display: none; pointer-events: none; }
+svg .mark-loop[data-highlight-on], svg .mark-swipe[data-highlight-on] { display: inline; }
+svg .mark-loop { fill: none; stroke: var(--pen); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; mix-blend-mode: var(--blend); }
+svg .mark-swipe { fill: none; stroke: var(--pen-wash); stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }
+/* fallback for an SVG target without its own mark: a pink glow */
+svg [data-highlight-on]:not(.mark-loop, .mark-swipe) { filter: drop-shadow(0 0 3px var(--pen)); }
+
+/* ---------- Step controls: a strip printed along the foot ---------- */
+:root { --cur: 0; --tot: 1; }
+:root[data-step-current="1"]{--cur:1} :root[data-step-current="2"]{--cur:2} :root[data-step-current="3"]{--cur:3}
+:root[data-step-current="4"]{--cur:4} :root[data-step-current="5"]{--cur:5} :root[data-step-current="6"]{--cur:6}
+:root[data-step-current="7"]{--cur:7} :root[data-step-current="8"]{--cur:8} :root[data-step-current="9"]{--cur:9}
+:root[data-step-current="10"]{--cur:10} :root[data-step-current="11"]{--cur:11} :root[data-step-current="12"]{--cur:12}
+:root[data-step-total="1"]{--tot:1} :root[data-step-total="2"]{--tot:2} :root[data-step-total="3"]{--tot:3}
+:root[data-step-total="4"]{--tot:4} :root[data-step-total="5"]{--tot:5} :root[data-step-total="6"]{--tot:6}
+:root[data-step-total="7"]{--tot:7} :root[data-step-total="8"]{--tot:8} :root[data-step-total="9"]{--tot:9}
+:root[data-step-total="10"]{--tot:10} :root[data-step-total="11"]{--tot:11} :root[data-step-total="12"]{--tot:12}
+
+#mimir-controls {
+  position: sticky; bottom: 0; z-index: 20;
+  display: flex; align-items: center; gap: var(--sp-4);
+  margin-top: var(--sp-7);
+  padding: var(--sp-4) 0 max(var(--sp-3), env(safe-area-inset-bottom));
+}
+#mimir-controls:empty { display: none; }
+#mimir-controls::after {     /* the strip: stock with a blue rule, full bleed */
+  content: ""; position: absolute; inset: 0 -100vw; z-index: -1;
+  background: var(--stock); border-top: 2.5px solid var(--ink);
+}
+#mimir-controls::before {    /* the reading ribbon: pink, printed over the rule */
+  content: ""; position: absolute; left: 0; top: -2.5px; height: 6px; z-index: 1;
+  width: calc(100% * var(--cur) / var(--tot)); background: var(--pink); mix-blend-mode: var(--blend);
+  transition: width .5s var(--ease-ink);
+}
+#mimir-controls button {
+  font: 700 1rem/1 var(--font-display); font-stretch: 85%; letter-spacing: .01em;
+  min-height: 2.9rem; padding: 0 1.15rem; border-radius: 0; cursor: pointer;
+  display: inline-flex; align-items: center; gap: .55rem;
+  transition: background-color .15s, color .15s, box-shadow .15s;
+}
+#mimir-back { background: transparent; color: var(--ink); border: 2px solid var(--ink); }
+#mimir-back:hover:not(:disabled) { background: var(--tint-ink); }
+#mimir-next {
+  order: 3; margin-left: auto; background: var(--ink); color: var(--stock); border: 2px solid var(--ink);
+  box-shadow: var(--mis-x) var(--mis-y) 0 var(--pink);
+}
+#mimir-next:hover:not(:disabled) { box-shadow: calc(var(--mis-x) * 2) calc(var(--mis-y) * 2) 0 var(--pink); }
+#mimir-next::after { content: ""; width: .95rem; height: .95rem; background: currentColor;
+  clip-path: polygon(0 42%, 66% 42%, 40% 12%, 54% 2%, 98% 50%, 54% 98%, 40% 88%, 66% 58%, 0 58%); }
+#mimir-back::before { content: ""; width: .95rem; height: .95rem; background: currentColor;
+  clip-path: polygon(100% 42%, 34% 42%, 60% 12%, 46% 2%, 2% 50%, 46% 98%, 60% 88%, 34% 58%, 100% 58%); }
+#mimir-controls button:disabled { opacity: .35; cursor: default; box-shadow: none; }
+#mimir-controls button:focus-visible { outline: 3px solid var(--pink); outline-offset: 3px; }
+#mimir-progress {
+  order: 2; font: 800 1.35rem/1 var(--font-display); font-stretch: 75%;
+  color: var(--ink); letter-spacing: .02em; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+#mimir-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
+
+/* ---------- Narrower screens ---------- */
+@media (max-width: 900px) {
+  :root { --tab: 2.3rem; }
+  .masthead { padding-top: var(--sp-4); }
+  .masthead::before { width: 9rem; right: calc(-1 * var(--gutter) - 2.5rem); top: -4.5rem; opacity: .8; }
+  .num { font-size: 1.3rem; }
+  .step { column-gap: var(--sp-4); padding: var(--sp-4) 0 var(--sp-3); }
+  .spread { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+  .spread > figure {
+    top: 0; margin: 0 calc(-1 * var(--gutter)); padding: var(--sp-3) var(--gutter);
+    background: var(--stock); border-bottom: 2.5px solid var(--ink);
+  }
+  .spread > .run .step { scroll-margin-top: var(--sticky-fig, 16rem); }
+  /* display maths, tables and figures in a step reclaim the sticker gutter */
+  .step .body .katex-display, .step .body > figure, .step > figure, .step .body > .table-wrap, .step > .verdict { margin-left: calc(-1 * (var(--tab) + var(--sp-4))); }
+  .step .katex-display > .katex { font-size: .98em; }
+  th, td { padding: .5em .4em; }
+  th { padding-left: 0; }
+  #mimir-controls { gap: var(--sp-2); }
+  #mimir-controls button { padding: 0 .9rem; }
+}
+
+/* ---------- Motion ---------- */
+@property --sweep { syntax: "<angle>"; inherits: false; initial-value: 360deg; }
+@keyframes sk-settle { from { opacity: 0; transform: translateY(.4rem); } to { opacity: 1; transform: none; } }
+@keyframes sk-ink    { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sk-draw   { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes sk-wash   { from { fill-opacity: 0; } }
+@keyframes sk-circle { from { --sweep: 0deg; } to { --sweep: 360deg; } }
+/* the pink drum settles into (near) register */
+@keyframes sk-register {
+  from { transform: translate(calc(var(--mis-x) * 4), calc(var(--mis-y) * 4)); opacity: .3; }
+  to   { transform: translate(var(--mis-x), var(--mis-y)); opacity: 1; }
+}
+@keyframes sk-register-rev {
+  from { transform: translate(calc(var(--mis-x) * -4), calc(var(--mis-y) * -4)); opacity: .2; }
+  to   { transform: translate(calc(-1 * var(--mis-x)), calc(-1 * var(--mis-y))); opacity: .9; }
+}
+
+/* none: nothing moves; every step still appears */
+:root[data-motion="none"] *, :root[data-motion="none"] *::before, :root[data-motion="none"] *::after {
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+/* gentle: the newest step fades up; SVG parts and the pen mark fade in */
+:root[data-motion="gentle"] [data-latest]:not(svg, svg *),
+:root[data-motion="full"] [data-latest]:not(svg, svg *) { animation: sk-settle var(--t-settle) var(--ease-ink) both; }
+:root[data-motion="gentle"] svg [data-latest],
+:root[data-motion="gentle"] svg .mark-loop[data-highlight-on],
+:root[data-motion="gentle"] svg .mark-swipe[data-highlight-on],
+:root[data-motion="gentle"] [data-highlight-on]:not(svg, svg *)::after { animation: sk-ink .8s ease both; }
+/* full: strokes draw like a pen (pathLength="1"), fills ink in, the pink drum settles into register,
+   and the pen mark is drawn round its target */
+:root[data-motion="full"] [data-latest] > .num::before { animation: sk-register-rev .7s var(--ease-ink) both; }
+:root[data-motion="full"] svg [data-latest] { animation: sk-ink .4s ease both; }
+:root[data-motion="full"] svg [data-latest] [pathLength="1"],
+:root[data-motion="full"] svg [data-latest][pathLength="1"] {
+  stroke-dasharray: 1 1; animation: sk-draw var(--t-draw) var(--ease-ink) both;
+}
+:root[data-motion="full"] svg [data-latest] .wash { animation: sk-wash .8s .5s ease both; }
+:root[data-motion="full"] svg .mark-loop[data-highlight-on],
+:root[data-motion="full"] svg .mark-swipe[data-highlight-on] {
+  stroke-dasharray: 1 1; animation: sk-draw .85s .35s var(--ease-ink) both;
+}
+:root[data-motion="full"] [data-highlight-on]:not(svg, svg *)::after {
+  -webkit-mask: var(--loop) 0 0 / 100% 100% no-repeat, conic-gradient(from 20deg, #000 var(--sweep), transparent 0);
+  -webkit-mask-composite: source-in;
+  mask: var(--loop) 0 0 / 100% 100% no-repeat, conic-gradient(from 20deg, #000 var(--sweep), transparent 0);
+  mask-composite: intersect;
+  animation: sk-circle .75s .2s var(--ease-ink) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Print: a clean one-ink handout ---------- */
+@media print {
+  @page { margin: 15mm 14mm; }
+  :root {
+    --stock: #fff; --ink: #111; --ink-soft: #333; --ink-faint: #888; --rule: #aaa;
+    --pink: #fff; --over: #111; --tint-ink: #fff; --tint-pink: #fff; --blend: normal;
+    --fig-ink: #000; --fig-soft: #555; --fig-paper: #fff; --fig-plate: #fff; --fig-curve: #000;
+  }
+  body { background: #fff !important; color: #000; font-size: 10.5pt; }
+  body::after, .masthead::before, .masthead::after, hr, figcaption::before { display: none !important; }
+  html.mimir-js [data-step]:not([data-revealed]) { display: revert !important; }
+  html.mimir-js .step[data-step]:not([data-revealed]) { display: grid !important; }
+  html.mimir-js svg .mark-loop, html.mimir-js svg .mark-swipe { display: none !important; }
+  [data-highlight-on]::after { display: none !important; }
+  svg [data-highlight-on] { filter: none !important; }
+  #mimir-controls { display: none !important; }
+  * { animation: none !important; transition: none !important; }
+  main { min-height: 0; padding-top: 0; width: auto; }
+  .tab, .verdict, .num { background: #fff !important; color: #000 !important; border: 1.5px solid #000; transform: none !important; }
+  .tab::after, .verdict::after, .num::before, .num::after { display: none; }
+  .spread { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8mm; }
+  .spread > figure { position: static; border: 0; margin: 0; padding: 0; background: none; }
+  .step, figure, table, .verdict { break-inside: avoid; }
+  .plate { padding: 0; }
+}
