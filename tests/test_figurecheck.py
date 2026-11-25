@@ -239,6 +239,8 @@ def test_the_figure_checker_is_a_registered_read_only_helper():
     front, _ = _helper()
     assert front["name"] == "figure-checker"
     assert front["tools"] == "Read, Grep, Glob"  # no shell and no write tool: it cannot edit the figure
+    # #99 live runs: sonnet passed the heart test page's thin left ventricle wall in some runs, opus never did.
+    assert front["model"] == "opus"
     assert front["description"].endswith("Dispatched by Mimir skills; not for direct use.")
     manifest = json.loads((ROOT_DIR / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     assert "./helpers/figure-checker.md" in manifest["agents"]
