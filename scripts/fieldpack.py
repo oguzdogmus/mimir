@@ -127,9 +127,10 @@ is named like a field, at most SUBJECT_MAX_CHARS characters ("human-heart").
 A base figure passes every check of ``visual.py svg`` and the part check: every
 id is a stable part id (lowercase letters and digits joined by single hyphens,
 starting with a letter, used once, not ``mimir-``/``sk-``), every drawn shape
-(path, rect, circle, ellipse, line, polyline, polygon, use; not inside defs,
-markers, clips or text) has one or sits in a group that has one, and there is
-at least one part. A stored base figure is checked again every time it is
+(path, rect, circle, ellipse, line, polyline, polygon; not inside defs,
+markers, clips or text) has one or sits in a group that has one, there is at
+least one part, and there is no ``<use>``, so a reuse cannot change a part by
+changing what it points at. A stored base figure is checked again every time it is
 read; a damaged one exits 2 naming its file. A subject is saved once per
 place: saving it again exits 2.
 

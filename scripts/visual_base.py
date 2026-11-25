@@ -63,6 +63,9 @@ def parts(figure, field: str) -> dict[str, tuple]:
             if value in seen:
                 raise InputError(f"{field}: id {short(value)} is used twice")
             seen.add(value)
+        if node.tag == "use":
+            raise InputError(f"{field}: a base figure draws every part itself; <use> {_where(node)} is not "
+                             "allowed, since a reuse could change what it points at")
         if node is figure or not _drawn(node):
             continue
         if node.tag in SHAPES or node.tag == "g":

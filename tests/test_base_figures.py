@@ -120,6 +120,10 @@ def test_a_built_figure_the_checker_passed_is_saved_in_its_pack_without_the_shel
     (BASE.replace('id="inner-membrane"', 'id="Inner_Membrane"'), "is not a stable part id"),
     (BASE.replace('id="inner-membrane"', 'id="sk-inner"'), "is reserved for the page"),
     (BASE.replace(PARTS, ""), "the base figure has no parts"),
+    # a <use> would let a reuse change the part by changing what it points at
+    (BASE.replace("</desc>", '</desc><defs><symbol id="layer"><rect width="180" height="6"/></symbol></defs>').replace(
+        '<rect x="10" y="34" width="180" height="6" class="ink"/>', '<use href="#layer" x="10" y="34"/>'),
+     "a base figure draws every part itself"),
 ])
 def test_a_figure_without_stable_part_ids_is_refused_and_not_saved(home, root, svg, needle):
     """#101: every drawn shape belongs to a part with a stable id, or the figure is not saved."""
