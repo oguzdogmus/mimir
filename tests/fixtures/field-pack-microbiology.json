@@ -1,0 +1,20 @@
+{
+ "field": "microbiology",
+ "title": "Microbiology",
+ "figure_kinds": [
+  {"name": "cell envelope section", "kind": "depiction"}
+ ],
+ "conventions": [
+  {"rule": "A Gram-negative envelope shows, from outside in: outer membrane, thin peptidoglycan layer in the periplasm, inner membrane.",
+   "source": "Madigan et al., Brock Biology of Microorganisms, 16th ed., ch. 2"}
+ ],
+ "recipes": [],
+ "checklists": [
+  {"figure": "cell envelope section", "rules": [
+   {"rule": "A Gram-positive wall has a thick peptidoglycan layer and no outer membrane.",
+    "source": "Madigan et al., Brock Biology of Microorganisms, 16th ed., ch. 2"}
+  ]}
+ ],
+ "test_page": {"figure": "cell envelope section",
+  "content": "The envelope of a Gram-negative rod, labelled layer by layer from the outer membrane to the cytoplasm."}
+}

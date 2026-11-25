@@ -349,10 +349,15 @@ def _course(data: dict) -> tuple[Path, Path, Path, str, str]:
     course_dir = workspace.course_folder(root, term, course)
     if not course_dir.is_dir():
         raise InputError(f"no course folder at {course_dir}")
+    return root, course_dir, link_record(course_dir), term, course
+
+
+def link_record(course_dir: Path) -> Path:
+    """``<course>/.state/field-packs.json``; refuses a symlinked record."""
     record = course_dir / ".state" / LINK_FILE
     if record.is_symlink():
         raise InputError(f"{record} is a symlink; refusing to work through it")
-    return root, course_dir, record, term, course
+    return record
 
 
 def linked_fields(record: Path) -> list[str]:
@@ -423,13 +428,22 @@ def cmd_match(data: dict) -> dict:
 
 # --- report ---------------------------------------------------------------------------
 
-def cmd_report(data: dict) -> dict:
-    check_keys(data, {"term", "course"})
-    root, course_dir, record, _, course = _course(data)
+def course_packs(root: Path, course_dir: Path) -> list[dict]:
+    """The packs a course uses, in link order, each checked as on save: ``{field, title, path}``.
+
+    [] when the course has no link record; a damaged record or a missing or damaged pack is refused.
+    """
     packs = []
-    for field in linked_fields(record):
+    for field in linked_fields(link_record(course_dir)):
         path, p = load_pack(root, field)
         packs.append({"field": field, "title": p["title"], "path": str(path)})
+    return packs
+
+
+def cmd_report(data: dict) -> dict:
+    check_keys(data, {"term", "course"})
+    root, course_dir, _, _, course = _course(data)
+    packs = course_packs(root, course_dir)
     if packs:
         line = f"{course} uses the field pack{'s' if len(packs) > 1 else ''} {', '.join(p['field'] for p in packs)}."
     else:

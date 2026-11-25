@@ -3,7 +3,9 @@
 
 Dev-only, not part of CI. Each ``pieces/<name>.json`` is the exact ``visual.py page`` input
 the visual builder wrote for one test piece of ``content.md`` (synthetic content, fixture
-course ``2026-Fall/CS301 Automata``). This script builds every piece again through the
+course ``2026-Fall/CS301 Automata``). Every fixture course is linked to its synthetic field
+pack from ``tests/fixtures/`` first, because the shell builds nothing for a course without
+one. This script builds every piece again through the
 current ``scripts/visual.py`` in a throwaway workspace, so a change to the shell (tokens,
 step controls, a mascot) shows up without rebuilding the bodies, then screenshots each
 page with every step revealed, in light and dark::
@@ -31,6 +33,8 @@ SCRIPTS = REPO / "scripts"
 PIECES = Path(__file__).resolve().parent / "pieces"
 PICTURES = REPO / "assets" / "showcase"
 WIDTH, HEIGHT = 1280, 1080
+FIXTURE_PACKS = REPO / "tests" / "fixtures"
+COURSE_FIELDS = {"CS301 Automata": "theory-of-computation", "BIO110 Microbiology": "microbiology"}
 
 
 def run(script: str, cmd: str, data: dict, home: Path) -> dict:
@@ -49,10 +53,16 @@ def build(out: Path, work: Path) -> list[Path]:
     (home / ".config" / "mimir" / "root").write_text(f"{work / 'learning'}\n", encoding="utf-8")
     run("workspace.py", "init", {}, home)  # its profile has no motion line: motion level none
     out.mkdir(parents=True, exist_ok=True)
-    pages = []
+    pages, saved = [], set()
     for path in sorted(PIECES.glob("*.json")):
         piece = json.loads(path.read_text(encoding="utf-8"))
         run("workspace.py", "course", {"term": piece["term"], "course": piece["course"]}, home)
+        field = COURSE_FIELDS[piece["course"]]
+        if field not in saved:
+            pack = FIXTURE_PACKS / f"field-pack-{field}.json"
+            run("fieldpack.py", "save", json.loads(pack.read_text(encoding="utf-8")), home)
+            saved.add(field)
+        run("fieldpack.py", "link", {"term": piece["term"], "course": piece["course"], "field": field}, home)
         built = Path(run("visual.py", "page", piece, home)["path"])
         pages.append(Path(shutil.copy2(built, out / built.name)))
     return pages

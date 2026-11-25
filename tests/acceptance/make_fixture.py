@@ -12,7 +12,9 @@ DIR (must not exist) gets:
   Run the host's shell commands with ``HOME=DIR/home``.
 * ``learning/``: a finished setup with one course, ``2026-Fall/CS301 Automata``,
   built through Mimir's own scripts: a midterm three weeks ahead (Standard
-  delivery), two unseen topics, a notes file with the shared task and four
+  delivery), the synthetic theory-of-computation field pack from
+  ``tests/fixtures/`` linked (so a visual builds without field research
+  first), two unseen topics, a notes file with the shared task and four
   more questions, an earlier session log (so it is not a first contact and
   the knowledge gauge is done), the what's-new line already seen, and all
   three teaching settings saved as explicit: the axis under test at
@@ -36,6 +38,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO / "scripts"
 TERM, COURSE, CODE = "2026-Fall", "CS301 Automata", "CS301"
+FIELD = "theory-of-computation"
 TOPIC = "Languages of context-free grammars"
 NEXT_TOPIC = "Closure properties of context-free languages"
 DEFAULTS = {"support": "method-first", "frequency": "key decisions", "depth": "why"}
@@ -109,6 +112,9 @@ def main() -> None:
     earlier = earlier.replace(hour=18, minute=0, second=0, microsecond=0)
 
     course_dir = Path(run("workspace.py", "course", {"term": TERM, "course": COURSE}, env)["course_dir"])
+    pack = json.loads((REPO / "tests" / "fixtures" / f"field-pack-{FIELD}.json").read_text(encoding="utf-8"))
+    run("fieldpack.py", "save", pack, env)
+    run("fieldpack.py", "link", {"term": TERM, "course": COURSE, "field": FIELD}, env)
 
     write(root / ".state" / "profile.md", f"""<!-- Mimir profile. Always loaded. Cap: 50 lines (forecast record 1 line). -->
 # Profile

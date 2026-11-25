@@ -859,3 +859,21 @@ def test_background_dispatch_names_one_recipe_per_host_and_leaves_the_checker_in
     assert "never the checker" in dispatch
     helpers = core_section("Paths, commands and helpers")
     assert "field research" in helpers and "<mimir>/helpers/field-researcher.md" in helpers
+
+
+# No builder without its field pack (#100): the builder dispatch makes sure the course has a
+# pack first, running field research (#98's Background dispatch) and only then the builder.
+def _building_a_file():
+    return _read("reference/notation.md").split("\n## Building a file\n", 1)[1].split("\n## ", 1)[0]
+
+
+def test_builder_dispatch_runs_field_research_and_then_the_builder_when_a_pack_is_missing():
+    text = _building_a_file()
+    report, match = text.index("`fieldpack.py report`"), text.index("`fieldpack.py match`")
+    research, builder = text.index("Background dispatch"), text.index("`mimir:visual-builder`")
+    assert report < match < research < builder
+    assert "`mimir-ingest` step 10" in text  # the field is named as ingest names it
+    assert "`visual.py: field pack missing" in text and "dispatch the builder again" in text
+    assert "then dispatch the builder" in text
+    background = core_section("Background dispatch")
+    assert "Building a file" in background and "notation.md" in background
