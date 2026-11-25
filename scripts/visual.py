@@ -23,8 +23,8 @@ This script is the command line and owns the contract below; the work is
 split by job into sibling modules: ``visual_check.py`` (the SVG and page body
 allowlist checkers), ``visual_labels.py`` (the label overlap check),
 ``visual_machine.py`` (the simulator's machine), ``visual_render.py`` (the
-page file, the Skald tokens and the assets) and ``visual_open.py`` (the
-browser open). The limits named below live with the module that applies them.
+page file, the Skald tokens and the assets), ``visual_base.py`` (base figures:
+stable part ids and their reuse) and ``visual_open.py`` (the browser open). The limits named below live with the module that applies them.
 
 This script is the trust boundary for generated pages: the model supplies
 content, this script escapes it, checks it and places the file. Output goes
@@ -47,6 +47,13 @@ inputs -- what the builder reads beside the core house style guide.
     ``fieldpack.py`` checks it on save. ``notation`` is the ``## Notation``
     section of the course's ``.state/fingerprint.md``, or "" when there is
     none ("no notation section." in ``line``). Writes nothing.
+    With ``subject`` (optional, a base figure subject as ``fieldpack.py``
+    names it), ``base`` is the base figure the course builds that subject
+    from, ``{"subject", "source", "field", "path", "parts"}`` as
+    ``fieldpack.py find-base`` finds it (the course's own first), or null
+    when it has none yet; ``line`` ends "; base figure <subject> from the
+    field pack <field>." (or "the course's own diagram", or "; no base figure
+    <subject> yet.").
 
 page -- an offline page in the Skald house style from a body the builder wrote.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "even-zeros",
@@ -195,6 +202,21 @@ svg -- check one SVG document and write it with the Skald tokens.
     Skald tokens and the figure's CSS (type, class and id selectors), once
     without and once with its ``@media`` rules (the phone sizes).
 
+Base figures (``page`` and ``svg``)
+    With ``base`` (optional, a subject), the build starts from the subject's
+    base figure, the one ``inputs`` names for the course, and must keep it
+    exactly: the SVG that holds its parts (for ``page``, the first outermost
+    inline ``<svg>`` with one of its part ids) has the base figure's viewBox
+    and every part, by id, with the same tag, the same geometry (d, x, y,
+    width, height, cx, cy, r, rx, ry, x1, y1, x2, y2, points, transform,
+    href, pathLength), the same shapes inside it and the same transforms
+    around it. Classes, styles and ``data-step``/``data-highlight`` may change,
+    and parts may be wrapped in step groups without a transform. Labels
+    (``<text>``) may be added anywhere; a new shape outside the parts must
+    have the class leader, anchor, mark-loop or mark-swipe
+    (``visual_base.ADDED_CLASSES``). Anything else, or a subject with no base
+    figure, exits 2 with ``base: ...`` and nothing is written.
+
 open -- open a built file in the default browser.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "file": "pumping-lemma.html"}
     out: {"path": "/home/u/learning/2026-Fall/CS201 Theory/.state/out/pumping-lemma.html",
@@ -224,11 +246,13 @@ import re
 import sys
 import tempfile
 import unicodedata
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import fieldpack
 import ingest
 import verify
+import visual_base
 import visual_check
 import visual_labels
 import visual_machine
@@ -326,36 +350,73 @@ def _course_with_pack(term: str, course: str) -> tuple[Path, list[dict]]:
 # --- inputs --------------------------------------------------------------------------
 
 def cmd_inputs(data: dict) -> dict:
-    check_keys(data, {"term", "course"})
+    check_keys(data, {"term", "course", "subject"})
     term, course = parse_term(data), parse_segment(data, "course")
+    subject = fieldpack.parse_subject(data) if "subject" in data else None
     course_dir, packs = _course_with_pack(term, course)
     notation = verify._notation(course_dir)
     fields = ", ".join(p["field"] for p in packs)
     line = (f"{course}: field pack{'s' if len(packs) > 1 else ''} {fields}; "
-            f"{'notation section included' if notation else 'no notation section'}.")
-    return {"course_dir": str(course_dir), "packs": packs, "notation": notation, "line": line}
+            f"{'notation section included' if notation else 'no notation section'}")
+    out = {"course_dir": str(course_dir), "packs": packs, "notation": notation}
+    if subject is not None:
+        found = fieldpack.find_base(ingest._workspace_root(), course_dir, subject)
+        if found is None:
+            out["base"] = None
+            line += f"; no base figure {subject} yet"
+        else:
+            out["base"] = {"subject": subject, **{k: found[k] for k in ("source", "field", "path", "parts")}}
+            origin = "the course's own diagram" if found["source"] == "course" else f"the field pack {found['field']}"
+            line += f"; base figure {subject} from {origin}"
+    return {**out, "line": line + "."}
+
+
+def _check_base(data: dict, course_dir: Path, course: str, figures) -> None:
+    """With ``base``: refuse a build that does not keep the subject's base figure exactly (``visual_base``)."""
+    if "base" not in data:
+        return
+    subject = fieldpack.parse_subject(data, "base")
+    found = fieldpack.find_base(ingest._workspace_root(), course_dir, subject)
+    if found is None:
+        raise InputError(f"base: no base figure {subject} for {course}; build without base")
+    base = visual_labels._tree_from_svg(_checked_svg(found["svg"]))
+    visual_base.check_reuse(base, figures(), "base")
 
 
 # --- svg ---------------------------------------------------------------------------
 
-def build_svg(svg) -> str:
-    """The standalone SVG file for ``svg``: every check of ``visual.py svg``, then the Skald tokens added."""
+def _checked_svg(svg) -> ET.Element:
+    """The root of ``svg`` after every check of ``visual.py svg``."""
     root = visual_check.check_svg(_markup_field(svg, "svg", "the SVG document as a string", SVG_MAX_BYTES))
     visual_labels.check_svg_labels(root)
+    return root
+
+
+def build_svg(svg) -> str:
+    """The standalone SVG file for ``svg``: every check of ``visual.py svg``, then the Skald tokens added."""
+    _checked_svg(svg)
     return visual_render.svg_with_tokens(svg)
 
 
+def base_parts(svg) -> dict[str, tuple]:
+    """A base figure's parts: every check of ``visual.py svg``, then the stable part ids (``visual_base``)."""
+    return visual_base.parts(visual_labels._tree_from_svg(_checked_svg(svg)), "svg")
+
+
 def cmd_svg(data: dict) -> dict:
-    check_keys(data, {"term", "course", "name", "svg"})
+    check_keys(data, {"term", "course", "name", "svg", "base"})
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
     course_dir, _ = _course_with_pack(term, course)
-    return _write_out(course_dir, name, "svg", build_svg(data.get("svg")).encode("utf-8"))
+    svg = data.get("svg")
+    root = _checked_svg(svg)
+    _check_base(data, course_dir, course, lambda: [visual_labels._tree_from_svg(root)])
+    return _write_out(course_dir, name, "svg", visual_render.svg_with_tokens(svg).encode("utf-8"))
 
 
 # --- page ----------------------------------------------------------------------------
 
 def cmd_page(data: dict) -> dict:
-    check_keys(data, {"term", "course", "name", "title", "body", "machine", "example"})
+    check_keys(data, {"term", "course", "name", "title", "body", "machine", "example", "base"})
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
     if "title" not in data:
         raise InputError("title is required")
@@ -373,6 +434,7 @@ def cmd_page(data: dict) -> dict:
         body, lambda marker, k: visual_render.original_html(marker, f"body.original[{k}]", rows, course_dir, index),
         machine["states"] if machine else ())
     visual_labels.check_body_labels(body_html)
+    _check_base(data, course_dir, course, lambda: visual_labels.body_figures(body_html))
     page = visual_render.render_page(title, body_html, math, steps, machine, example,
                                      workspace.read_motion(ingest._workspace_root()))
     return _write_out(course_dir, name, "html", page.encode("utf-8"))

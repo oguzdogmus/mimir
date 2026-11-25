@@ -821,8 +821,21 @@ def check_svg_labels(root: ET.Element) -> None:
 
 def check_body_labels(body: str) -> None:
     """The label check of ``visual.py page``: every outermost ``<svg>`` of a checked body, inside the page."""
+    main = _body_tree(body)
+    check_labels(_outermost_svgs(main), _style_texts(main), "body", _PAGE_FONT_PX)
+
+
+def body_figures(body: str) -> list[_Node]:
+    """Every outermost ``<svg>`` of a checked page body, in order, in the tree the page places it in."""
+    return _outermost_svgs(_body_tree(body))
+
+
+def _body_tree(body: str) -> _Node:
     tree = _BodyTree()
     tree.feed(body)
     tree.close()
-    figures = [n for n in _walk(tree.root) if n.tag == "svg" and not any(a.tag == "svg" for a in _ancestors(n))]
-    check_labels(figures, _style_texts(tree.root), "body", _PAGE_FONT_PX)
+    return tree.root
+
+
+def _outermost_svgs(main: _Node) -> list[_Node]:
+    return [n for n in _walk(main) if n.tag == "svg" and not any(a.tag == "svg" for a in _ancestors(n))]

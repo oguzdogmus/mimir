@@ -2,8 +2,9 @@
 
 Standard library only, Python 3.11+. ``render_page`` fills the page shell (``assets/page/page.html``) with
 the Skald tokens, KaTeX, the step script, the mascot and the simulator, each script allowed by its hash in
-the Content-Security-Policy; ``svg_with_tokens`` adds the Skald tokens to a checked SVG document;
-``original_html`` turns one ``<mimir-original>`` marker into the image or link it stands for.
+the Content-Security-Policy; ``svg_with_tokens`` adds the Skald tokens to a checked SVG document and
+``svg_without_tokens`` takes them off again; ``original_html`` turns one ``<mimir-original>`` marker into the
+image or link it stands for.
 """
 
 from __future__ import annotations
@@ -158,8 +159,24 @@ def svg_with_tokens(svg: str) -> str:
     end = _SVG_ROOT_END.search(svg)
     if end is None or "]]>" in css:
         raise RuntimeError("cannot place the Skald tokens in the SVG")
+    return svg[:end.start()] + _tokens_block(end, css) + svg[end.start():]
+
+
+def _tokens_block(end: re.Match, css: str) -> str:
     tag = f"{end.group(1)}:style" if end.group(1) else "style"
-    return svg[:end.start()] + f"<{tag}><![CDATA[\n{css}]]></{tag}>" + svg[end.start():]
+    return f"<{tag}><![CDATA[\n{css}]]></{tag}>"
+
+
+def svg_without_tokens(built: str) -> str | None:
+    """The SVG document ``svg_with_tokens`` was given, or None when ``built`` does not end with today's tokens."""
+    end = _SVG_ROOT_END.search(built)
+    if end is None:
+        return None
+    block = _tokens_block(end, skald_tokens())
+    head = built[:end.start()]
+    if not head.endswith(block):
+        return None
+    return head[:-len(block)] + built[end.start():]
 
 
 def _mascot_html() -> str:
