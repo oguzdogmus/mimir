@@ -87,3 +87,32 @@ tree.
 
 Each step reveals its part in the figure and its text. The teaching highlight marks the
 newest part's label.
+
+## Piece 4: a non-engineering depiction, layer by layer (`name: bacterium-envelope`)
+
+This piece belongs to a second made-up course, `2026-Fall/BIO110 Microbiology`, so the
+showcase also shows a figure outside engineering. It has no fixture notes: the content
+below is the whole of it, written for the showcase.
+
+- Title: The envelope of a Gram-negative bacterium
+- Label (always shown, verbatim): `[diagram, made by Mimir, simplified]`
+- Intro (always shown): A Gram-negative bacterium such as E. coli is wrapped in layers.
+  Click through to build its envelope from the inside out.
+- The figure (a depiction of a real thing): one rod-shaped cell, a capsule with rounded
+  ends, drawn whole and cut lengthwise so its layers show as nested outlines around the
+  inside: the cytoplasm innermost, then the inner membrane, the periplasm with the thin
+  cell wall in it, and the outer membrane outermost with a fringe of lipopolysaccharide
+  on its outer face. Each layer is labelled at the side with a leader line.
+- Step 1: Cytoplasm: the inside of the cell, a gel of water, proteins and ribosomes. The
+  DNA lies in a region called the nucleoid, with no membrane around it.
+- Step 2: Inner membrane: a phospholipid bilayer around the cytoplasm that controls what
+  enters and leaves it.
+- Step 3: Cell wall: outside the inner membrane lies the periplasm, a narrow space that
+  holds a thin layer of peptidoglycan, the cell wall, which keeps the cell's shape.
+- Step 4: Outer membrane: a second bilayer whose outer face carries lipopolysaccharide
+  (LPS); porins in it let small molecules through.
+- Caption (always shown): Not to scale: the whole envelope is a few tens of nanometres
+  thick, and the cell about 2 µm long.
+
+Each step reveals its layer in the figure and its text. The teaching highlight marks the
+newest layer's label.

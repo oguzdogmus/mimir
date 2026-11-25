@@ -15,7 +15,7 @@ Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude
 
 ## What it looks like
 
-Pages and diagrams follow Mimir's house style, Skald: a chalk board in dark theme, a whiteboard in light theme. You click through a page one step at a time, and the newest step is marked. These three pages were built for a made-up automata course, shown here with every step revealed. How they were made, and how to rebuild them, is in [`docs/showcase/`](docs/showcase/).
+Pages and diagrams follow Mimir's house style, Skald: a chalk board in dark theme, a whiteboard in light theme. You click through a page one step at a time, and the newest step is marked. The first three pages were built for a made-up automata course, the last for a made-up biology course, shown here with every step revealed. How they were made, and how to rebuild them, is in [`docs/showcase/`](docs/showcase/).
 
 A worked answer, step by step:
 
@@ -36,6 +36,13 @@ A structure built up part by part:
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/showcase/pda-parts-dark.png">
   <img src="assets/showcase/pda-parts-light.png" alt="A pushdown automaton drawn part by part: the input tape aabb with the head on the first b, the finite control with states q0 to q3, and the stack holding X, X, $, with four numbered steps explaining each part">
+</picture>
+
+A real thing drawn layer by layer:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/showcase/bacterium-envelope-dark.png">
+  <img src="assets/showcase/bacterium-envelope-light.png" alt="A rod-shaped Gram-negative bacterium cut lengthwise, its envelope built from the inside out in four numbered steps: cytoplasm, inner membrane, cell wall in the periplasm, and outer membrane with its lipopolysaccharide fringe, each layer labelled with a leader line">
 </picture>
 
 ## Install
