@@ -166,4 +166,6 @@ Mimir is open source under the [Apache License 2.0](LICENSE). You can use, chang
 
 Math sheets use [KaTeX](https://katex.org/) (MIT license), vendored in `assets/vendor/katex/`.
 
+The Skald house style bundles the fonts Familjen Grotesk, Atkinson Hyperlegible Next and Kalam (SIL Open Font License 1.1) in `assets/skald/fonts/`, each with its licence.
+
 `mimir-help` is modelled on Matt Pocock's [`ask-matt`](https://github.com/mattpocock/skills) router skill.

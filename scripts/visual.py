@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Mimir visual builder: math sheets, safe SVG files, interactive pages and the browser open.
+"""Mimir visual builder: Skald pages, math sheets, safe SVG files, interactive pages and the browser open.
 
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``verify.py`` (same folder). Run as::
 
-    python3 visual.py <sheet|svg|steps|trace|open>  < input.json
+    python3 visual.py <page|sheet|svg|steps|trace|open>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -19,6 +19,51 @@ missing, neither ``out/`` nor the target may be a symlink, and the file is
 written atomically (a rebuild replaces it). ``name`` matches
 ``[a-z0-9]+(-[a-z0-9]+)*``, at most NAME_MAX_CHARS (60) characters. Errors
 name the field, e.g. ``blocks[3].math`` (blocks are numbered from 1).
+
+page -- an offline page in the Skald house style from a body the builder wrote.
+    in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "even-zeros",
+          "title": "Even number of 0s", "body": "<header class=\\"head\\"><h1>...</h1></header>
+           <p>Let \\(p\\) be ...</p><mimir-original path=\\"past-papers/q.jpg\\" page=\\"1\\"></mimir-original>"}
+    out: as ``sheet``.
+    ``title`` (required, one line, at most TITLE_MAX_CHARS) is the ``<title>``.
+    ``body`` (required, at most PAGE_BODY_MAX_BYTES (1 MiB) as UTF-8, no
+    control characters other than tab, newline and carriage return) is HTML
+    that may hold inline SVG. It is parsed and checked against an allowlist,
+    then written out again from what was checked (comments dropped, text and
+    attribute values re-escaped, SVG names in their camelCase spelling), so
+    the browser sees exactly the markup that passed. Allowed HTML elements:
+    div, span, p, h1-h6, header, footer, section, article, aside, figure,
+    figcaption, ul, ol, li, dl, dt, dd, table, thead, tbody, tfoot, tr, th,
+    td, caption, colgroup, col, strong, em, b, i, u, s, small, sub, sup, mark,
+    code, pre, kbd, var, samp, abbr, cite, q, blockquote, br, hr, wbr,
+    details, summary, time, a, style, svg. Allowed HTML attributes: id,
+    class, style, title, lang, dir, role, hidden, tabindex, ``aria-*``,
+    ``data-*``, plus a href, th and td colspan/rowspan/headers (th also
+    scope, abbr), col and colgroup span, ol start/reversed/type, li value,
+    time datetime and details open. Inside an ``svg`` only the ``svg`` kind's
+    elements, with any attribute except ``on*``. Refused: any other element
+    (script, forms, buttons, inputs, img, iframe, object, embed, link, meta,
+    base, math, template, foreignObject, ...); an ``on*`` attribute; an
+    ``href`` (any namespace) not starting with ``#``; in a ``style``
+    attribute, a ``<style>`` or any SVG attribute, ``javascript:``, ``url(``
+    other than ``url(#...)``, ``@import``, ``image-set(`` or a backslash;
+    ``<`` or ``&`` in ``<style>`` text; an outermost inline ``svg`` whose
+    first two children are not a non-empty ``title`` then ``desc``, unless it
+    has ``aria-hidden="true"``; elements inside an SVG ``title`` or ``desc``;
+    a repeated id or one starting with ``mimir-`` or ``sk-``; a malformed or
+    repeated attribute name; an end tag that does not close the open
+    element, or an element left open; declarations, CDATA sections and
+    processing instructions. Errors start ``body:``.
+    An original is placed with ``<mimir-original path="..." page="N">`` (empty,
+    closed by ``</mimir-original>`` or ``/>``, not inside an SVG); ``path`` and
+    ``page`` follow the ``sheet`` ``original`` rules, and errors name
+    ``body.original[k]`` (markers numbered from 1). The page carries the Skald
+    tokens (``assets/skald/tokens.css`` with its fonts as data URIs), the
+    shell's chalk and marker filters (``#sk-chalk``, ``#sk-marker``) and
+    ``data-motion="none"`` on its root. When the body's text (outside SVG and
+    ``<style>``) holds ``\\(`` or ``\\[``, KaTeX is inlined as in ``sheet`` and
+    renders ``\\(...\\)`` and ``\\[...\\]`` in ``<main>``, skipping SVG;
+    otherwise the page has no script at all (``script-src 'none'``).
 
 sheet -- an offline HTML math sheet from ``assets/math-sheet.html``.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "pumping-lemma",
@@ -57,7 +102,7 @@ sheet -- an offline HTML math sheet from ``assets/math-sheet.html``.
     fonts and images, inline styles and the page's own scripts by sha256
     hash: nothing loads from the network.
 
-svg -- check one SVG document and write it byte-for-byte.
+svg -- check one SVG document and write it with the Skald tokens.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "dfa-even-zeros",
           "svg": "<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 200 80\\">
                   <title>DFA for an even number of 0s</title><desc>...</desc>...</svg>"}
@@ -77,6 +122,8 @@ svg -- check one SVG document and write it byte-for-byte.
     starting with ``#``; ``javascript:`` in an attribute or style; ``url(``
     other than ``url(#...)``; ``@import`` or ``image-set(``; a backslash in an
     attribute value or ``style`` text (CSS escapes would hide the checks).
+    The document is written as given, with one ``<style>`` added as the root's
+    last child: the Skald tokens, fonts inlined, in a CDATA section.
 
 steps -- a step-reveal worked answer from ``assets/interactive/step-reveal.html``.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "q2-steps",
@@ -158,6 +205,7 @@ import sys
 import tempfile
 import unicodedata
 import xml.etree.ElementTree as ET
+from html.parser import HTMLParser
 from pathlib import Path
 
 import ingest
@@ -172,6 +220,7 @@ BLOCK_MAX_CHARS = 4000
 SHEET_MAX_BLOCKS = 200
 ORIGINAL_EMBED_MAX_BYTES = 10 * 1024 * 1024
 SVG_MAX_BYTES = 1024 * 1024
+PAGE_BODY_MAX_BYTES = 1024 * 1024
 OPEN_WAIT_SECONDS = 5
 STEPS_MAX = 50                 # steps in a step-reveal page
 STEP_MAX_BLOCKS = 20           # blocks in one step
@@ -187,6 +236,9 @@ _TEMPLATE = _ASSETS / "math-sheet.html"
 _STEPS_TEMPLATE = _ASSETS / "interactive" / "step-reveal.html"
 _TRACE_TEMPLATE = _ASSETS / "interactive" / "step-through.html"
 _KATEX = _ASSETS / "vendor" / "katex"
+_PAGE_TEMPLATE = _ASSETS / "page" / "page.html"
+_PAGE_MATH_JS = _ASSETS / "page" / "math.js"
+_SKALD = _ASSETS / "skald"
 
 _NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 _FILE = re.compile(r"([a-z0-9]+(?:-[a-z0-9]+)*)\.(html|svg)")
@@ -373,6 +425,11 @@ def _katex_values(*content: str) -> dict[str, str]:
     """Load KaTeX only for display blocks or inline delimiters in escaped page content."""
     if not any('class="mimir-display"' in part or r"\(" in part for part in content):
         return {"KATEX_CSS": "", "KATEX_JS": "", "AUTO_RENDER_JS": ""}
+    return _katex()
+
+
+def _katex() -> dict[str, str]:
+    """KaTeX's CSS (woff2 fonts as data URIs), its JS and auto-render, checked for inlining."""
     return {
         "KATEX_CSS": _check_raw(_inline_fonts(_vendor_text("katex.min.css")), "</style", "KaTeX CSS"),
         "KATEX_JS": _check_raw(_vendor_text("katex.min.js"), "</script", "KaTeX JS"),
@@ -405,10 +462,15 @@ def render_page(template_path: Path, values: dict[str, str]) -> str:
             raise RuntimeError("page template script mixes code and a slot")
         else:
             hashes.append(_csp_hash(body))
-    values["CSP"] = html.escape("default-src 'none'; script-src " + " ".join(hashes) + "; "
-                                "style-src 'unsafe-inline'; font-src data:; img-src data:; "
-                                "base-uri 'none'; form-action 'none'", quote=False)
+    values["CSP"] = _csp(hashes)
     return _fill(template, values)
+
+
+def _csp(hashes: list[str]) -> str:
+    """The page's Content-Security-Policy: nothing from the network, only these scripts by hash."""
+    return html.escape("default-src 'none'; script-src " + (" ".join(hashes) or "'none'") + "; "
+                       "style-src 'unsafe-inline'; font-src data:; img-src data:; "
+                       "base-uri 'none'; form-action 'none'", quote=False)
 
 
 def cmd_sheet(data: dict) -> dict:
@@ -480,18 +542,18 @@ def _local(tag: str) -> tuple[str, str]:
     return "", tag
 
 
-def _check_css_text(value: str, where: str) -> None:
+def _check_css_text(value: str, where: str, field: str = "svg") -> None:
     low = value.lower()
     if "\\" in value:
-        raise InputError(f"svg: {where} contains a backslash (CSS escapes are not allowed)")
+        raise InputError(f"{field}: {where} contains a backslash (CSS escapes are not allowed)")
     if "javascript:" in re.sub(r"[\s\x00-\x1f]", "", low):
-        raise InputError(f"svg: {where} contains javascript:")
+        raise InputError(f"{field}: {where} contains javascript:")
     if "@import" in low:
-        raise InputError(f"svg: {where} contains @import")
+        raise InputError(f"{field}: {where} contains @import")
     if "image-set(" in low:
-        raise InputError(f"svg: {where} contains image-set(")
+        raise InputError(f"{field}: {where} contains image-set(")
     if len(_URL.findall(value)) != len(_URL_LOCAL.findall(value)):
-        raise InputError(f"svg: {where} has url( that is not url(#...)")
+        raise InputError(f"{field}: {where} has url( that is not url(#...)")
 
 
 def check_svg(raw: bytes) -> ET.Element:
@@ -562,7 +624,261 @@ def cmd_svg(data: dict) -> dict:
         raise InputError(f"svg is {len(raw)} bytes; at most {SVG_MAX_BYTES}")
     course_dir = verify._course_dir(term, course)
     check_svg(raw)
-    return _write_out(course_dir, name, "svg", raw)
+    return _write_out(course_dir, name, "svg", _svg_with_tokens(svg).encode("utf-8"))
+
+
+# --- Skald tokens --------------------------------------------------------------------
+
+_SKALD_FONT = re.compile(r'url\("fonts/([a-z0-9-]+\.woff2)"\)')
+
+
+def skald_tokens() -> str:
+    """The Skald stylesheet with its bundled fonts as data URIs (nothing left to load)."""
+    def font(match: re.Match) -> str:
+        payload = base64.b64encode((_SKALD / "fonts" / match.group(1)).read_bytes()).decode("ascii")
+        return f"url(data:font/woff2;base64,{payload})"
+
+    css = _SKALD_FONT.sub(font, (_SKALD / "tokens.css").read_text(encoding="utf-8"))
+    if 'url("fonts/' in css or "url(fonts/" in css:
+        raise RuntimeError("Skald tokens still reference a font file")
+    return css
+
+
+_SVG_ROOT_END = re.compile(r"</(?:([A-Za-z_][\w.-]*):)?svg\s*>((?:\s|<!--(?:(?!-->).)*-->)*)\Z", re.S)
+
+
+def _svg_with_tokens(svg: str) -> str:
+    """Append the Skald tokens as the root's last ``<style>`` (CSS applies wherever it sits)."""
+    css = skald_tokens()
+    end = _SVG_ROOT_END.search(svg)
+    if end is None or "]]>" in css:
+        raise RuntimeError("cannot place the Skald tokens in the SVG")
+    tag = f"{end.group(1)}:style" if end.group(1) else "style"
+    return svg[:end.start()] + f"<{tag}><![CDATA[\n{css}]]></{tag}>" + svg[end.start():]
+
+
+# --- page ----------------------------------------------------------------------------
+
+_PAGE_HTML_ELEMENTS = {
+    "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6", "header", "footer", "section", "article", "aside",
+    "figure", "figcaption", "ul", "ol", "li", "dl", "dt", "dd", "table", "thead", "tbody", "tfoot", "tr", "th",
+    "td", "caption", "colgroup", "col", "strong", "em", "b", "i", "u", "s", "small", "sub", "sup", "mark",
+    "code", "pre", "kbd", "var", "samp", "abbr", "cite", "q", "blockquote", "br", "hr", "wbr", "details",
+    "summary", "time", "a", "style", "svg", "mimir-original"}
+_PAGE_VOID = {"br", "hr", "wbr", "col"}
+_PAGE_GLOBAL_ATTRS = {"id", "class", "style", "title", "lang", "dir", "role", "hidden", "tabindex"}
+_PAGE_ELEMENT_ATTRS = {
+    "a": {"href"}, "th": {"colspan", "rowspan", "scope", "headers", "abbr"}, "td": {"colspan", "rowspan", "headers"},
+    "col": {"span"}, "colgroup": {"span"}, "ol": {"start", "reversed", "type"}, "li": {"value"},
+    "time": {"datetime"}, "details": {"open"}}
+_PAGE_ATTR_NAME = re.compile(r"[a-z][a-z0-9_.:-]*")
+# html.parser lowercases names; inline SVG gets the camelCase spelling back
+_SVG_CASE = {name.lower(): name for name in _SVG_ELEMENTS | {
+    "viewBox", "preserveAspectRatio", "pathLength", "gradientUnits", "gradientTransform", "spreadMethod",
+    "markerWidth", "markerHeight", "markerUnits", "refX", "refY", "clipPathUnits", "maskUnits",
+    "maskContentUnits", "textLength", "lengthAdjust", "startOffset"}}
+_RESERVED_ID = re.compile(r"(?:mimir|sk)-")
+
+
+class _PageBody(HTMLParser):
+    """Check a builder-written page body against the allowlist and write it out again from what was checked.
+
+    The output is rebuilt from the parsed tokens (names, escaped text and attribute values), so the
+    browser sees exactly the markup that passed. ``original(attrs, k)`` turns the k-th
+    ``<mimir-original>`` marker into the shell's markup.
+    """
+
+    def __init__(self, original):
+        super().__init__(convert_charrefs=True)
+        self.original = original
+        self.out: list[str] = []
+        self.stack: list[dict] = []      # open elements: {"name", "svg", "kids", "text"}
+        self.ids: set[str] = set()
+        self.markers = 0
+        self.math = False
+
+    # -- helpers
+    def _fail(self, message: str):
+        raise InputError(f"body: {message}")
+
+    def _in_svg(self) -> bool:
+        return bool(self.stack) and self.stack[-1]["svg"]
+
+    def _attrs(self, tag: str, attrs: list, svg: bool) -> str:
+        seen, parts = set(), []
+        for name, value in attrs:
+            if not _PAGE_ATTR_NAME.fullmatch(name):
+                self._fail(f"<{tag}> has a malformed attribute name {_short(name)}")
+            if name in seen:
+                self._fail(f"<{tag}> has the attribute {name} twice")
+            seen.add(name)
+            value = "" if value is None else value
+            if name.startswith("on"):
+                self._fail(f"event attribute {name} on <{tag}> is not allowed")
+            where = f"<{tag}> attribute {name}"
+            if svg:
+                if name.endswith("href") and not value.startswith("#"):
+                    self._fail(f"{where} must start with # (no external links): {_short(value)}")
+                _check_css_text(value, where, "body")
+                name = _SVG_CASE.get(name, name)
+            else:
+                allowed = name in _PAGE_GLOBAL_ATTRS or name in _PAGE_ELEMENT_ATTRS.get(tag, ())
+                if not (allowed or name.startswith(("aria-", "data-"))):
+                    self._fail(f"attribute {name} on <{tag}> is not allowed")
+                if name == "href" and not value.startswith("#"):
+                    self._fail(f"{where} must start with # (no links out of the page): {_short(value)}")
+                if name == "style":
+                    _check_css_text(value, where, "body")
+            if name == "id":
+                if value in self.ids:
+                    self._fail(f"id {_short(value)} is used twice")
+                if _RESERVED_ID.match(value):
+                    self._fail(f"id {_short(value)} is reserved for the page (mimir-..., sk-...)")
+                self.ids.add(value)
+            parts.append(f' {name}="{html.escape(value)}"')
+        return "".join(parts)
+
+    def _open(self, tag: str, attrs: list, closed: bool) -> None:
+        parent = self.stack[-1] if self.stack else None
+        if parent is not None and parent["name"] in ("mimir-original", "title", "desc"):
+            self._fail(f"<{parent['name']}> must not contain elements")
+        svg = self._in_svg() or tag == "svg"
+        if parent is not None and parent["root"]:
+            parent["kids"].append(tag)
+        if self._in_svg():
+            if _SVG_CASE.get(tag) not in _SVG_ELEMENTS:
+                self._fail(f"element <{tag}> is not allowed in an SVG")
+        elif tag not in _PAGE_HTML_ELEMENTS:
+            self._fail(f"element <{tag}> is not allowed")
+        if tag == "mimir-original":
+            self.markers += 1
+            marker = {}
+            for name, value in attrs:
+                if name in marker:
+                    self._fail(f"<mimir-original> has the attribute {name} twice")
+                marker[name] = int(value) if name == "page" and value and value.isascii() and value.isdigit() \
+                    else value
+            self.out.append(self.original(marker, self.markers))
+            if not closed:
+                self.stack.append({"name": tag, "svg": False, "root": False})
+            return
+        name = _SVG_CASE.get(tag, tag) if svg else tag
+        text = f"<{name}{self._attrs(tag, attrs, svg)}"
+        if svg and closed:
+            self.out.append(text + "/>")
+            return
+        self.out.append(text + ">")
+        if not svg and tag in _PAGE_VOID:
+            return
+        root = tag == "svg" and not self._in_svg()
+        hidden = root and dict(attrs).get("aria-hidden") == "true"
+        self.stack.append({"name": tag, "svg": svg, "root": root and not hidden, "kids": [], "text": {}})
+        if closed:
+            self.handle_endtag(tag)
+
+    # -- parser events
+    def handle_starttag(self, tag, attrs):
+        self._open(tag, attrs, closed=False)
+
+    def handle_startendtag(self, tag, attrs):
+        self._open(tag, attrs, closed=True)
+
+    def handle_endtag(self, tag):
+        if not self.stack or self.stack[-1]["name"] != tag:
+            if tag in _PAGE_VOID:
+                self._fail(f"</{tag}> closes nothing (<{tag}> has no end tag)")
+            open_ = f"<{self.stack[-1]['name']}>" if self.stack else "no open element"
+            self._fail(f"</{tag}> does not close {open_}")
+        top = self.stack.pop()
+        if tag == "mimir-original":
+            return
+        if top.get("root"):
+            for k, want in enumerate(("title", "desc")):
+                if len(top["kids"]) <= k or top["kids"][k] != want:
+                    self._fail(f'<svg>: child element {k + 1} must be <{want}> (or mark the svg aria-hidden="true")')
+                if not top["text"].get(want, "").strip():
+                    self._fail(f"<svg>: <{want}> must not be empty")
+        self.out.append(f"</{_SVG_CASE.get(tag, tag) if top['svg'] else tag}>")
+
+    def handle_data(self, data):
+        parent = self.stack[-1] if self.stack else None
+        if parent is not None and parent["name"] == "style":
+            if "<" in data or "&" in data:
+                self._fail("<style> must not contain < or &")
+            _check_css_text(data, "<style>", "body")
+            self.out.append(data)
+            return
+        if parent is not None and parent["name"] == "mimir-original" and data.strip():
+            self._fail("<mimir-original> must be empty")
+        if parent is not None and parent["name"] in ("title", "desc") and len(self.stack) > 1 \
+                and self.stack[-2].get("root"):
+            self.stack[-2]["text"][parent["name"]] = self.stack[-2]["text"].get(parent["name"], "") + data
+        if not self._in_svg() and ("\\(" in data or "\\[" in data):
+            self.math = True
+        self.out.append(html.escape(data, quote=False))
+
+    def handle_comment(self, data):
+        pass
+
+    def handle_decl(self, decl):
+        self._fail("declarations (<!...>) are not allowed")
+
+    def unknown_decl(self, data):
+        self._fail("declarations and CDATA sections (<![...]>) are not allowed")
+
+    def handle_pi(self, data):
+        self._fail("processing instructions (<?...>) are not allowed")
+
+    def finish(self) -> str:
+        self.close()
+        if self.stack:
+            self._fail(f"<{self.stack[-1]['name']}> is not closed")
+        return "".join(self.out)
+
+
+def check_page_body(body: str, original) -> tuple[str, bool]:
+    """Check a page body (see the docstring); return it rebuilt and whether it holds math."""
+    parser = _PageBody(original)
+    parser.feed(body)
+    out = parser.finish()
+    return out, parser.math
+
+
+def render_free_page(title: str, body: str, math: bool) -> str:
+    katex = _katex() if math else None
+    scripts = [katex["KATEX_JS"], katex["AUTO_RENDER_JS"],
+               _check_raw(_PAGE_MATH_JS.read_text(encoding="utf-8"), "</script", "page math")] if katex else []
+    template = _PAGE_TEMPLATE.read_text(encoding="utf-8")
+    return _fill(template, {
+        "CSP": _csp([_csp_hash(s) for s in scripts]),
+        "MOTION": "none",
+        "TITLE": html.escape(title),
+        "KATEX_STYLE": f"<style>{katex['KATEX_CSS']}</style>\n" if katex else "",
+        "TOKENS": _check_raw(skald_tokens(), "</style", "Skald tokens"),
+        "BODY": body,
+        "SCRIPTS": "".join(f"<script>{s}</script>\n" for s in scripts)})
+
+
+def cmd_page(data: dict) -> dict:
+    _check_keys(data, {"term", "course", "name", "title", "body"})
+    term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
+    if "title" not in data:
+        raise InputError("title is required")
+    title = verify._text(data["title"], "title", TITLE_MAX_CHARS)
+    body = data.get("body")
+    if not isinstance(body, str) or not body.strip():
+        raise InputError("body is required (the page body as an HTML string)")
+    if any(c not in _SVG_ALLOWED_CONTROL and unicodedata.category(c) in ("Cc", "Cs") for c in body):
+        raise InputError("body contains control characters or lone surrogates")
+    size = len(body.encode("utf-8"))
+    if size > PAGE_BODY_MAX_BYTES:
+        raise InputError(f"body is {size} bytes; at most {PAGE_BODY_MAX_BYTES}")
+    course_dir = verify._course_dir(term, course)
+    index = course_dir / "INDEX.md"
+    rows = {p: r for p, r in ingest.registry(index).items() if verify._inside(course_dir, p)}
+    body_html, math = check_page_body(
+        body, lambda marker, k: _original(marker, f"body.original[{k}]", rows, course_dir, index))
+    return _write_out(course_dir, name, "html", render_free_page(title, body_html, math).encode("utf-8"))
 
 
 # --- trace ---------------------------------------------------------------------------
@@ -882,6 +1198,7 @@ def cmd_open(data: dict) -> dict:
 
 
 COMMANDS = {
+    "page": (cmd_page, "build an offline Skald page from a checked page body in <course>/.state/out/"),
     "sheet": (cmd_sheet, "build an offline HTML math sheet in <course>/.state/out/"),
     "svg": (cmd_svg, "check an SVG document and write it to <course>/.state/out/"),
     "steps": (cmd_steps, "build a step-reveal worked answer page in <course>/.state/out/"),
@@ -892,7 +1209,7 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("visual.py",
-                             ("Mimir visual builder. Subcommands: sheet, svg, steps, trace, open. Reads one JSON object on "
+                             ("Mimir visual builder. Subcommands: page, sheet, svg, steps, trace, open. Reads one JSON object on "
                               "stdin and prints one JSON object on stdout."),
                              COMMANDS, argv)
 
