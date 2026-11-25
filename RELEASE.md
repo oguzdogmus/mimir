@@ -1,8 +1,8 @@
 # Release check
 
-Mimir opens the pages and SVG files it builds through `open_in_browser` in `scripts/visual.py`. The tests cover it with fake openers only, so before a release run the same live check by hand on each OS: Linux, macOS, Windows and WSL.
+Mimir opens the pages and SVG files it builds through `open_in_browser` in `scripts/visual_open.py`. The tests cover it with fake openers only, so before a release run the same live check by hand on each OS: Linux, macOS, Windows and WSL.
 
-`scripts/release_check.py` is a dev-only script (standard library, Python 3.11+); no skill uses it. It builds `mimir-release-check.html` through the shell of `visual.py page` (the Skald tokens, a KaTeX formula and two steps, so the page's own scripts run under its Content-Security-Policy) and `mimir-release-check.svg` through the checks of `visual.py svg` (with the Skald tokens), into a new temp folder whose name contains a space, opens each one through the shipped `visual.open_in_browser`, and prints one JSON object: `platform`, `html`, `svg`, `opened_html`, `opened_svg`, `line`. It exits 0 when both files opened, else 1. `--no-open` only builds the files.
+`scripts/release_check.py` is a dev-only script (standard library, Python 3.11+); no skill uses it. It builds `mimir-release-check.html` through the shell of `visual.py page` (the Skald tokens, a KaTeX formula and two steps, so the page's own scripts run under its Content-Security-Policy) and `mimir-release-check.svg` through the checks of `visual.py svg` (with the Skald tokens), into a new temp folder whose name contains a space, opens each one through the shipped `visual_open.open_in_browser`, and prints one JSON object: `platform`, `html`, `svg`, `opened_html`, `opened_svg`, `line`. It exits 0 when both files opened, else 1. `--no-open` only builds the files.
 
 An Antigravity install (`agy plugin install`) is a snapshot of the repository: after every change, reinstall it (`agy plugin uninstall mimir`, then install again) before any live check on Antigravity.
 
