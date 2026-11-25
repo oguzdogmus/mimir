@@ -899,7 +899,7 @@ def test_trace_svg_is_reserialized(home, cdir):
     assert '<svg xmlns="http://www.w3.org/2000/svg"' in page
 
 
-@pytest.mark.parametrize("machine, svg_doc, needle", [
+BAD_MACHINES = [
     ({**DFA, "transitions": _moves(("q0", "", "q1"))}, None, "machine.transitions[1].read must be one character"),
     ({**DFA, "transitions": _moves(("q0", "0", "q1"), ("q0", "0", "q0"))}, None,
      "machine.transitions[2]: a second move from 'q0' on '0'"),
@@ -929,7 +929,10 @@ def test_trace_svg_is_reserialized(home, cdir):
     ({**DFA, "states": ["q" * 21]}, None, "machine.states[1] is longer than 20"),
     ({**DFA, "states": [f"s{i}" for i in range(61)]}, None, "machine.states has 61 states"),
     ({**DFA, "transitions": _moves(*[("q0", "0", "q1")] * 401)}, None, "machine.transitions has 401 moves"),
-])
+]
+
+
+@pytest.mark.parametrize("machine, svg_doc, needle", BAD_MACHINES)
 def test_bad_machine(home, cdir, machine, svg_doc, needle):
     fails(home, "trace", trace(machine, svg_doc=svg_doc), needle)
 
@@ -1487,3 +1490,133 @@ def test_page_rebuild_replaces_and_opens(home, cdir, monkeypatch):
     monkeypatch.setattr(visual, "open_in_browser", lambda path: opened.append(path) or True)
     out = visual.cmd_open({"term": TERM, "course": COURSE, "file": "demo.html"})
     assert opened == [first] and out["line"] == f"Opened `{first}` in your browser."
+
+
+# --- page with a machine -------------------------------------------------------------
+
+def machine_page(machine, *, svg_doc=None, name="machine", **extra) -> dict:
+    """A page whose inline diagram holds the machine's states (the trace fixtures, as a page body)."""
+    figure = f"<figure>{svg_doc or _diagram(len(machine['states']))}</figure>"
+    return {**free_page(f"<h1>Step through</h1>\n{figure}", name=name), "machine": machine, **extra}
+
+
+def build_machine_page(home, machine, **extra) -> str:
+    return build_page(home, machine_page(machine, **extra))[1]
+
+
+def test_page_with_a_machine_carries_the_simulator(home, cdir):
+    page = build_machine_page(home, PDA, example="aabb")
+    assert_safe_page(page, 2)
+    assert_skald(page)
+    data = json_data(page, "mimir-machine")
+    assert data["kind"] == "pda" and data["stack_start"] == "Z" and data["states"] == ["p", "q", "f"]
+    assert data["max_configs"] == 256 and data["max_stack"] == 64 and data["max_symbols"] == 64
+    assert data["transitions"][1] == {"from": "p", "read": "", "to": "q", "pop": "", "push": ""}
+    body = main_part(page)
+    assert body.index('id="state-3"') < body.index('id="mimir-sim"')  # the controls follow the builder's body
+    assert 'id="mimir-sim-input"' in body and 'value="aabb"' in body
+    assert "<th scope=\"col\">Pop</th>" in body and "<td>ε</td>" in body and "PDA, accepting by final state" in body
+    engine, ui = scripts(page)
+    assert "MimirSim" in engine and "data-highlight-on" in ui and "innerHTML" not in page
+
+
+def test_page_without_a_machine_has_no_simulator(home, cdir):
+    _, built = build_page(home, free_page(_diagram(2)))
+    assert_safe_page(built, 0)
+    assert "MimirSim" not in built and "mimir-machine" not in built and "mimir-sim" not in main_part(built)
+
+
+@pytest.mark.parametrize("machine, svg_doc, needle", BAD_MACHINES)
+def test_bad_machine_on_a_page(home, cdir, machine, svg_doc, needle):
+    fails(home, "page", machine_page(machine, svg_doc=svg_doc), needle)
+
+
+@pytest.mark.parametrize("payload, needle", [
+    (machine_page(DFA, svg_doc='<svg viewBox="0 0 9 9" aria-hidden="true"></svg><p id="state-1">a</p>'
+                  '<p id="state-2">b</p>'), 'body: no element with id "state-1" for machine.states[1]'),
+    (machine_page(DFA, example="0" * 65), "example has 65 symbols; at most 64"),
+    (machine_page(DFA, example="0" + " " * 4000 + "0"), "example is longer than 4000"),
+    ({**free_page(), "example": "01"}, "example is only for a page with a machine"),
+    ({**free_page(), "machine": None}, "machine must be an object"),
+    ({**free_page(), "svg": _diagram(2)}, "svg"),
+])
+def test_bad_machine_page_payload(home, cdir, payload, needle):
+    fails(home, "page", payload, needle)
+
+
+def test_machine_page_example_at_the_limit(home, cdir):
+    ok(home, "page", machine_page(DFA, example="0 " * 64))
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_machine_page_simulates_like_trace(home, cdir, tmp_path):
+    page = build_machine_page(home, PDA)
+    good, short, extra = simulate(tmp_path, page, ["aabb", "aab", "abb"])
+    assert good["verdict"] == {"result": "accepted"} and "p/AAZ" in good["frames"][2]["configs"]
+    assert short["verdict"] == {"result": "rejected"} and extra["verdict"]["result"] == "stuck"
+
+
+def page_sim_ui(tmp_path: Path, page: str, text: str, actions: str) -> dict:
+    data = json.dumps(json.dumps(json_data(page, "mimir-machine")))
+    setup = (f'document.getElementById("mimir-machine").textContent = {data};\n'
+             f'document.getElementById("mimir-sim-input").value = {json.dumps(text)};')
+    helpers = r"""
+function arrow(name, target) {
+  byId["mimir-sim"].fire("keydown", {key: name, target: target || byId["mimir-sim-next"],
+                                     preventDefault: function () {}});
+}
+function snap(tag) { out[tag] = {status: byId["mimir-sim-status"].textContent,
+  history: byId["mimir-sim-history"].children.map(function (c) { return c.textContent; }),
+  current: Object.keys(byId).filter(function (k) {
+    return k.indexOf("state-") === 0 && "data-highlight-on" in byId[k].attrs; })}; }
+"""
+    return run_ui(tmp_path, "\n".join(scripts(page)), setup, helpers + actions)
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_machine_page_ui_marks_the_current_states(home, cdir, tmp_path):
+    page = build_machine_page(home, DFA)
+    out = page_sim_ui(tmp_path, page, "0101", r"""
+out.controls = byId["mimir-sim-controls"].hidden; snap("load");
+byId["mimir-sim-start"].click(); snap("start");
+arrow("ArrowRight"); snap("one");
+key("ArrowRight"); snap("document");
+arrow("ArrowRight"); arrow("ArrowRight"); byId["mimir-sim-next"].click(); snap("end");
+byId["mimir-sim-back"].click(); snap("back");
+arrow("ArrowRight", byId["mimir-sim-input"]); snap("typing");
+byId["mimir-sim-input"].fire("input"); snap("edited");
+""")
+    assert out["controls"] is False and out["load"]["status"] == "Type an input and press Start."
+    assert out["start"] == {"status": "Start: in q0. Remaining: 0101.", "history": ["Start: in q0. Remaining: 0101."],
+                            "current": ["state-1"]}
+    assert out["one"]["status"] == "Read '0' (1 of 4): in q1. Remaining: 101." and out["one"]["current"] == ["state-2"]
+    assert out["document"] == out["one"]  # arrows outside the simulator are left to the page
+    assert out["end"]["status"].endswith("Accepted: the whole input was read and an accepting state was reached.")
+    assert len(out["end"]["history"]) == 5 and out["end"]["current"] == ["state-1"]
+    assert out["back"]["status"] == "Read '0' (3 of 4): in q0. Remaining: 1." and len(out["back"]["history"]) == 4
+    assert out["typing"] == out["back"]
+    assert out["edited"] == {"status": "Press Start to run the new input.", "history": [], "current": []}
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+@pytest.mark.parametrize("machine, text, ending", [
+    (DFA, "011", "Rejected: the whole input was read, but no accepting state was reached."),
+    (DFA_PARTIAL, "00", "Stuck on '0': no move from the previous state, so the input is rejected."),
+    (CUT, "", "No verdict: the search was cut, so an accepting path may have been missed. "
+              "Search limit reached: some paths were not followed."),
+    (DFA, "0" * 65, "Use at most 64 symbols."),
+])
+def test_machine_page_verdicts(home, cdir, tmp_path, machine, text, ending):
+    page = build_machine_page(home, machine)
+    out = page_sim_ui(tmp_path, page, text,
+                      'byId["mimir-sim-start"].click(); for (var i = 0; i < 5; i++) arrow("ArrowRight"); snap("end");')
+    assert out["end"]["status"].endswith(ending), out["end"]["status"]
+
+
+def test_machine_page_with_math_keeps_both_script_sets(home, cdir):
+    payload = machine_page(DFA)
+    payload["body"] = "<p>Read \\(w\\) one symbol at a time.</p>\n" + payload["body"]
+    _, built = build_page(home, payload)
+    assert_safe_page(built, 5)
+    bodies = scripts(built)
+    assert "renderMathInElement" in bodies[1] and "MimirSim" in bodies[3] and "mimir-sim" in bodies[4]

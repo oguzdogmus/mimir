@@ -64,6 +64,16 @@ page -- an offline page in the Skald house style from a body the builder wrote.
     ``<style>``) holds ``\\(`` or ``\\[``, KaTeX is inlined as in ``sheet`` and
     renders ``\\(...\\)`` and ``\\[...\\]`` in ``<main>``, skipping SVG;
     otherwise the page has no script at all (``script-src 'none'``).
+    ``machine`` (optional) attaches the automata simulator to the body's
+    inline diagram. It and ``example`` follow the ``trace`` rules and limits,
+    and the body needs an element ``id="state-<i>"`` inside an inline SVG for
+    each state i (counting from 1). After the body the shell adds the
+    simulator controls (``#mimir-sim``) and the machine as a table, the
+    machine as JSON data and the simulator scripts (allowed by hash); current
+    states get ``data-highlight-on`` (the teaching highlight), and the arrow
+    keys act only while focus is in the simulator. The body's ``<style>`` is
+    not scoped, since the builder writes the whole page. ``example`` without
+    ``machine`` is refused; a page without ``machine`` has no simulator.
 
 sheet -- an offline HTML math sheet from ``assets/math-sheet.html``.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "pumping-lemma",
@@ -238,6 +248,8 @@ _TRACE_TEMPLATE = _ASSETS / "interactive" / "step-through.html"
 _KATEX = _ASSETS / "vendor" / "katex"
 _PAGE_TEMPLATE = _ASSETS / "page" / "page.html"
 _PAGE_MATH_JS = _ASSETS / "page" / "math.js"
+_MACHINE_JS = _ASSETS / "page" / "machine.js"       # the simulator engine (MimirSim), page and trace
+_PAGE_SIM_JS = _ASSETS / "page" / "simulator.js"
 _SKALD = _ASSETS / "skald"
 
 _NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
@@ -694,6 +706,7 @@ class _PageBody(HTMLParser):
         self.out: list[str] = []
         self.stack: list[dict] = []      # open elements: {"name", "svg", "kids", "text"}
         self.ids: set[str] = set()
+        self.svg_ids: set[str] = set()
         self.markers = 0
         self.math = False
 
@@ -735,6 +748,8 @@ class _PageBody(HTMLParser):
                 if _RESERVED_ID.match(value):
                     self._fail(f"id {_short(value)} is reserved for the page (mimir-..., sk-...)")
                 self.ids.add(value)
+                if svg:
+                    self.svg_ids.add(value)
             parts.append(f' {name}="{html.escape(value)}"')
         return "".join(parts)
 
@@ -836,18 +851,52 @@ class _PageBody(HTMLParser):
         return "".join(self.out)
 
 
-def check_page_body(body: str, original) -> tuple[str, bool]:
-    """Check a page body (see the docstring); return it rebuilt and whether it holds math."""
+def check_page_body(body: str, original, states: list[str] = ()) -> tuple[str, bool]:
+    """Check a page body (see the docstring); return it rebuilt and whether it holds math.
+
+    ``states`` are a machine's states: each needs an element ``id="state-<i>"`` inside an inline SVG.
+    """
     parser = _PageBody(original)
     parser.feed(body)
     out = parser.finish()
+    for i, name in enumerate(states, 1):
+        if f"state-{i}" not in parser.svg_ids:
+            raise InputError(f'body: no element with id "state-{i}" for machine.states[{i}] {_short(name)} '
+                             "inside an inline <svg>")
     return out, parser.math
 
 
-def render_free_page(title: str, body: str, math: bool) -> str:
+def _simulator_html(machine: dict, example: str) -> str:
+    """The shell's simulator controls and the machine as a table, placed after the builder's body."""
+    return (
+        '\n<section class="sim" id="mimir-sim">\n<div id="mimir-sim-controls" hidden>\n'
+        "<h2>Feed an input</h2>\n"
+        f'<p><label for="mimir-sim-input">Input</label> <input type="text" id="mimir-sim-input" '
+        f'value="{html.escape(example)}" autocomplete="off" spellcheck="false" '
+        'aria-describedby="mimir-sim-hint"></p>\n'
+        f'<p class="sim-hint" id="mimir-sim-hint">One symbol per character; spaces are ignored. '
+        f"At most {TRACE_MAX_SYMBOLS} symbols.</p>\n"
+        '<p class="sim-buttons"><button type="button" id="mimir-sim-start">Start</button>'
+        '<button type="button" id="mimir-sim-next">Next symbol</button>'
+        '<button type="button" id="mimir-sim-back">Back</button></p>\n'
+        '<p class="sim-hint">Enter in the input field starts; on the buttons, the right arrow reads the next '
+        "symbol and the left arrow goes back. The current states are marked in the diagram.</p>\n"
+        '<p id="mimir-sim-status" role="status" aria-live="polite"></p>\n'
+        '<h3>Steps so far</h3>\n<ol id="mimir-sim-history"></ol>\n</div>\n'
+        f'<details class="sim-machine"><summary>The machine</summary>\n{_machine_html(machine)}\n</details>\n'
+        "</section>")
+
+
+def render_free_page(title: str, body: str, math: bool, machine: dict | None = None, example: str = "") -> str:
     katex = _katex() if math else None
     scripts = [katex["KATEX_JS"], katex["AUTO_RENDER_JS"],
                _check_raw(_PAGE_MATH_JS.read_text(encoding="utf-8"), "</script", "page math")] if katex else []
+    data = ""
+    if machine is not None:
+        body += _simulator_html(machine, example)
+        data = f'<script type="application/json" id="mimir-machine">{_json_script(_machine_data(machine))}</script>\n'
+        scripts += [_check_raw(path.read_text(encoding="utf-8"), "</script", "simulator")
+                    for path in (_MACHINE_JS, _PAGE_SIM_JS)]
     template = _PAGE_TEMPLATE.read_text(encoding="utf-8")
     return _fill(template, {
         "CSP": _csp([_csp_hash(s) for s in scripts]),
@@ -856,15 +905,19 @@ def render_free_page(title: str, body: str, math: bool) -> str:
         "KATEX_STYLE": f"<style>{katex['KATEX_CSS']}</style>\n" if katex else "",
         "TOKENS": _check_raw(skald_tokens(), "</style", "Skald tokens"),
         "BODY": body,
-        "SCRIPTS": "".join(f"<script>{s}</script>\n" for s in scripts)})
+        "SCRIPTS": data + "".join(f"<script>{s}</script>\n" for s in scripts)})
 
 
 def cmd_page(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "name", "title", "body"})
+    _check_keys(data, {"term", "course", "name", "title", "body", "machine", "example"})
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
     if "title" not in data:
         raise InputError("title is required")
     title = verify._text(data["title"], "title", TITLE_MAX_CHARS)
+    machine = _machine(data["machine"]) if "machine" in data else None
+    if machine is None and "example" in data:
+        raise InputError("example is only for a page with a machine")
+    example = _example(data)
     body = data.get("body")
     if not isinstance(body, str) or not body.strip():
         raise InputError("body is required (the page body as an HTML string)")
@@ -877,8 +930,10 @@ def cmd_page(data: dict) -> dict:
     index = course_dir / "INDEX.md"
     rows = {p: r for p, r in ingest.registry(index).items() if verify._inside(course_dir, p)}
     body_html, math = check_page_body(
-        body, lambda marker, k: _original(marker, f"body.original[{k}]", rows, course_dir, index))
-    return _write_out(course_dir, name, "html", render_free_page(title, body_html, math).encode("utf-8"))
+        body, lambda marker, k: _original(marker, f"body.original[{k}]", rows, course_dir, index),
+        machine["states"] if machine else ())
+    page = render_free_page(title, body_html, math, machine, example)
+    return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
 # --- trace ---------------------------------------------------------------------------
@@ -1087,8 +1142,25 @@ def _machine_html(machine: dict) -> str:
         body.append(f"<tr>{cells}{cell(m['to'])}</tr>")
     if not body:
         body.append(f"<tr><td colspan=\"{5 if pda else 3}\">No moves.</td></tr>")
-    return (f"<p>{html.escape(facts)}</p>\n<table>\n<thead><tr>{head}</tr></thead>\n<tbody>\n"
-            + "\n".join(body) + "\n</tbody>\n</table>")
+    return (f"<p>{html.escape(facts)}</p>\n<div class=\"table-wrap\"><table>\n<thead><tr>{head}</tr></thead>\n"
+            "<tbody>\n" + "\n".join(body) + "\n</tbody>\n</table></div>")
+
+
+def _example(data: dict) -> str:
+    """The optional input the simulator starts with."""
+    if data.get("example") is None:
+        return ""
+    example = verify._text(data["example"], "example", BLOCK_MAX_CHARS, required=False)
+    symbols = sum(1 for c in example if not c.isspace())
+    if symbols > TRACE_MAX_SYMBOLS:
+        raise InputError(f"example has {symbols} symbols; at most {TRACE_MAX_SYMBOLS}")
+    return example
+
+
+def _machine_data(machine: dict) -> dict:
+    """The simulator's JSON data: the machine and its limits."""
+    return {**machine, "max_configs": TRACE_MAX_CONFIGS, "max_stack": TRACE_MAX_STACK,
+            "max_symbols": TRACE_MAX_SYMBOLS}
 
 
 def cmd_trace(data: dict) -> dict:
@@ -1096,19 +1168,14 @@ def cmd_trace(data: dict) -> dict:
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
     title = _title(data)
     machine = _machine(data.get("machine"))
-    example = ""
-    if data.get("example") is not None:
-        example = verify._text(data["example"], "example", BLOCK_MAX_CHARS, required=False)
-        symbols = sum(1 for c in example if not c.isspace())
-        if symbols > TRACE_MAX_SYMBOLS:
-            raise InputError(f"example has {symbols} symbols; at most {TRACE_MAX_SYMBOLS}")
+    example = _example(data)
     diagram = _inline_svg(data.get("svg"), machine["states"])
     course_dir = verify._course_dir(term, course)
-    payload = {**machine, "max_configs": TRACE_MAX_CONFIGS, "max_stack": TRACE_MAX_STACK,
-               "max_symbols": TRACE_MAX_SYMBOLS}
+    engine = _check_raw(_MACHINE_JS.read_text(encoding="utf-8"), "</script", "simulator")
     page = render_page(_TRACE_TEMPLATE, {"TITLE": html.escape(title), "SVG": diagram,
                                          "EXAMPLE": html.escape(example), "MAX_SYMBOLS": str(TRACE_MAX_SYMBOLS),
-                                         "MACHINE": _machine_html(machine), "DATA": _json_script(payload)})
+                                         "MACHINE": _machine_html(machine), "SIM_JS": engine,
+                                         "DATA": _json_script(_machine_data(machine))})
     return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
