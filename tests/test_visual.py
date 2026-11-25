@@ -273,6 +273,12 @@ DESC = '  <desc>Two states q0 (start, accepting, double circle) and q1; 0 moves 
     (_swap("<style>", "<style>@import 'https://evil.example/a.css';"), "@import"),
     (_swap("<style>", "<style>@IMPORT url(#x);"), "@import"),
     (_swap("fill: url(#g)", "mask-image: image-set('https://evil.example/a.png' 1x)"), "image-set("),
+    (_swap("fill: url(#g)", "mask-image: image('https://evil.example/a.png')"), "contains image("),
+    (_swap("fill: url(#g)", "mask-image: -webkit-image-set('https://evil.example/a.png' 1x)"),
+     "contains -webkit-image-set("),
+    (_swap("fill: url(#g)", "mask-image: cross-fade(url(#g), image('https://evil.example/a.png'))"), "cross-fade("),
+    (_swap("fill: url(#g)", "fill: SRC('https://evil.example/a.png')"), "contains src("),
+    (_swap('marker-end="url(#arrow)"', 'mask="src(https://evil.example/m.svg)"'), "contains src("),
     (_swap("fill: url(#g)", r"fill: u\72l(http://evil.example/a)"), "backslash"),
     (_swap("<style>", "<style><![CDATA[@import 'x.css';]]>"), "@import"),
     ('<!DOCTYPE svg [<!ENTITY a "b">]>' + SVG_OK.split("\n", 1)[1], "DOCTYPE"),
@@ -294,6 +300,16 @@ DESC = '  <desc>Two states q0 (start, accepting, double circle) and q1; 0 moves 
 def test_unsafe_svg_refused(home, cdir, doc, needle):
     fails(home, "svg", svg(doc), needle)
     assert not (cdir / ".state" / "out" / "dfa.svg").exists()
+
+
+def test_build_svg_is_the_svg_commands_file(home, cdir):
+    """The public check used by the svg command and the release check: same checks, same file."""
+    out = ok(home, "svg", svg(SVG_OK))
+    assert Path(out["path"]).read_text(encoding="utf-8") == visual.build_svg(SVG_OK)
+    for bad, needle in ((SVG_OK.replace("q0</text>", "q0\x07</text>"), "svg contains control characters"),
+                        ("", "svg is required"), (SVG_OK.replace("</svg>", ""), "not well-formed")):
+        with pytest.raises(visual.InputError, match=re.escape(needle)):
+            visual.build_svg(bad)
 
 
 def test_svg_too_large(home, cdir):
@@ -734,9 +750,9 @@ def test_delay_subcommand_is_gone(home, root, cdir):
 
 def test_new_constants_are_the_spec_values():
     assert visual.STEPS_MAX == 50
-    assert visual.TRACE_MAX_STATES == 60 and visual.TRACE_MAX_TRANSITIONS == 400
-    assert visual.STATE_NAME_MAX_CHARS == 20 and visual.TRACE_MAX_SYMBOLS == 64
-    assert visual.TRACE_MAX_CONFIGS == 256 and visual.TRACE_MAX_STACK == 64
+    assert visual.MACHINE_MAX_STATES == 60 and visual.MACHINE_MAX_TRANSITIONS == 400
+    assert visual.STATE_NAME_MAX_CHARS == 20 and visual.MACHINE_MAX_SYMBOLS == 64
+    assert visual.MACHINE_MAX_CONFIGS == 256 and visual.MACHINE_MAX_STACK == 64
 
 
 @pytest.mark.parametrize("field, machine", [
@@ -902,6 +918,34 @@ def test_unreadable_profile_gives_motion_none(home, root, cdir):
     assert 'data-motion="none"' in build_page(home, free_page())[1]
 
 
+def test_profile_that_cannot_be_read_gives_motion_none(home, root, cdir, monkeypatch):
+    set_motion(root, "motion: full")
+    profile = root / ".state" / "profile.md"
+    real = Path.read_text
+
+    def read_text(self, *args, **kwargs):
+        if self == profile:
+            raise PermissionError(13, "Permission denied", str(self))
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    assert visual.workspace.read_motion(root) is None
+    monkeypatch.undo()
+    profile.chmod(0)
+    try:
+        if os.access(profile, os.R_OK):
+            pytest.skip("running as a user who can read any file")
+        assert 'data-motion="none"' in build_page(home, free_page())[1]
+    finally:
+        profile.chmod(0o644)
+
+
+def test_motion_fallback_has_one_owner():
+    """render_page builds a missing level as none; only read_motion decides what a valid level is."""
+    assert 'data-motion="none"' in visual.render_page("t", "<p>a</p>", False)
+    assert 'data-motion="gentle"' in visual.render_page("t", "<p>a</p>", False, motion="gentle")
+
+
 def assert_no_katex(built: str) -> None:
     assert "renderMathInElement" not in built and "font-family:KaTeX_" not in built
 
@@ -1025,6 +1069,20 @@ def _p(inner: str) -> str:
     (_p("<style>@import 'https://evil.example/a.css';</style>"), "body: <style> contains @import"),
     (_p("<style>p { background: url(https://evil.example/a.png); }</style>"), "body: <style> has url("),
     (_p("<style>p { background: image-set('a.png' 1x); }</style>"), "image-set("),
+    (_p("<style>p { background: image('https://evil.example/a.png'); }</style>"), "body: <style> contains image("),
+    (_p("<style>@font-face { font-family: x; src: src('https://evil.example/a.woff2'); }</style>"),
+     "contains src("),
+    (_p('<p style="background: element(#x)">a</p>'), "body: <p> attribute style contains element("),
+    (_p('<p style="background: paint(x)">a</p>'), "contains paint("),
+    (_p("<style>#mimir-controls { display: none; }</style>"), "body: <style> must not name the page's own mimir-"),
+    (_p("<style>main #mimir-sim, p { visibility: hidden; }</style>"), "must not name"),
+    (_p("<style>.mimir-js p { color: red; }</style>"), "must not name"),
+    (_p("<style>.sk-defs { display: block; }</style>"), "must not name"),
+    (_p("<style>.mimir-mascot { opacity: 0; }</style>"), "must not name"),
+    (_p('<style>[id^="mimir"] { display: none; }</style>'), "must not name"),
+    (_p("<style>[class~=sk-defs] { display: none; }</style>"), "must not name"),
+    (_p('<svg viewBox="0 0 9 9"><title>t</title><desc>d</desc><style>#MIMIR-CONTROLS { display: none }</style></svg>'),
+     "must not name"),
     (_p("<style>p { color: re\\64 }</style>"), "backslash"),
     (_p("<style>p { b: u&#x72;l(https://evil.example/a) }</style>"), "<style> must not contain < or &"),
     (_p('<svg viewBox="0 0 9 9"><title>t</title><desc>d</desc><style><img src=x onerror=alert(1)></style></svg>'),
@@ -1058,6 +1116,11 @@ def _p(inner: str) -> str:
     (_p("<!DOCTYPE html><p>a</p>"), "declarations"),
     (_p("<![CDATA[x]]>"), "declarations"),
     (_p("<?xml-stylesheet href='x'?>"), "processing instructions"),
+    (_p('<p data-step="2" class="x>Step 2: the answer is 42.</p>'), "body: the body ends inside an unfinished tag"),
+    (_p("<p>a</p><!-- unclosed comment <p>b</p>"), "ends inside an unfinished tag, comment"),
+    (_p("<p>a</p><p"), "ends inside an unfinished tag"),
+    (_p("<p>a</p></p"), "ends inside an unfinished tag"),
+    (_p("<p>a</p><!x"), "ends inside an unfinished tag"),
     (_p("<p>a\x07</p>"), "body contains control characters"),
     ("   ", "body is required"),
 ])
@@ -1358,6 +1421,47 @@ def test_page_without_step_markup_has_no_step_script(home, cdir):
     assert STEPS_JS not in scripts(built)
 
 
+MASCOT_ART = (ROOT_DIR / "assets" / "skald" / "mascot.svg").read_text(encoding="utf-8")
+
+
+def test_a_page_with_steps_carries_the_mascot(home, cdir):
+    """Inlined (offline), decorative, outside <main>, hidden until the step script shows him."""
+    _, built = build_page(home, free_page(STEP_BODY))
+    assert_safe_page(built, 1)
+    wrapper = '<div id="mimir-mascot" class="mimir-mascot" aria-hidden="true" hidden>\n'
+    assert built.count(wrapper) == 1 and built.index("</main>") < built.index(wrapper) < built.index("<script>")
+    assert wrapper + MASCOT_ART + "</div>" in built
+    assert MASCOT_ART.startswith("<svg ") and 'aria-hidden="true"' in MASCOT_ART.split(">", 1)[0]
+    for needle in (" id=", "href", "url(", "<style", "<script", "<!--", "<text"):
+        assert needle not in MASCOT_ART, needle
+    for mood in ("curious", "explaining", "thinking", "surprised", "pleased", "proud"):
+        assert f'class="mm-face mm-{mood}"' in MASCOT_ART, mood
+    assert "mimir-mascot" in STEPS_JS
+
+
+def test_a_page_without_steps_has_no_mascot(home, cdir):
+    """His moods follow the steps, and without the step ledge he would have no place on a phone."""
+    _, built = build_page(home, free_page())
+    assert "mimir-mascot" not in main_part(built) and 'id="mimir-mascot"' not in built
+
+
+def test_mascot_tokens_place_him_hide_him_in_print_and_keep_still_at_motion_none():
+    tokens = visual.skald_tokens()
+    rule = tokens[tokens.index("#mimir-mascot {"):]
+    rule = rule[:rule.index("}")]
+    for decl in ("position: fixed", "pointer-events: none", "right: var(--mimir-mascot-right)",
+                 "width: var(--mimir-mascot-size, var(--mimir-mascot-size-wide))"):
+        assert decl in rule, decl
+    print_block = tokens[tokens.index("@media print {"):]
+    assert "#mimir-controls, #mimir-mascot { display: none !important; }" in print_block
+    for line in tokens.splitlines():
+        if (".mimir-mascot" in line and ("animation:" in line or "transition:" in line)
+                and not line.startswith(':root[data-motion="')):
+            raise AssertionError(f"mascot motion outside a motion-level rule: {line}")
+    assert ':root[data-motion="full"] .mimir-mascot .mm-bob { animation: mm-bob' in tokens
+    assert ':root[data-motion="gentle"] .mimir-mascot .mm-face' in tokens
+
+
 STEP_DOM = r"""
 function Node(tag, attrs, parent, svg) {
   this.tagName = tag; this.attrs = attrs || {}; this.parent = parent || null; this.children = [];
@@ -1431,6 +1535,27 @@ function snap(tag) {
 
 def step_ui(tmp_path: Path, actions: str) -> dict:
     return run_ui(tmp_path, STEPS_JS, STEP_DOM, actions)
+
+
+MASCOT_DOM = STEP_DOM + r"""
+Object.defineProperty(Node.prototype, "hidden", {get: function () { return "hidden" in this.attrs; },
+  set: function (v) { if (v) this.attrs.hidden = ""; else delete this.attrs.hidden; }});
+var mascot = new Node("div", {"id": "mimir-mascot", "class": "mimir-mascot", "aria-hidden": "true", "hidden": ""}, root);
+for (var s = 4; s <= 7; s++) new Node("p", {"data-step": String(s)}, main);
+"""
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_mascot_mood_follows_the_steps_ui(home, cdir, tmp_path):
+    out = run_ui(tmp_path, STEPS_JS, MASCOT_DOM, r"""
+out.shown = !mascot.hidden;
+out.moods = [mascot.getAttribute("data-mood")];
+for (var i = 0; i < 8; i++) { key("ArrowRight"); out.moods.push(mascot.getAttribute("data-mood")); }
+key("ArrowLeft"); out.moods.push(mascot.getAttribute("data-mood"));
+""")
+    assert out["shown"] is True
+    assert out["moods"] == ["curious", "explaining", "thinking", "surprised", "pleased", "explaining", "thinking",
+                            "proud", "proud", "thinking"]
 
 
 @pytest.mark.skipif(NODE is None, reason="node not installed")

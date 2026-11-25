@@ -284,32 +284,40 @@ def course_folder(root: Path, term: str, course: str, what: str = "course") -> P
     return course_dir
 
 
-def read_setup_done(root: Path) -> str | None:
+def _profile_value(root: Path, key: str) -> str | None:
+    """The value of the profile's first ``<key>:`` line, stripped; None when the profile or the line is missing.
+
+    Raises OSError when the profile exists but cannot be read; undecodable bytes are replaced.
+    """
     profile = root / ".state" / "profile.md"
     if not profile.is_file():
         return None
     for line in profile.read_text(encoding="utf-8", errors="replace").splitlines():
-        match = re.fullmatch(r"setup_done:(.*)", line.strip())
+        match = re.fullmatch(rf"{re.escape(key)}:(.*)", line.strip())
         if match:
-            value = match.group(1).strip()
-            return value if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) else None
+            return match.group(1).strip()
     return None
+
+
+def read_setup_done(root: Path) -> str | None:
+    value = _profile_value(root, "setup_done")
+    return value if value and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) else None
 
 
 MOTION_LEVELS = ("none", "gentle", "full")
 
 
 def read_motion(root: Path) -> str | None:
-    """The profile's motion level (none, gentle or full); None when the line is missing, empty or malformed."""
-    profile = root / ".state" / "profile.md"
-    if not profile.is_file():
+    """The profile's motion level (none, gentle or full).
+
+    None when not chosen: the line is missing, empty or malformed, or the profile cannot be read (a visual is
+    then built at motion level none, never refused for it).
+    """
+    try:
+        value = _profile_value(root, "motion")
+    except OSError:
         return None
-    for line in profile.read_text(encoding="utf-8", errors="replace").splitlines():
-        match = re.fullmatch(r"motion:(.*)", line.strip())
-        if match:
-            value = match.group(1).strip()
-            return value if value in MOTION_LEVELS else None
-    return None
+    return value if value in MOTION_LEVELS else None
 
 
 # --- Templates and tree building -------------------------------------------------

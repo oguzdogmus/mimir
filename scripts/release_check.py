@@ -53,7 +53,7 @@ def render_html(platform: str) -> str:
             '<div class="step" data-step="2"><div class="n">2</div>'
             "<p>Step two: the last step.</p></div>\n")
     checked, math, steps = visual.check_page_body(body, _no_original)
-    return visual.render_free_page(HEADING, checked, math, steps)
+    return visual.render_page(HEADING, checked, math, steps)
 
 
 def _no_original(marker: dict, k: int) -> str:
@@ -72,9 +72,7 @@ def render_svg(platform: str) -> str:
            f"<text class=\"label\" x=\"240\" y=\"72\" text-anchor=\"middle\" font-size=\"28\">{HEADING}</text>\n"
            f"<text x=\"240\" y=\"115\" text-anchor=\"middle\" font-size=\"22\">Platform: {p}</text>\n"
            "</svg>\n")
-    figure = visual._tree_from_svg(visual.check_svg(svg.encode("utf-8")))
-    visual.check_labels([figure], visual._style_texts(figure), "svg", 16.0)  # as cmd_svg does
-    return visual._svg_with_tokens(svg)
+    return visual.build_svg(svg)
 
 
 def build(platform: str) -> tuple[Path, Path]:

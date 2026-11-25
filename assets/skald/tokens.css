@@ -459,6 +459,52 @@ main > :nth-last-child(2) { margin-bottom: var(--sp-7); }
 #mimir-sim-history { color: var(--ink-soft); }
 #mimir-sim .sim-machine summary { font: 400 1.1rem/1.3 var(--font-hand); color: var(--ink-soft); cursor: pointer; }
 
+/* ---------- The mascot: Mimir's head, bottom right (a page with steps) ----------
+   The shell inlines assets/skald/mascot.svg into div#mimir-mascot.mimir-mascot (aria-hidden,
+   hidden until the step script runs) and the step script sets data-mood: curious before the
+   first step, then explaining, thinking, surprised and pleased in turn, proud on the last.
+   No data-mood reads as curious. One fixed palette on every theme, like any cartoon
+   character; only the marks above his head use the page's teaching pen. */
+#mimir-mascot {
+  position: fixed; z-index: 40; pointer-events: none;
+  right: var(--mimir-mascot-right);
+  bottom: var(--mimir-mascot-bottom, calc(76px + env(safe-area-inset-bottom, 0px)));
+  width: var(--mimir-mascot-size, var(--mimir-mascot-size-wide));
+  --mm-accent: var(--mark);
+}
+.mimir-mascot {
+  --mm-skin: #f9dcc6; --mm-skin-deep: #efbd9f; --mm-nose: #e79c85; --mm-blush: #e4837f;
+  --mm-beard: #ece7df; --mm-brow: #92826f; --mm-line: #463229; --mm-gold: #ffd24a;
+  --mm-eye: #fff8e8; --mm-edge: #fbf8f1;
+}
+.mimir-mascot .mm-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.mimir-mascot .mm-edge-p { fill: var(--mm-edge); stroke: var(--mm-edge); stroke-width: 7; stroke-linejoin: round; stroke-linecap: round; }
+.mimir-mascot .mm-edge-t { fill: var(--mm-edge); stroke: var(--mm-edge); stroke-width: 3.4; stroke-linejoin: round; stroke-linecap: round; }
+.mimir-mascot .mm-ln { stroke: var(--mm-line); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.mimir-mascot .mm-w2 { stroke-width: 2; }
+.mimir-mascot .mm-w18 { stroke-width: 1.8; }
+.mimir-mascot .mm-w16 { stroke-width: 1.6; }
+.mimir-mascot .mm-w34 { stroke-width: 3.4; }
+.mimir-mascot .mm-nofill { fill: none; }
+.mimir-mascot .mm-skin { fill: var(--mm-skin); }
+.mimir-mascot .mm-deep { fill: var(--mm-skin-deep); }
+.mimir-mascot .mm-nose { fill: var(--mm-nose); }
+.mimir-mascot .mm-beard { fill: var(--mm-beard); }
+.mimir-mascot .mm-gold { fill: var(--mm-gold); }
+.mimir-mascot .mm-eye { fill: var(--mm-eye); }
+.mimir-mascot .mm-ink { fill: var(--mm-line); }
+.mimir-mascot .mm-hole { fill: var(--mm-line); opacity: .5; }
+.mimir-mascot .mm-blush { fill: var(--mm-blush); }
+.mimir-mascot .mm-brow-l { fill: var(--mm-brow); stroke: var(--mm-line); stroke-width: 1.9; stroke-linejoin: round; stroke-linecap: round; }
+.mimir-mascot .mm-mk { fill: var(--mm-accent); stroke: var(--mm-line); stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
+/* moods: only the active mood's face parts and mark show */
+.mimir-mascot[data-mood]:not([data-mood="curious"]) .mm-curious,
+.mimir-mascot:not([data-mood="explaining"]) .mm-explaining,
+.mimir-mascot:not([data-mood="thinking"]) .mm-thinking,
+.mimir-mascot:not([data-mood="surprised"]) .mm-surprised,
+.mimir-mascot:not([data-mood="pleased"]) .mm-pleased,
+.mimir-mascot:not([data-mood="proud"]) .mm-proud { opacity: 0; }
+
 /* ---------- Narrow screens: one column, the figure pinned above the work ---------- */
 @media (max-width: 900px) {
   .board, .board.work-first { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
@@ -489,6 +535,8 @@ main > :nth-last-child(2) { margin-bottom: var(--sp-7); }
 @keyframes sk-draw   { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 @keyframes sk-wash   { from { fill-opacity: 0; } }
 @keyframes sk-circle { from { --sweep: 0deg; } to { --sweep: 360deg; } }
+@keyframes mm-bob    { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.2px); } }
+@keyframes mm-blink  { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.12); } }
 
 /* none: nothing moves; every step still appears */
 :root[data-motion="none"] *, :root[data-motion="none"] *::before, :root[data-motion="none"] *::after {
@@ -521,6 +569,15 @@ main > :nth-last-child(2) { margin-bottom: var(--sp-7); }
   mask: conic-gradient(from 210deg, #000 var(--sweep), transparent 0);
   animation: sk-circle .75s .3s var(--ease-chalk) both;
 }
+/* the mascot: gentle crossfades his face from mood to mood; full adds a bobbing mark and a blink */
+:root[data-motion="gentle"] .mimir-mascot .mm-face, :root[data-motion="gentle"] .mimir-mascot .mm-mark,
+:root[data-motion="full"] .mimir-mascot .mm-face, :root[data-motion="full"] .mimir-mascot .mm-mark {
+  transition: opacity 200ms ease;
+}
+:root[data-motion="full"] .mimir-mascot .mm-bob { animation: mm-bob 3.4s ease-in-out infinite; }
+:root[data-motion="full"] .mimir-mascot .mm-blink {
+  transform-box: fill-box; transform-origin: center; animation: mm-blink 5.5s infinite;
+}
 
 /* ---------- Print: a clean handout, no board ---------- */
 @media print {
@@ -539,7 +596,7 @@ main > :nth-last-child(2) { margin-bottom: var(--sp-7); }
   html.mimir-js svg .mark-loop, html.mimir-js svg .mark-swipe { display: none !important; }
   [data-highlight-on]::before, [data-highlight-on]::after { display: none !important; }
   svg [data-highlight-on] { filter: none !important; }
-  #mimir-controls { display: none !important; }
+  #mimir-controls, #mimir-mascot { display: none !important; }
   * { animation: none !important; transition: none !important; }
   main { min-height: 0; padding: 0; }
   .board, .board.work-first { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8mm; }
