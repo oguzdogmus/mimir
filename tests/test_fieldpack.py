@@ -325,6 +325,68 @@ def test_report_needs_an_existing_course(home, root):
     fails(home, "report", {"term": TERM, "course": COURSE}, "no course folder at")
 
 
+# --- match (#98) ---------------------------------------------------------------------
+
+def match(field: str, course: str = COURSE, **extra) -> dict:
+    return {"term": TERM, "course": course, "field": field, **extra}
+
+
+def test_match_links_a_course_to_the_existing_pack_of_its_field_without_research(home, root, course):
+    """#98: a second course in a field reuses that field's pack; nothing is researched."""
+    ok(home, "save", PACK)
+    out = ok(home, "match", match("medicine", topics=["Cardiac cycle"]))
+    assert out["status"] == "linked" and out["added"] is True and out["packs"] == ["medicine"]
+    assert "brief" not in out
+    assert ok(home, "report", {"term": TERM, "course": COURSE})["packs"][0]["field"] == "medicine"
+    assert out["line"] == f"{COURSE} now uses the field pack medicine."
+
+
+def test_match_on_a_field_without_a_pack_returns_the_researcher_brief_and_writes_nothing(home, root, course):
+    """#98: the brief is the researcher's whole input, built only from the field name and topic names."""
+    before = snapshot(root)
+    out = ok(home, "match", match("human-anatomy", topics=["Cardiac cycle", " Heart valves "]))
+    assert out["status"] == "research" and out["packs"] == [] and out["added"] is False
+    assert out["brief"] == {"field": "human-anatomy", "topics": ["Cardiac cycle", "Heart valves"]}
+    assert out["line"] == "No field pack human-anatomy yet; researching it in the background."
+    assert snapshot(root) == before
+
+
+def test_match_refuses_research_for_a_course_that_already_uses_two_packs(home, root, course):
+    ok(home, "save", PACK)
+    ok(home, "save", ENGINEERING)
+    ok(home, "link", link("medicine"))
+    ok(home, "link", link("civil-engineering"))
+    before = snapshot(root)
+    fails(home, "match", match("translation-studies"), "already uses 2 field packs (medicine, civil-engineering)")
+    assert snapshot(root) == before
+
+
+@pytest.mark.parametrize("payload, needle", [
+    (match("human-anatomy", topics="Cardiac cycle"), "topics must be a list of at most 20 topic names"),
+    (match("human-anatomy", topics=[f"Topic {n}" for n in range(21)]), "topics must be a list of at most 20"),
+    (match("human-anatomy", topics=["x" * 121]), "topics[1] has 121 characters, over the 120-character limit"),
+    (match("human-anatomy", topics=["Cardiac\ncycle"]), "topics[1] must be one line"),
+    (match("human-anatomy", notes="Week 3 slides"), "unknown field 'notes'"),
+    (match("Human Anatomy"), "field must be lowercase letters and digits"),
+    (match("human-anatomy", course="ANAT999 Missing"), "no course folder at"),
+])
+def test_match_refuses_bad_input_and_writes_nothing(home, root, course, payload, needle):
+    before = snapshot(root)
+    fails(home, "match", payload, needle)
+    assert snapshot(root) == before
+
+
+def test_after_research_saves_the_pack_match_links_the_waiting_course(home, root, course):
+    """#98: ingest matches again when the background research finishes, which links the course."""
+    assert ok(home, "match", match("medicine", topics=["Cardiac cycle"]))["status"] == "research"
+    ok(home, "save", PACK)  # what the field researcher does
+    out = ok(home, "match", match("medicine", topics=["Cardiac cycle"]))
+    assert out["status"] == "linked" and out["added"] is True
+    again = ok(home, "match", match("medicine"))
+    assert again["status"] == "linked" and again["added"] is False
+    assert again["line"] == f"{COURSE} already uses the field pack medicine."
+
+
 # --- glossary ------------------------------------------------------------------------
 
 def test_the_glossary_names_field_packs_and_base_figures():

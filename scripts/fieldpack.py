@@ -4,7 +4,7 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py`` and ``ingest.py`` (same folder). Run as::
 
-    python3 fieldpack.py <save|list|link|report>  < input.json
+    python3 fieldpack.py <save|list|link|match|report>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -85,6 +85,24 @@ link -- record that a course uses a field pack.
     MAX_LINKS packs, in link order; linking a pack it already uses changes
     nothing (``added`` false).
 
+match -- link a course to the pack of its field, or name the research it needs.
+    in : {"term": "2026-Fall", "course": "ANAT101 Human Anatomy",
+          "field": "human-anatomy", "topics": ["Cardiac cycle"]}
+    out: {"course_dir": "...", "path": "...", "field": "human-anatomy",
+          "packs": [], "added": false, "status": "research", "brief":
+          {"field": "human-anatomy", "topics": ["Cardiac cycle"]}, "line":
+          "No field pack human-anatomy yet; researching it in the
+          background."}
+    When the field already has a pack, ``match`` links it exactly as
+    ``link`` does and returns ``status`` "linked" with no ``brief``. With
+    no pack it writes nothing and returns ``status`` "research" and the
+    ``brief``: the field researcher's whole input, built only from the field
+    name and the topic names, so no course text, name or path reaches it.
+    ``topics`` (optional, default []) holds at most MAX_TOPICS public topic
+    names, one line each, at most ``ingest.TOPIC_MAX_CHARS`` characters,
+    stored stripped. A course that already uses MAX_LINKS packs exits 2.
+    Matching again after the research saved the pack links the course.
+
 report -- the field packs one course uses.
     in : {"term": "2026-Fall", "course": "MED101 Physiology"}
     out: {"course_dir": "...", "status": "linked", "packs": [{"field":
@@ -119,6 +137,7 @@ MAX_PACK_CHARS = 16000
 FIELD_MAX_CHARS = 40
 TEXT_MAX_CHARS = 300
 CONTENT_MAX_CHARS = 2000
+MAX_TOPICS = 20
 
 _FIELD = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
@@ -354,6 +373,12 @@ def linked_fields(record: Path) -> list[str]:
     return fields
 
 
+def _check_room(course: str, fields: list[str]) -> None:
+    if len(fields) >= MAX_LINKS:
+        raise InputError(f"{course} already uses {len(fields)} field packs ({', '.join(fields)}); a course uses "
+                         f"at most {MAX_LINKS}")
+
+
 def cmd_link(data: dict) -> dict:
     check_keys(data, {"term", "course", "field"})
     field = parse_field(data)
@@ -361,9 +386,8 @@ def cmd_link(data: dict) -> dict:
     load_pack(root, field)
     fields = linked_fields(record)
     added = field not in fields
-    if added and len(fields) >= MAX_LINKS:
-        raise InputError(f"{course} already uses {len(fields)} field packs ({', '.join(fields)}); a course uses "
-                         f"at most {MAX_LINKS}")
+    if added:
+        _check_room(course, fields)
     if added:
         fields.append(field)
         workspace.build_course(root, term, course, [])  # after every check: restores a missing .state/
@@ -372,6 +396,29 @@ def cmd_link(data: dict) -> dict:
             else f"{course} already uses the field pack {field}.")
     return {"course_dir": str(course_dir), "path": str(record), "field": field, "packs": fields, "added": added,
             "line": line}
+
+
+# --- match ----------------------------------------------------------------------------
+
+def _topics(data: dict) -> list[str]:
+    value = data.get("topics", [])
+    if not isinstance(value, list) or len(value) > MAX_TOPICS:
+        raise InputError(f"topics must be a list of at most {MAX_TOPICS} topic names")
+    return [_text(v, f"topics[{n}]", ingest.TOPIC_MAX_CHARS) for n, v in enumerate(value, 1)]
+
+
+def cmd_match(data: dict) -> dict:
+    check_keys(data, {"term", "course", "field", "topics"})
+    field, topics = parse_field(data), _topics(data)
+    root, course_dir, record, _, course = _course(data)
+    if pack_path(root, field).parent.exists():
+        out = cmd_link({k: data[k] for k in ("term", "course", "field")})
+        return {**out, "status": "linked"}
+    fields = linked_fields(record)
+    _check_room(course, fields)
+    return {"course_dir": str(course_dir), "path": str(record), "field": field, "packs": fields,
+            "added": False, "status": "research", "brief": {"field": field, "topics": topics},
+            "line": f"No field pack {field} yet; researching it in the background."}
 
 
 # --- report ---------------------------------------------------------------------------
@@ -394,13 +441,14 @@ COMMANDS = {
     "save": (cmd_save, "check one field pack and write it once"),
     "list": (cmd_list, "list the field packs in the workspace"),
     "link": (cmd_link, "record that a course uses a field pack (at most two)"),
+    "match": (cmd_match, "link a course to the pack of its field, or name the research it needs"),
     "report": (cmd_report, "the field packs one course uses"),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("fieldpack.py",
-                             ("Mimir field pack store. Subcommands: save, list, link, report. Reads one JSON object on stdin "
+                             ("Mimir field pack store. Subcommands: save, list, link, match, report. Reads one JSON object on stdin "
                               "and prints one JSON object on stdout."),
                              COMMANDS, argv)
 
