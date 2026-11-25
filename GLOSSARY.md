@@ -133,8 +133,12 @@ The helper that researches a field pack from high-trust public sources, in the b
 _Avoid_: Field scout, pack builder
 
 **Base figure**:
-A recurring subject of a field (a heart, a truss, a neuron) built carefully once, checked against its field pack's checklist and saved in the field pack as a reusable SVG with stable part ids. Later visuals of that subject start from it and only add labels, steps and highlights.
+A recurring subject of a field (a heart, a truss, a neuron) built carefully once, checked against its field pack's checklist and saved in the field pack as a reusable SVG with stable part ids. Later visuals of that subject start from it and only add labels, steps, highlights and leader lines; the visual shell refuses a build that redraws a part. A professor's own diagram can be one course's base figure: it comes before the pack's for that course and never leaves the course folder.
 _Avoid_: Template, stock figure
+
+**Base figure builder**:
+The helper that draws a base figure the first time its subject is needed, on the stronger model and in the background, while the student already has a normal build. Its figure is saved only after the figure checker passes every checklist item.
+_Avoid_: Base builder, figure grower
 
 **Figure checker**:
 The independent, read-only helper that checks one built figure against its field pack's accuracy checklist for that figure kind, before a base figure is saved or a blind test page is scored. It returns a pass or a fail with a reason for every checklist item, plus an overall verdict that passes only when every item does. It reads only the figure, its figure kind and that checklist.

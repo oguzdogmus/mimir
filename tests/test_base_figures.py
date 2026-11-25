@@ -365,3 +365,81 @@ def test_a_course_with_its_professors_diagram_builds_from_that_not_the_packs(hom
     run_fails(VISUAL, home, "svg", reuse(), "part 'outer-membrane' changed")
     run_ok(VISUAL, home, "svg", reuse(PROFESSOR.replace("</svg>", LABELS + "</svg>")))
     run_ok(VISUAL, home, "svg", reuse(course=OTHER))
+
+
+# --- the dispatch and helper text ----------------------------------------------------
+# First need: the student's build returns at once; the base figure grows in the background, is checked
+# in the foreground when it arrives and saved only on a pass. Later needs start from it.
+
+def _read(rel: str) -> str:
+    return (ROOT_DIR / rel).read_text(encoding="utf-8")
+
+
+def _section(text: str, heading: str) -> str:
+    return text.split(f"\n## {heading}\n", 1)[1].split("\n## ", 1)[0]
+
+
+def _front(rel: str) -> dict:
+    _, head, _ = _read(rel).split("---", 2)
+    return dict(line.split(": ", 1) for line in head.strip().splitlines())
+
+
+BUILDER = "helpers/base-figure-builder.md"
+
+
+def test_the_base_figure_builder_is_a_registered_helper_on_the_stronger_model():
+    front = _front(BUILDER)
+    assert front["name"] == "base-figure-builder"
+    assert front["model"] == "opus" and front["tools"] == "Bash"
+    assert front["description"].endswith("Dispatched by Mimir skills; not for direct use.")
+    assert f"./{BUILDER}" in json.loads(_read(".claude-plugin/plugin.json"))["agents"]
+    assert "mimir:base-figure-builder" in _read("docs/agents/plugin-from-worktree.md")
+
+
+def test_the_base_figure_builder_draws_parts_with_stable_ids_through_the_shell_and_never_opens_them():
+    body = _read(BUILDER)
+    given = _section(body, "Input")
+    for key in ("`script`", "`term`", "`course`", "`subject`", "`figure`"):
+        assert key in given, key
+    assert '"$(dirname "$(dirname "<script>")")/reference/house-style.md"' in body
+    assert "inputs" in body and "stable part id" in body and "no labels" in body.lower()
+    assert "`base-<subject>`" in body and "never `open`" in body
+    assert "Built <path>." in _section(body, "Reply")
+
+
+def test_core_rules_start_the_base_figure_builder_in_the_background_and_the_figure_checker_in_the_foreground():
+    dispatch = _section(_read("reference/core-rules.md"), "Base figure dispatch")
+    background = dispatch.index("`mimir:base-figure-builder`")
+    assert dispatch.index("`run_in_background: true`") > background
+    checker = dispatch.index("`mimir:figure-checker`")
+    assert dispatch.index("`run_in_background: false`") > checker
+    assert "`spawn_agent`" in dispatch and "`define_subagent`" in dispatch and "no independent agent" in dispatch
+    assert "never waits" in dispatch and "foreground" in dispatch
+
+
+def test_the_first_need_builds_at_once_and_saves_a_base_figure_only_after_the_checker_passes_it():
+    text = _section(_read("reference/notation.md"), "Base figures")
+    find, builder = text.index("`fieldpack.py find-base`"), text.index("`mimir:visual-builder`")
+    background, brief = text.index("Base figure dispatch"), text.index("`figurecheck.py brief`")
+    checker, save_ = text.index("`mimir:figure-checker`"), text.index("`fieldpack.py save-base`")
+    assert find < builder < background < brief < checker < save_
+    assert "without waiting" in text and "`subject`" in text
+    assert "not saved" in text and "tries again" in text
+
+
+def test_a_professors_diagram_is_saved_only_for_its_course_and_never_leaves_it():
+    text = _section(_read("reference/notation.md"), "Base figures")
+    assert "`fieldpack.py save-course-base`" in text
+    assert "never leaves the course folder" in text and "never" in text and "commit" in text
+
+
+def test_the_builder_starts_from_the_base_figure_and_never_redraws_its_parts():
+    body = _read("helpers/visual-builder.md")
+    given = _section(body, "Input")
+    assert "`subject`" in given
+    start = _section(body, "Start from a base figure")
+    assert '"subject"' in start and "`base`" in start and 'cat "<path>"' in start
+    assert "never redraw" in start
+    for added in ("labels", "steps", "highlights", "leader lines"):
+        assert added in start, added
+    assert '"base": "<subject>"' in start

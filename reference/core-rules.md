@@ -28,6 +28,15 @@ Field research runs in the background: the skill that starts it never waits for 
 
 When the reply arrives, the starting skill finishes the step that dispatched it: `mimir-ingest` step 10, or Field pack first in Building a file (`<mimir>/reference/notation.md`), which then dispatches the visual builder. A course whose research does not finish stays without a pack until the next ingest that indexes it.
 
+## Base figure dispatch
+A base figure grows in two steps (Base figures in `<mimir>/reference/notation.md`). First the base figure builder (`<mimir>/helpers/base-figure-builder.md`) runs in the background: the skill never waits for it and finishes its own steps first. Its input is `script` (`<mimir>/scripts/visual.py`, expanded), `term`, `course`, `subject`, `figure` and the subject's description, nothing else. Use the first recipe the host has:
+- Claude Code: `Agent` with `subagent_type` `mimir:base-figure-builder` and `run_in_background: true`; its reply arrives when it finishes.
+- Codex: `spawn_agent` with `fork_turns` none and a message holding the body of `<mimir>/helpers/base-figure-builder.md` plus the input; call `wait_agent` only after the skill's final line.
+- Antigravity: `define_subagent` from the body of `<mimir>/helpers/base-figure-builder.md`, then `invoke_subagent` with the input after the skill's final line.
+- Only when the host has no independent agent: skip the base figure; the next need of the subject tries again.
+
+When its `Built <path>.` reply arrives, the figure checker (`<mimir>/helpers/figure-checker.md`) checks that file in the foreground, like the checker: the turn waits for its reply. Its input is only the `brief` from `figurecheck.py brief`. Claude Code: `Agent` with `subagent_type` `mimir:figure-checker` and `run_in_background: false`. Codex: `spawn_agent` with `fork_turns` none and the helper body plus the brief, then `wait_agent`. Antigravity: `define_subagent` from the helper body, then `invoke_subagent` with the brief. With no independent agent, the figure is not saved.
+
 ## Resolve the course
 Use this block wherever a skill resolves a course; keep the caller's action word and declaration timing.
 
