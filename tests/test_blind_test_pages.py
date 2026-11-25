@@ -102,7 +102,8 @@ def test_a_page_that_was_not_built_is_reported_with_the_builders_reply_and_is_no
     checked = []
 
     def broken(job):
-        return {"reply": "visual.py: body: element <img> is not allowed", "seconds": 90.0, "cost_usd": 0.2}
+        return {"reply": "visual.py: body: element <img> is not allowed", "seconds": 90.0, "cost_usd": 0.2,
+                "exit": 0, "stderr": "warning"}
 
     def checker(brief, job):
         checked.append(brief)
@@ -112,7 +113,7 @@ def test_a_page_that_was_not_built_is_reported_with_the_builders_reply_and_is_no
     assert checked == []
     assert all(r["built"] is None and r["errors"] is None for r in rows)
     assert rows[0]["build_reply"] == "visual.py: body: element <img> is not allowed"
-    assert rows[0]["build_seconds"] == 90.0
+    assert (rows[0]["build_seconds"], rows[0]["build_exit"], rows[0]["build_stderr"]) == (90.0, 0, "warning")
 
 
 JOB = {"script": "/p/mimir/scripts/visual.py", "term": "2026-Fall", "course": "Test page medicine",
@@ -125,7 +126,7 @@ def test_the_builder_is_the_plugin_agent_given_the_helpers_inputs_and_the_test_c
     assert cmd[:2] == ["claude", "-p"]
     assert cmd[cmd.index("--agent") + 1] == "mimir:visual-builder"
     assert cmd[cmd.index("--plugin-dir") + 1] == str(Path("/p/mimir"))
-    assert cmd[cmd.index("--allowedTools") + 1] == "Bash"  # the helper's one tool, without a prompt
+    assert "--allowedTools=Bash" in cmd  # the helper's one tool; the = form, as --allowedTools takes many values
     assert cmd[cmd.index("--model") + 1] == "opus"
     prompt = cmd[-1]
     for line in ("script: /p/mimir/scripts/visual.py", "term: 2026-Fall", "course: Test page medicine",

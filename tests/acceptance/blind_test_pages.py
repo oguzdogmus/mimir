@@ -97,7 +97,8 @@ def run_pack(out: Path, scripts: Path, pack: dict, builder: Callable[[dict], dic
     built = builder(job)
     path = fx["course_dir"] / ".state" / "out" / f"{NAME}.html"
     row = {"field": pack["field"], "figure": page["figure"], "build_seconds": built["seconds"],
-           "build_reply": built["reply"], "built": str(path) if path.is_file() else None,
+           "build_reply": built["reply"], "build_exit": built.get("exit"), "build_stderr": built.get("stderr"),
+           "built": str(path) if path.is_file() else None,
            "models": sorted(set(built.get("models") or [])), "cost_usd": built.get("cost_usd")}
     if row["built"] is None:
         return {**row, "items": None, "errors": None, "failed": None, "failed_rules": None, "check_seconds": None,
@@ -128,7 +129,7 @@ def builder_cmd(plugin: Path, job: dict, model: str | None = None) -> list[str]:
     prompt = "\n".join([f"script: {job['script']}", f"term: {job['term']}", f"course: {job['course']}",
                         f"name: {job['name']}", f"kind: {job['kind']}", "",
                         f"Figure kind: {job['figure']} ({job['figure_kind']})", "Content:", job["content"]])
-    return _agent_cmd(plugin, "mimir:visual-builder", model) + ["--allowedTools", "Bash", prompt]
+    return _agent_cmd(plugin, "mimir:visual-builder", model) + ["--allowedTools=Bash", prompt]
 
 
 def checker_cmd(plugin: Path, brief: str, model: str | None = None) -> list[str]:
