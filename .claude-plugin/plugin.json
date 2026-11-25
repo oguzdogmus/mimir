@@ -21,6 +21,7 @@
   ],
   "agents": [
     "./helpers/verifier.md",
-    "./helpers/visual-builder.md"
+    "./helpers/visual-builder.md",
+    "./helpers/figure-checker.md"
   ]
 }

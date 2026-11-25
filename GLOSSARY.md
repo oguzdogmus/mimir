@@ -132,5 +132,9 @@ _Avoid_: Field notes, field guide, domain pack
 A recurring subject of a field (a heart, a truss, a neuron) built carefully once, checked against its field pack's checklist and saved in the field pack as a reusable SVG with stable part ids. Later visuals of that subject start from it and only add labels, steps and highlights.
 _Avoid_: Template, stock figure
 
+**Figure checker**:
+The independent, read-only helper that checks one built figure against its field pack's accuracy checklist for that figure kind, before a base figure is saved or a blind test page is scored. It returns a pass or a fail with a reason for every checklist item, plus an overall verdict that passes only when every item does. It reads only the figure, its figure kind and that checklist.
+_Avoid_: Figure verifier, figure grader
+
 **Teaching highlight**:
 The one standard mark that points at the part of a figure being discussed. Never a colour change where colour is notation.
