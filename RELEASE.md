@@ -27,6 +27,17 @@ From a clone of this repository, in a graphical session:
 
 Then fill in that OS's row below, with the commit you ran (`git rev-parse --short HEAD`). A row is `passed` only after a real run on that OS. Exit 1 or a page that does not render is `failed`: note what happened, and it blocks the release until fixed and rerun. Each run leaves its temp folder (path in the JSON) for you to look at; delete it afterwards.
 
+## When the core house style guide changes
+
+When `reference/house-style.md` changed since the last release, rerun every field pack's blind test page before release and compare against the last run:
+
+```sh
+python3 tests/acceptance/blind_test_pages.py run --home <packs home> --plugin <this commit> --out <runs>/<commit>
+python3 tests/acceptance/blind_test_pages.py compare <runs>/<last run> <runs>/<commit>
+```
+
+`tests/acceptance/README.md` ("Blind test pages") says how to set it up; the packs and their test content are synthetic. A pack that gains checklist errors or is no longer built blocks the release until the guide is fixed and the rerun shows no new failures. Keep each run's folder as the last run for the next comparison.
+
 ## Results
 
 | OS | Date | Commit | Opened (exit code) | Rendered (by eye) | Tester | Notes |

@@ -98,6 +98,18 @@ python3 tests/acceptance/checker_benchmark.py report "$A"/bench/*
 
 A planted error counts as caught for any verdict other than `correct`; a clean question is wrongly rejected the same way; a reply without the pack token leaves its batch unsettled and catches nothing.
 
+## Blind test pages (#102)
+
+Every field pack holds a blind test page: fixed synthetic content for one of its figure kinds. The runner finds every pack in a workspace, builds each pack's test page with a fresh `mimir:visual-builder` in a fixture workspace of its own (only that pack and one course linked to it), checks the page with a fresh `mimir:figure-checker` against the pack's checklist, and reports the build time and checklist errors per pack, measured as in #87. Every script and the house style guide come from `--plugin`. Point `--home` at a HOME whose workspace holds the packs; it is only read.
+
+```bash
+python3 tests/acceptance/blind_test_pages.py run --home "$A/packs-home" --plugin "$A/plugin" --out "$A/pages/<commit>"
+python3 tests/acceptance/blind_test_pages.py report "$A"/pages/*
+python3 tests/acceptance/blind_test_pages.py compare "$A/pages/<last>" "$A/pages/<commit>"
+```
+
+`compare` names, per pack, the failed rules the later run gained (new failures) or lost (gone), matched by rule text. A page the builder did not build counts as the failure "not built". Checker verdicts on one page can vary between runs (#99), so read a single new failure on a depiction as a reason to rerun that pack, not yet as a regression.
+
 ## Results
 
 See `docs/acceptance-44.md` (teaching levels), `docs/acceptance-77.md` (speed checks), `docs/acceptance-78.md` (check ledger), `docs/acceptance-79.md` (host parity) and `docs/measurements/checker-benchmark.md` (checker benchmark).
