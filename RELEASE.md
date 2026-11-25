@@ -36,7 +36,7 @@ python3 tests/acceptance/blind_test_pages.py run --home <packs home> --plugin <t
 python3 tests/acceptance/blind_test_pages.py compare <runs>/<last run> <runs>/<commit>
 ```
 
-`tests/acceptance/README.md` ("Blind test pages") says how to set it up; the packs and their test content are synthetic. A pack that gains checklist errors or is no longer built blocks the release until the guide is fixed and the rerun shows no new failures. Keep each run's folder as the last run for the next comparison.
+`tests/acceptance/README.md` ("Blind test pages") says how to set it up; the packs and their test content are synthetic. Checker and builder results vary between runs, so rerun a pack that gains checklist errors or is no longer built. If it gains new failures again, the release is blocked until the guide is fixed and a rerun shows no new failures. Keep each run's folder as the last run for the next comparison.
 
 ## Results
 

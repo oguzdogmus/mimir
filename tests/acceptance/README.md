@@ -108,7 +108,7 @@ python3 tests/acceptance/blind_test_pages.py report "$A"/pages/*
 python3 tests/acceptance/blind_test_pages.py compare "$A/pages/<last>" "$A/pages/<commit>"
 ```
 
-`compare` names, per pack, the failed rules the later run gained (new failures) or lost (gone), matched by rule text. A page the builder did not build counts as the failure "not built". Checker verdicts on one page can vary between runs (#99), so read a single new failure on a depiction as a reason to rerun that pack, not yet as a regression.
+`compare` names, per pack, the failed rules the later run gained (new failures) or lost (gone), matched by rule text. A page the builder did not build counts as the failure "not built". Builds and checker verdicts vary between runs (#99; on 2026-11-25 two runs of the same guide differed by up to 2 failed items per pack), so rerun a pack that shows new failures before calling it a regression. A rule that already fails is not reported again when it fails worse; read the check replies in `results.json` for that.
 
 ## Results
 
