@@ -392,5 +392,6 @@ def test_after_research_saves_the_pack_match_links_the_waiting_course(home, root
 def test_the_glossary_names_field_packs_and_base_figures():
     text = (ROOT_DIR / "GLOSSARY.md").read_text(encoding="utf-8")
     assert "**Field pack**:" in text and "**Base figure**:" in text
-    notes = text.split("**Field notes**:", 1)[1].split("\n\n", 1)[0]
-    assert "field pack" in notes and "when a real case shows the need" not in notes
+    assert "**Field notes**:" not in text  # #103: renamed, field conventions live in field packs
+    recipes = text.split("**Cross-field recipes**:", 1)[1].split("\n\n", 1)[0]
+    assert "field pack" in recipes and "when a real case shows the need" not in recipes

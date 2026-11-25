@@ -195,6 +195,31 @@ def test_no_living_doc_names_the_removed_visual_kinds():
     assert not (ROOT_DIR / "assets" / "interactive").exists()
 
 
+# Living docs must not describe maintainer-added field notes (#103): a field's
+# conventions live in its field pack, researched per course. The glossary may
+# still list the old name on an _Avoid_ line. Historical records (CHANGELOG.md,
+# the rest of docs/, assets/prototype-skald/) keep their wording.
+FIELD_NOTES = re.compile(r"field[- ]notes?\b|when a real case shows the need|added by the maintainer", re.I)
+
+
+def test_no_living_doc_describes_maintainer_added_field_notes():
+    for path in LIVING_DOCS:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.startswith("_Avoid_:"):
+                assert not FIELD_NOTES.search(line), f"{path}:{n}: {line.strip()[:100]}"
+
+
+FIGURE_PRECEDENCE = re.compile(r"own materials.{0,300}?field pack.{0,300}?core (?:house style )?guide", re.I)
+
+
+def test_living_docs_give_the_figure_precedence_order():
+    """#96: the course's own materials beat the field pack, which beats the core guide."""
+    for rel in ("reference/notation.md", "reference/core-rules.md", "helpers/visual-builder.md",
+                "reference/house-style.md"):
+        text = " ".join(_read(rel).split())
+        assert FIGURE_PRECEDENCE.search(text), rel
+
+
 # Sessions end only when the student says "end session": no episode timer and
 # no close the agent triggers itself (a finished set, route or drill list).
 AUTO_CLOSE = re.compile(r"session\.py clock|`clock`|episode timer|20 to 25 min|Good luck|"
@@ -859,6 +884,18 @@ def test_background_dispatch_names_one_recipe_per_host_and_leaves_the_checker_in
     assert "never the checker" in dispatch
     helpers = core_section("Paths, commands and helpers")
     assert "field research" in helpers and "<mimir>/helpers/field-researcher.md" in helpers
+
+
+# What left the core house style guide (#103) must be found again by research: the
+# automata input tape, the bacterium's ratio recipe, the anatomical view, one ERD
+# notation per course and the units of a time axis.
+def test_field_researcher_asks_for_what_left_the_core_guide():
+    find = " ".join(_read(RESEARCHER).split("\n## What to find\n", 1)[1].split("\n## ", 1)[0].split())
+    assert "parts drawn with it" in find and "input tape" in find
+    assert "which part keeps them" in find and "not to scale" in find
+    assert "length-to-width ratio" in find and "its key proportion as a number" in find
+    assert "rival notations" in find and "the course's own" in find
+    assert "standard views" in find and "units and their notation" in find
 
 
 # No builder without its field pack (#100): the builder dispatch makes sure the course has a

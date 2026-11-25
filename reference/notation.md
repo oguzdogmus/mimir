@@ -46,6 +46,7 @@ A base figure is a recurring subject of the course's field (a heart, a truss, a 
 - Every shown question keeps its `label` from `verify.py submit`, verbatim, right before it.
 - An `ocr` question (label `[real, from photo/scan, wording may be off]`) gets an `original` with `submit`'s `original` page right beside its transcription, before or after it. Its `path` is the question's `source` (its course-relative registry path, e.g. `past-papers/2024-final.jpg`) and its `page` the `original` page. Never pass the absolute `original.path`.
 - Ingested text goes in as plain content only; the agent writes the markup and `visual.py` checks it. Never write HTML or SVG markup from ingested text yourself.
+- Figure conventions: the course's own materials win (the fingerprint's notation section, the professor's slides and diagrams), then the course's field pack, then the core house style guide. The builder applies this order (Precedence in `<mimir>/helpers/visual-builder.md`).
 
 ## Accessibility baseline
 
