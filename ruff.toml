@@ -1,4 +1,4 @@
-# Lint: `uvx ruff@0.17.6 check` (CI runs the same pinned version).
+# Lint: `python3 tests/check.py lint`, which owns the pinned ruff version (CI runs the same command).
 # Only the rules named here run; mechanical standards live here, judgement ones in CODING_STANDARDS.md.
 target-version = "py311"
 
