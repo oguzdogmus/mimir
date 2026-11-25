@@ -28,7 +28,7 @@ def test_no_claude_only_paths_or_command_names():
         text = path.read_text(encoding="utf-8")
         assert "CLAUDE_PLUGIN_ROOT" not in text, path
         assert not re.search(r"/mimir:(?!mimir-)", text), path
-        assert not re.search(r"`mimir:(?!verifier`|visual-builder`)", text), path
+        assert not re.search(r"`mimir:(?!verifier`|visual-builder`|figure-checker`)", text), path
 
 
 INTERNAL = {"mimir-core-rules", "mimir-notation"}
