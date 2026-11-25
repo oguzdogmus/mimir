@@ -48,8 +48,9 @@ SVG_OK = ('<?xml version="1.0" encoding="UTF-8"?>\n'
           '  <circle cx="40" cy="40" r="18"/><circle cx="40" cy="40" r="14"/>\n'
           '  <circle cx="160" cy="40" r="18"/>\n'
           '  <line x1="58" y1="40" x2="142" y2="40" stroke="black" marker-end="url(#arrow)"/>\n'
-          '  <text x="40" y="45" text-anchor="middle">q0</text><text x="160" y="45">q<tspan>1</tspan></text>\n'
-          '  <text x="100" y="32">0 &amp; ε</text>\n'
+          '  <text x="40" y="44" text-anchor="middle">q0</text>'
+          '<text x="160" y="44" text-anchor="middle">q<tspan>1</tspan></text>\n'
+          '  <text x="100" y="32" text-anchor="middle">0 &amp; ε</text>\n'
           '  <use href="#arrow"/><use xlink:href="#arrow"/>\n'
           '</svg>\n')
 
@@ -970,8 +971,8 @@ INJECTIONS = [
 @pytest.mark.parametrize("text", INJECTIONS)
 def test_injection_strings_in_content_stay_inert(home, cdir, text):
     body = (f'<p title="{text}" data-note="&quot;&gt;&lt;script&gt;x()&lt;/script&gt;">{text}</p>'
-            f'<svg viewBox="0 0 9 9" role="img"><title>{text}</title><desc>d</desc>'
-            f'<text x="1" y="5">{text}</text></svg>')
+            f'<svg viewBox="0 0 1000 40" role="img"><title>{text}</title><desc>d</desc>'
+            f'<text x="1" y="30">{text}</text></svg>')
     _, built = build_page(home, free_page(body, title=html.unescape(text)))
     assert_safe_page(built.replace(html.unescape(text), ""), 0)  # content slots stay literal
     body_out = main_part(built)
@@ -1475,3 +1476,128 @@ key("ArrowUp"); document.getElementById("mimir-back").click(); document.getEleme
     assert out["prevented"] == [False, False, False, False] and out["ignored"] == {**back, "scrolls": []}
     assert out["again"]["back"] is False and out["again"]["t3"] == "revealed,latest"
     assert (out["none"]["status"], out["none"]["wall"], out["none"]["current"]) == ("No steps are shown.", "", "0")
+
+
+# --- label overlap check (#92) ------------------------------------------------------
+
+def figure(inner: str, view: str = "0 0 400 200", style: str = "text { font-size: 20px; }") -> str:
+    """A standalone SVG holding ``inner``, with its own <style>."""
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view}" role="img">'
+            f'<title>Figure</title><desc>A test figure.</desc><style>{style}</style>{inner}</svg>')
+
+
+EDGE = '<line x1="20" y1="100" x2="380" y2="100" stroke="black"/>'
+SELF_LOOP = ('<path class="ink" d="M105.92 123.51C80 58 160 58 134.08 123.51"/>'
+             '<circle class="ink" cx="120" cy="150" r="30"/>')
+
+
+def test_spaced_labels_accepted(home, cdir):
+    """Edge label above its line, a loop label beyond the apex, a state name inside its ring."""
+    doc = figure(EDGE + '<text x="200" y="88" text-anchor="middle">read 0</text>'
+                 + SELF_LOOP + '<text x="120" y="60" text-anchor="middle">1</text>'
+                 + '<text x="120" y="157" text-anchor="middle">q0</text>')
+    ok(home, "svg", svg(doc))
+
+
+def test_label_crossing_an_edge_refused(home, cdir):
+    doc = figure(EDGE + '<text id="edge-label" x="200" y="106" text-anchor="middle">read 0</text>')
+    err = fails(home, "svg", svg(doc), 'svg: label "read 0" at (200, 106) touches <line x1="20" y1="100"')
+    assert "Move each label clear" in err
+    assert not (cdir / ".state" / "out" / "dfa.svg").exists()
+
+
+def test_self_loop_label_touching_its_arc_refused(home, cdir):
+    """The DFA self-loop of item 8: the label sits on the loop's apex instead of beyond it."""
+    doc = figure(SELF_LOOP + '<text x="120" y="80" text-anchor="middle">1</text>')
+    fails(home, "svg", svg(doc), 'label "1" at (120, 80) touches <path class="ink" d="M105.92 123.51C80 58 160')
+    wrapped = figure(SELF_LOOP.replace("C80 58", "\n  C80 58") + '<text x="120" y="80" text-anchor="middle">1</text>')
+    fails(home, "svg", svg(wrapped), 'touches <path class="ink" d="M105.92 123.51 C80 58 160')  # one line
+
+
+@pytest.mark.parametrize("text,side", [
+    ('<text x="2" y="50" text-anchor="middle">Capsule</text>', "left"),  # starts inside; the anchor is the middle
+    ('<text x="390" y="50">Capsule</text>', "right"),
+    ('<text x="200" y="8" text-anchor="middle">Capsule</text>', "top"),
+    ('<text x="200" y="199" text-anchor="middle">Capsule</text>', "bottom"),
+])
+def test_label_outside_the_viewbox_refused(home, cdir, text, side):
+    err = fails(home, "svg", svg(figure(text)), f"leaves the viewBox at the {side}")
+    assert 'svg: label "Capsule" at (' in err
+
+
+def test_labels_in_transformed_groups(home, cdir):
+    """Positions go through every transform on the way to the root, so a shifted label is checked where it is drawn."""
+    inside = '<g transform="translate(200 90)"><g transform="rotate(-90)"><text x="0" y="0">y axis</text></g></g>'
+    ok(home, "svg", svg(figure(EDGE + inside)))
+    onto_edge = '<g transform="translate(150 0) scale(2)"><text x="10" y="52">0</text></g>'
+    fails(home, "svg", svg(figure(EDGE + onto_edge)), 'label "0" at (10, 52) touches <line')
+    off_frame = '<g transform="translate(0 150)"><text x="200" y="60" text-anchor="middle">x</text></g>'
+    fails(home, "svg", svg(figure(off_frame)), 'label "x" at (200, 60) leaves the viewBox at the bottom')
+
+
+def test_only_drawn_strokes_count(home, cdir):
+    """Fills, hidden highlight marks and shapes in defs are not lines a label can cross."""
+    under = ('<rect x="150" y="80" width="100" height="40" fill="white"/>'      # no stroke: a label backing
+             '<path class="mark-swipe" d="M150 100H250"/>'                     # the tokens hide it until highlighted
+             '<path class="ink-fill" d="M190 90L210 100L190 110Z"/>'           # an arrowhead: no stroke in the tokens
+             '<defs><path id="p" stroke="black" d="M150 100H250"/></defs>')
+    label = '<text x="200" y="106" text-anchor="middle">read 0</text>'
+    ok(home, "svg", svg(figure(under + label)))
+    fails(home, "svg", svg(figure(under.replace("mark-swipe", "ink") + label)), 'touches <path class="ink"')
+
+
+def test_label_sizes_come_from_the_css_cascade(home, cdir):
+    """The class rule wins over the type rule; a larger @media size (the phone) is checked too and named."""
+    style = ("text { font-size: 10px; } .edge { font-size: 12px; } "
+             "@media (max-width: 600px) { .edge { font-size: 30px; } }")
+    label = '<text class="edge" x="200" y="92" text-anchor="middle">read 0</text>'
+    fails(home, "svg", svg(figure(EDGE + label, style=style)),
+          'touches <line x1="20" y1="100" x2="380" y2="100"> (at the @media font sizes)')
+    ok(home, "svg", svg(figure(EDGE + label, style=style.split(" @media")[0])))
+
+
+# A Skald DFA in the style of the approved look (#87): an example machine made by Mimir.
+SKALD_DFA = (
+    '<style>.machine svg text { font-size: 24px; } .machine svg .edge-label { font-size: 21px; } '
+    '.machine svg .ink { stroke-width: 1.7; } @media (max-width: 600px) { .machine svg text { font-size: 27px; } '
+    '.machine svg .edge-label { font-size: 24px; } .machine svg .ink { stroke-width: 2; } }</style>'
+    '<figure class="machine"><svg viewBox="22 30 526 196" role="img">'
+    '<title>DFA for binary numbers divisible by 3</title><desc>Three states q0, q1, q2.</desc>'
+    '<g class="swipes"><path class="mark-swipe" d="M143.64 131.53Q215 94 286.36 131.53"/></g>'
+    '<g class="machine"><path class="ink" d="M30 150H81"/>'
+    '<path class="ink-fill" d="M90 150L79 153.75Q82.08 150 79 146.25Z"/>'
+    '<path class="ink" d="M143.64 131.53Q215 94 278.39 127.34"/>'
+    '<path class="ink" d="M286.36 168.47Q215 206 151.61 172.66"/>'
+    '<path class="ink" d="M333.64 131.53Q405 94 468.39 127.34"/>'
+    '<path class="ink" d="M476.36 168.47Q405 206 341.61 172.66"/>'
+    '<path class="ink" d="M105.92 123.51C80 58 160 58 137.39 115.14"/>'
+    '<path class="ink" d="M485.92 123.51C460 58 540 58 517.39 115.14"/>'
+    '<circle class="ink" cx="120" cy="150" r="30"/><circle class="ink" cx="120" cy="150" r="24"/>'
+    '<text x="119" y="156" text-anchor="middle"><tspan class="tex-i">q</tspan>'
+    '<tspan class="tex" font-size="15" dy="5">0</tspan></text>'
+    '<circle class="ink" cx="310" cy="150" r="30"/><text x="309" y="156" text-anchor="middle">'
+    '<tspan class="tex-i">q</tspan><tspan class="tex" font-size="15" dy="5">1</tspan></text>'
+    '<circle class="ink" cx="500" cy="150" r="30"/><text x="499" y="156" text-anchor="middle">'
+    '<tspan class="tex-i">q</tspan><tspan class="tex" font-size="15" dy="5">2</tspan></text>'
+    '<text class="tex edge-label" x="215" y="100.77" text-anchor="middle">1</text>'
+    '<text class="tex edge-label" x="215" y="214.23" text-anchor="middle">1</text>'
+    '<text class="tex edge-label" x="405" y="100.77" text-anchor="middle">0</text>'
+    '<text class="tex edge-label" x="405" y="214.23" text-anchor="middle">0</text>'
+    '<text class="tex edge-label" x="120" y="62.38" text-anchor="middle">0</text>'
+    '<text class="tex edge-label" x="500" y="62.38" text-anchor="middle">1</text></g></svg></figure>')
+
+
+def test_page_figure_in_the_house_style_accepted(home, cdir):
+    _, built = build_page(home, free_page(SKALD_DFA))
+    assert 'class="tex edge-label" x="120" y="62.38"' in main_part(built)
+
+
+def test_page_figure_label_on_its_loop_refused(home, cdir):
+    """Same check inside a page: the error is the body's, and the page's own CSS sets the sizes."""
+    body = SKALD_DFA.replace('x="500" y="62.38"', 'x="500" y="80"')
+    fails(home, "page", free_page(body), 'body: label "1" at (500, 80) touches <path class="ink" d="M485.92')
+    assert not (cdir / ".state" / "out" / "demo.html").exists()
+    late = ('<svg viewBox="0 0 400 200" role="img"><title>T</title><desc>D</desc>'
+            '<text x="200" y="260" text-anchor="middle">late</text></svg>')
+    fails(home, "page", free_page(SKALD_DFA + late),
+          'body: svg 2: label "late" at (200, 260) leaves the viewBox at the bottom')
