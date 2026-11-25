@@ -103,6 +103,26 @@ A check verdict other than correct that led to a fixed answer key or a dropped q
 **Escape**:
 A wrong answer key that reached the student, counted when the student challenges it and the tutor concedes.
 
+**House style**:
+The shared Mimir look, named Skald, that every visual Mimir makes in its own voice follows, whatever the subject: the feel, palette, type and composition.
+_Avoid_: Template, theme, design system
+
+**Mock paper**:
+A practice paper made to look like the instructor's own papers, so the student practises in the form they will meet in the exam. It follows the instructor's format, not the house style.
+_Avoid_: Practice midterm, mock exam handout
+
 **Motion level**:
-How much the visuals Mimir builds animate: none, gentle or full. Saved in the profile and shared across courses; chosen only by the student, never learned. Missing means none.
+How much animation a student wants in visuals: none, gentle or full. Saved once in the profile for all courses and changed only when the student says so. Not a teaching setting: never probed or learned. A missing or unreadable value is built as none; a missing value is asked once at the next study session.
 _Avoid_: Animation preference, reduced motion
+
+**Notation**:
+Every visual property of a figure that carries meaning in its field or for the professor: shapes, symbols, proportions, positions, scales, and colours where the field assigns them. The house style never changes notation. When unsure whether a property is notation, it is.
+
+**Figure kind**:
+One of four kinds of figure, each allowing a different amount of house style: a depiction of a real thing (a heart, a bacterium), a formal notation (an ERD, a DFA, a circuit), a plot of data or a function, or Mimir's own sketch (an analogy, a concept map). When unsure, the stricter kind applies.
+
+**Field notes**:
+The conventions of one field that a figure must keep, recorded one line each in the house style guide when a real case shows the need. A professor's own conventions belong in the fingerprint instead.
+
+**Teaching highlight**:
+The one standard mark that points at the part of a figure being discussed. Never a colour change where colour is notation.
