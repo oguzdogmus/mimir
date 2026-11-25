@@ -215,9 +215,21 @@ FIGURE_PRECEDENCE = re.compile(r"own materials.{0,300}?field pack.{0,300}?core (
 def test_living_docs_give_the_figure_precedence_order():
     """#96: the course's own materials beat the field pack, which beats the core guide."""
     for rel in ("reference/notation.md", "reference/core-rules.md", "helpers/visual-builder.md",
-                "reference/house-style.md"):
+                "reference/house-style.md", "GLOSSARY.md"):
         text = " ".join(_read(rel).split())
         assert FIGURE_PRECEDENCE.search(text), rel
+
+
+HELPER_COUNT = {2: "Two", 3: "Three", 4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
+
+
+def test_core_rules_count_and_name_every_helper():
+    """The helper line in core rules names every helper file, and its count is the number of helpers."""
+    helpers = sorted(p.name for p in (ROOT_DIR / "helpers").glob("*.md"))
+    line = next(l for l in core_section("Paths, commands and helpers").splitlines() if "helpers/verifier.md" in l)
+    assert line.startswith(f"- {HELPER_COUNT[len(helpers)]} helpers "), line[:60]
+    for name in helpers:
+        assert f"`<mimir>/helpers/{name}`" in line, name
 
 
 # Sessions end only when the student says "end session": no episode timer and

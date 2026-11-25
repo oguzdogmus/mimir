@@ -126,7 +126,7 @@ The only figure recipes kept in the core house style guide: the ones several fie
 _Avoid_: Field notes
 
 **Field pack**:
-The builder guidance for one field, saved once in the student's workspace and shared by all of the student's courses in that field: the field's own figures (an anatomical section, a free-body diagram, an alignment table), each mapped to one of the four figure kinds, its conventions and recipes, an accuracy checklist per figure, its base figures and the content of its blind test page. Researched from public sources when a course's field is first known, every rule with its source. A course uses one field pack, or two when it spans two fields. The course's own materials override it. No builder draws without it: the visual shell refuses to build for a course with no field pack.
+The builder guidance for one field, saved once in the student's workspace and shared by all of the student's courses in that field: the field's own figures (an anatomical section, a free-body diagram, an alignment table), each mapped to one of the four figure kinds, its conventions and recipes, an accuracy checklist per figure, its base figures and the content of its blind test page. Researched from public sources when a course's field is first known, every rule with its source. A course uses one field pack, or two when it spans two fields. Precedence, highest first: the course's own materials, then the field pack, then the core house style guide. No builder draws without it: the visual shell refuses to build for a course with no field pack.
 _Avoid_: Field notes, field guide, domain pack
 
 **Field researcher**:
