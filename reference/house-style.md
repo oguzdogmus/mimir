@@ -10,9 +10,9 @@ markup.
 The shell puts your body inside `<main>` and adds: the Skald tokens (fonts, colours,
 light and dark themes, type, spacing, motion, print), the chalk and marker filters
 (`#sk-chalk`, `#sk-marker`, first in `<main>`), KaTeX when the text holds `\(...\)` or
-`\[...\]`, the step controls, the step reveal and the highlight switching. Into a
-standalone SVG it adds the tokens as the root's last `<style>`. You write none of
-these, and no `<main>`, `<html>`, `<head>` or `<title>`.
+`\[...\]`, the step controls, the step reveal, the highlight switching and, for a
+machine, the simulator. Into a standalone SVG it adds the tokens as the root's last
+`<style>`. You write none of these, and no `<main>`, `<html>`, `<head>` or `<title>`.
 
 It refuses, so never write:
 
@@ -285,6 +285,16 @@ for every level.
 **Step 0 of a figure built part by part.** When every part has a step, show the
 whole outline at step 0 as a `.ghost` (always shown, no `data-step`), so the pinned
 figure is not empty. It is frame: the ghost has no label.
+
+## A machine page
+
+When the content gives a machine (a DFA, NFA, PDA or labelled tree the student feeds an
+input into), draw its diagram inline in the page body and give the element that draws
+each state `id="state-<i>"`, numbering the states from 1 in the order the machine lists
+them: a `<g>` round the state's circles and name, or its outer circle. The shell adds
+the simulator after your body: the input field, the buttons, the history of steps and
+the machine as a table. Write none of these. While the simulator runs, the shell marks
+the current states in your diagram; draw no marks for it.
 
 ## Print
 

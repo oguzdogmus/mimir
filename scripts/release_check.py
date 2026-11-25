@@ -6,10 +6,12 @@ Dev only, standard library only, Python 3.11+. No skill uses this script; see
 
     python3 scripts/release_check.py [--no-open]
 
-It writes a self-contained ``mimir-release-check.html`` and
-``mimir-release-check.svg`` (with ``<title>`` and ``<desc>``), both showing
-"Mimir release check" and the detected platform, into a new temp folder whose
-name contains a space. It then opens each one through
+It builds ``mimir-release-check.html`` through the shell of ``visual.py page``
+(the Skald tokens, a formula for KaTeX and two steps for the step script, all
+inline and allowed by the page's CSP) and ``mimir-release-check.svg`` through
+the checks of ``visual.py svg`` (with ``<title>``, ``<desc>`` and the Skald
+tokens), both showing "Mimir release check" and the detected platform, into a
+new temp folder whose name contains a space. It then opens each one through
 ``visual.open_in_browser``, the opener the skills ship with (never a copy),
 and prints one JSON object::
 
@@ -40,29 +42,38 @@ STEM = "mimir-release-check"
 
 
 def render_html(platform: str) -> str:
+    """A ``page`` built by the real shell: checked body, Skald tokens, KaTeX and the step script."""
     p = html.escape(platform)
-    return ("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
-            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
-            "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">\n"
-            f"<title>{HEADING}</title>\n"
-            "<style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:3rem auto;padding:0 1rem;"
-            "color:#1a1a1a;background:#fff}code{font-size:1.1em}</style>\n</head>\n<body>\n"
-            f"<h1>{HEADING}</h1>\n<p>Platform: <code id=\"platform\">{p}</code></p>\n"
-            "<p>If you can read this in a graphical browser, the HTML page opened.</p>\n"
-            "</body>\n</html>\n")
+    body = (f'<header class="head">\n  <h1>{HEADING}</h1>\n'
+            f'  <p class="intro">Platform: <code id="platform">{p}</code></p>\n</header>\n'
+            "<p>If you can read this in a graphical browser, the page opened. "
+            "This formula should show as a fraction, not as code: \\(\\dfrac{1}{2}\\).</p>\n"
+            '<div class="step" data-step="1"><div class="n">1</div>'
+            "<p>Step one: the step script runs.</p></div>\n"
+            '<div class="step" data-step="2"><div class="n">2</div>'
+            "<p>Step two: the last step.</p></div>\n")
+    checked, math, steps = visual.check_page_body(body, _no_original)
+    return visual.render_free_page(HEADING, checked, math, steps)
+
+
+def _no_original(marker: dict, k: int) -> str:
+    raise RuntimeError("the release page has no original")
 
 
 def render_svg(platform: str) -> str:
+    """An SVG passed through the ``svg`` checks, with the Skald tokens appended."""
     p = html.escape(platform)
-    return ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"480\" height=\"160\" viewBox=\"0 0 480 160\" "
-            "role=\"img\" aria-labelledby=\"t d\">\n"
-            f"<title id=\"t\">{HEADING}</title>\n"
-            f"<desc id=\"d\">A test image from the Mimir release check. Platform: {p}.</desc>\n"
-            "<rect x=\"1\" y=\"1\" width=\"478\" height=\"158\" fill=\"#ffffff\" stroke=\"#1a1a1a\" stroke-width=\"2\"/>\n"
-            f"<text x=\"240\" y=\"70\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"28\" fill=\"#1a1a1a\">{HEADING}</text>\n"
-            f"<text x=\"240\" y=\"115\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"22\" fill=\"#1a1a1a\">Platform: {p}</text>\n"
-            "</svg>\n")
+    svg = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+           "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"480\" height=\"160\" viewBox=\"0 0 480 160\" "
+           "role=\"img\" aria-labelledby=\"t d\">\n"
+           f"<title id=\"t\">{HEADING}</title>\n"
+           f"<desc id=\"d\">A test image from the Mimir release check. Platform: {p}.</desc>\n"
+           "<rect class=\"ink\" x=\"4\" y=\"4\" width=\"472\" height=\"152\" rx=\"12\" stroke-width=\"2\"/>\n"
+           f"<text class=\"label\" x=\"240\" y=\"72\" text-anchor=\"middle\" font-size=\"28\">{HEADING}</text>\n"
+           f"<text x=\"240\" y=\"115\" text-anchor=\"middle\" font-size=\"22\">Platform: {p}</text>\n"
+           "</svg>\n")
+    visual.check_svg(svg.encode("utf-8"))
+    return visual._svg_with_tokens(svg)
 
 
 def build(platform: str) -> tuple[Path, Path]:

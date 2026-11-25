@@ -137,20 +137,10 @@ def _add_original(cdir: Path, name: str, data: bytes) -> None:
     index.write_text("\n".join(lines) + "\n")
 
 
-def sheet(*blocks, name="demo", title="Pumping lemma") -> dict:
-    return {"term": TERM, "course": COURSE, "name": name, "title": title, "blocks": list(blocks)}
-
-
 def svg(doc: str = SVG_OK, name="dfa") -> dict:
     return {"term": TERM, "course": COURSE, "name": name, "svg": doc}
 
 
-def build(home: Path, payload) -> tuple[dict, str]:
-    out = ok(home, "sheet", payload)
-    return out, Path(out["path"]).read_text(encoding="utf-8")
-
-
-BASIC = (sheet({"heading": "Setup"}, {"text": r"Let \(x\) be the length."}, {"math": r"\frac{a}{b}"}))
 PAGE = {"term": TERM, "course": COURSE, "name": "demo", "title": "Plain", "body": "<p>Plain.</p>"}
 
 
@@ -169,12 +159,11 @@ def csp(page: str) -> str:
     return html.unescape(match.group(1))
 
 
-# --- sheet ---------------------------------------------------------------------------
+# --- constants and the shared page parts ---------------------------------------------------------------------------
 
 def test_constants_are_the_spec_values():
-    assert visual.BLOCK_MAX_CHARS == 4000 and visual.SHEET_MAX_BLOCKS == 200
     assert visual.ORIGINAL_EMBED_MAX_BYTES == 10 * 1024 * 1024 and visual.SVG_MAX_BYTES == 1024 * 1024
-    assert visual.TITLE_MAX_CHARS == 120 and visual.HEADING_MAX_CHARS == 120
+    assert visual.TITLE_MAX_CHARS == 120 and visual.EXAMPLE_MAX_CHARS == 4000
     assert visual.NAME_MAX_CHARS == 60 and visual.OPEN_WAIT_SECONDS == 5
     version = (KATEX / "VERSION").read_text().splitlines()
     assert version[0] == "0.19.0"
@@ -184,109 +173,29 @@ def test_constants_are_the_spec_values():
     assert "MIT License" in (KATEX / "LICENSE").read_text()
 
 
-def test_sheet_written_to_out(home, cdir):
-    out, page = build(home, BASIC)
-    path = cdir / ".state" / "out" / "demo.html"
-    assert out["path"] == str(path) and out["course_dir"] == str(cdir)
-    assert out["line"] == f"Built {path}."
-    assert "<h2>Setup</h2>" in page and r"<p>Let \(x\) be the length.</p>" in page
-    assert r'<div class="mimir-display" tabindex="0">\frac{a}{b}</div>' in page
-    assert "<title>Pumping lemma</title>" in page and "<h1>Pumping lemma</h1>" in page
-    assert '<html lang="en">' in page and "<main>" in page
-    assert not re.search(r"\{\{[A-Z_]+\}\}", page)
-    assert sorted(p.name for p in path.parent.iterdir()) == ["demo.html"]  # no temp file left
-
-
-def test_out_created_if_missing_and_rebuild_replaces(home, cdir):
+def test_out_created_if_missing(home, cdir):
     (cdir / ".state" / "out").rmdir()
-    build(home, BASIC)
-    _, page = build(home, sheet({"text": "second"}))
-    assert "<p>second</p>" in page
+    build_page(home, PAGE)
     assert [p.name for p in (cdir / ".state" / "out").iterdir()] == ["demo.html"]
 
 
-def test_page_is_offline_and_self_contained(home, cdir):
-    _, page = build(home, BASIC)
+def test_math_page_is_offline_and_self_contained(home, cdir):
+    _, page = build_page(home, free_page(MATH_BODY))
     assert not re.search(r"""(?:src|href)\s*=\s*["']?\s*(?:https?:)?//""", page, re.I)
-    assert not re.search(r"url\(\s*['\"]?(?!data:)", page)
+    assert not re.search(r"url\(\s*(?!['\"]?(?:data:|#|%23))", page)  # data URIs and local references only
     assert not re.search(r"@import", page)
     assert "url(fonts/" not in page and ".woff)" not in page and ".ttf)" not in page
     fonts = sorted(p.name for p in (KATEX / "fonts").glob("*.woff2"))
     assert len(fonts) == 20
-    assert page.count("url(data:font/woff2;base64,") == len(fonts)
     assert 'format("woff")' not in page and 'format("truetype")' not in page
     for font in fonts:
         assert base64.b64encode((KATEX / "fonts" / font).read_bytes()).decode() in page
 
 
-def test_csp_hashes_match_inline_scripts(home, cdir):
-    _, page = build(home, BASIC)
-    policy = csp(page)
-    bodies = scripts(page)
-    assert len(bodies) == 3 and page.count("<script") == 3
-    assert bodies[0] == (KATEX / "katex.min.js").read_text()
-    assert bodies[1] == (KATEX / "contrib" / "auto-render.min.js").read_text()
-    hashes = {"'sha256-" + base64.b64encode(hashlib.sha256(b.encode()).digest()).decode() + "'"
-              for b in bodies}
-    directives = dict(d.strip().split(" ", 1) for d in policy.split(";"))
-    assert set(directives["script-src"].split()) == hashes
-    assert directives["default-src"] == "'none'"
-    assert directives["font-src"] == "data:" and directives["img-src"] == "data:"
-    assert directives["style-src"] == "'unsafe-inline'"
-    assert "connect-src" not in directives and "http" not in policy
-
-
-def test_katex_options_and_delimiters(home, cdir):
-    _, page = build(home, BASIC)
-    init = scripts(page)[2]
-    assert 'output: "htmlAndMathml"' in init and "throwOnError: false" in init and "trust: false" in init
-    assert re.findall(r'left: "([^"]*)"', init) == [r"\\(", r"\\["]
-    assert "innerHTML" not in init and "innerHTML" not in page.split("<script>")[0]
-
-
-def test_accessible_shell(home, cdir):
-    _, page = build(home, BASIC)
-    assert "color-scheme: light dark" in page and "prefers-color-scheme: dark" in page
-    assert "text-decoration: underline" in page
-    assert "@keyframes" not in page.split("</style>", 1)[1].split("<script>")[0]
-
-
-@pytest.mark.parametrize("field", ["title", "heading", "text", "math"])
-def test_injection_is_escaped(home, cdir, field):
-    blocks = [{"text": "plain"}] if field == "title" else [{field: f"x {INJECT}"}]
-    payload = sheet(*blocks, title=f"T {INJECT}" if field == "title" else "T")
-    _, page = build(home, payload)
-    assert page.count("<script") == 3 and "alert(1)</script>" not in page
-    assert "&lt;/p&gt;&lt;script&gt;alert(1)&lt;/script&gt;" in page
-    hashes = set(re.findall(r"'sha256-[^']+'", csp(page)))
-    assert hashes == {"'sha256-" + base64.b64encode(hashlib.sha256(b.encode()).digest()).decode() + "'"
-                      for b in scripts(page)}
-
-
-def test_attribute_breakout_is_escaped(home, cdir):
-    _, page = build(home, sheet({"text": "\" onmouseover=\"alert(1)"}, {"heading": "<img src=x onerror=alert(1)>"}))
-    assert "&quot; onmouseover=&quot;alert(1)" in page and "&lt;img src=x onerror=alert(1)&gt;" in page
-    assert "<img" not in main_part(page)
-
-
-def test_template_filled_in_one_pass(home, cdir):
-    _, page = build(home, sheet({"text": "{{KATEX_JS}} {{CSP}}"}, title="{{BLOCKS}}"))
-    assert "<p>{{KATEX_JS}} {{CSP}}</p>" in page and "<title>{{BLOCKS}}</title>" in page
-    assert page.count("<script") == 3
-
-
-def test_original_photo_is_embedded(home, cdir):
-    _, page = build(home, sheet({"text": "Q2 transcription"},
-                                {"original": {"path": "past-papers/q.jpg", "page": 1}}))
-    data = base64.b64encode(JPEG).decode()
-    assert f'<img src="data:image/jpeg;base64,{data}" alt="Original: past-papers/q.jpg, p.1">' in page
-    assert "file://" not in main_part(page)
-
-
 @pytest.mark.parametrize("name,mime", [("p.png", "image/png"), ("UP.JPG", "image/jpeg")])
 def test_original_image_types_are_embedded(home, cdir, name, mime):
     _add_original(cdir, name, b"\x89PNG-or-JPEG-bytes")
-    _, page = build(home, sheet({"original": {"path": f"past-papers/{name}", "page": 1}}))
+    _, page = build_page(home, free_page(original(f"past-papers/{name}", 1)))
     data = base64.b64encode(b"\x89PNG-or-JPEG-bytes").decode()
     assert f'<img src="data:{mime};base64,{data}" alt="Original: past-papers/{name}, p.1">' in page
 
@@ -295,98 +204,25 @@ def test_original_image_types_are_embedded(home, cdir, name, mime):
 def test_embed_size_boundary(home, cdir, monkeypatch, size, embedded):
     monkeypatch.setattr(visual, "ORIGINAL_EMBED_MAX_BYTES", 32)
     _add_original(cdir, "edge.png", b"x" * size)
-    out = visual.cmd_sheet(sheet({"original": {"path": "past-papers/edge.png", "page": 1}}))
+    out = visual.cmd_page(free_page(original("past-papers/edge.png", 1)))
     body = main_part(Path(out["path"]).read_text())
     assert ("data:image/png;base64," in body) is embedded and ("file://" in body) is not embedded
 
 
-def test_original_pdf_is_a_file_link(home, cdir):
-    _, page = build(home, sheet({"original": {"path": "past-papers/s.pdf", "page": 3}}))
-    uri = (cdir / "past-papers" / "s.pdf").resolve().as_uri() + "#page=3"
-    assert f'<a href="{html.escape(uri)}">Original: past-papers/s.pdf, p.3</a>' in page
-    assert "<img" not in main_part(page)
-
-
 def test_original_without_known_pages_accepts_any_page(home, cdir):
-    _, page = build(home, sheet({"original": {"path": "past-papers/nopages.pdf", "page": 9}}))
+    _, page = build_page(home, free_page(original("past-papers/nopages.pdf", 9)))
     assert "Original: past-papers/nopages.pdf, p.9" in page
 
 
 def test_big_image_becomes_a_link(home, cdir, monkeypatch):
     monkeypatch.setattr(visual, "ORIGINAL_EMBED_MAX_BYTES", 16)
-    out = visual.cmd_sheet(sheet({"original": {"path": "past-papers/big.png", "page": 1}}))
+    out = visual.cmd_page(free_page(original("past-papers/big.png", 1)))
     page = Path(out["path"]).read_text()
     assert "<img" not in main_part(page) and "file://" in page and "Original: past-papers/big.png, p.1" in page
 
 
-@pytest.mark.parametrize("ref,needle", [
-    ({"path": "past-papers/unindexed.jpg", "page": 1}, "blocks[2].original.path"),
-    ({"path": "/etc/passwd", "page": 1}, "blocks[2].original.path"),
-    ({"path": "past-papers/../../outside.jpg", "page": 1}, "blocks[2].original.path"),
-    ({"path": "past-papers/link.jpg", "page": 1}, "blocks[2].original.path"),
-    ({"path": "past-papers/missing.jpg", "page": 1}, "blocks[2].original.path"),
-    ({"path": "past-papers/s.pdf", "page": 5}, "blocks[2].original.page"),
-    ({"path": "past-papers/q.jpg", "page": 2}, "blocks[2].original.page"),
-    ({"path": "past-papers/q.jpg", "page": 0}, "blocks[2].original.page"),
-    ({"path": "past-papers/q.jpg", "page": True}, "blocks[2].original.page"),
-    ({"path": "past-papers/q.jpg"}, "blocks[2].original.page is required"),
-    ({"page": 1}, "blocks[2].original.path is required"),
-    ({"path": "past-papers/q.jpg", "page": 1, "crop": [0, 0, 1, 1]}, "blocks[2].original: unknown field"),
-    ("past-papers/q.jpg", "blocks[2].original must be an object"),
-])
-def test_bad_original(home, cdir, ref, needle):
-    fails(home, "sheet", sheet({"text": "t"}, {"original": ref}), needle)
-    assert not (cdir / ".state" / "out" / "demo.html").exists()
-
-
-@pytest.mark.parametrize("block,needle", [
-    ({"text": "a", "math": "b"}, "blocks[1] must be an object with exactly one of"),
-    ({}, "blocks[1] must be an object with exactly one of"),
-    ("text", "blocks[1] must be an object"),
-    ({"image": "x"}, "blocks[1]: unknown field 'image'"),
-    ({"text": ""}, "blocks[1].text is required"),
-    ({"text": 3}, "blocks[1].text must be a string"),
-    ({"math": "a\nb"}, "blocks[1].math must be one line"),
-    ({"text": "a\x1bb"}, "blocks[1].text must be one line"),
-    ({"text": "x" * 4001}, "blocks[1].text is longer than 4000"),
-    ({"math": "x" * 4001}, "blocks[1].math is longer than 4000"),
-    ({"heading": "x" * 121}, "blocks[1].heading is longer than 120"),
-    ({"text": r"see \[x\]"}, "blocks[1].text: inline math only"),
-    ({"text": r"ends \]"}, "blocks[1].text: inline math only"),
-    ({"heading": r"Step \[x\]"}, "blocks[1].heading: inline math only"),
-    ({"heading": r"a \] b"}, "blocks[1].heading: inline math only"),
-])
-def test_bad_blocks(home, cdir, block, needle):
-    fails(home, "sheet", sheet(block), needle)
-
-
-def test_limits_accept_the_maximum(home, cdir):
-    build(home, sheet(*([{"math": "x" * 4000}] * 200), title="t" * 120))
-
-
-@pytest.mark.parametrize("payload,needle", [
-    ({**sheet({"text": "a"}), "blocks": [{"text": "a"}] * 201}, "at most 200"),
-    ({**sheet({"text": "a"}), "blocks": []}, "blocks is required"),
-    ({**sheet({"text": "a"}), "title": "t" * 121}, "title is longer than 120"),
-    ({**sheet({"text": "a"}), "title": "a\tb"}, "title must be one line"),
-    ({**sheet({"text": "a"}), "title": r"Sum \[x\]"}, "title: inline math only"),
-    ({**sheet({"text": "a"}), "title": r"x \]"}, "title: inline math only"),
-    ({k: v for k, v in sheet({"text": "a"}).items() if k != "title"}, "title is required"),
-    ({**sheet({"text": "a"}), "lang": "tr"}, "unknown field 'lang'"),
-    ({**sheet({"text": "a"}), "name": "Bad_Name"}, "name must match"),
-    ({**sheet({"text": "a"}), "name": "a--b"}, "name must match"),
-    ({**sheet({"text": "a"}), "name": "-a"}, "name must match"),
-    ({**sheet({"text": "a"}), "name": "../x"}, "name must match"),
-    ({**sheet({"text": "a"}), "name": "a" * 61}, "at most 60"),
-    ({**sheet({"text": "a"}), "term": "Fall"}, "term must be"),
-    ({**sheet({"text": "a"}), "course": "CS999 Missing"}, "no course folder"),
-])
-def test_bad_sheet_payload(home, cdir, payload, needle):
-    fails(home, "sheet", payload, needle)
-
-
-def test_name_at_the_limit(home, cdir):
-    out = ok(home, "sheet", sheet({"text": "a"}, name="a" * 60))
+def test_name_and_title_at_the_limit(home, cdir):
+    out = ok(home, "page", free_page(name="a" * 60, title="t" * 120))
     assert Path(out["path"]).name == "a" * 60 + ".html"
 
 
@@ -496,7 +332,7 @@ def test_bad_svg_payload(home, cdir, payload, needle):
 
 # --- output placement -------------------------------------------------------------------
 
-@pytest.mark.parametrize("cmd,payload", [("sheet", BASIC), ("svg", svg()), ("page", PAGE)])
+@pytest.mark.parametrize("cmd,payload", [("svg", svg()), ("page", PAGE)])
 def test_symlinked_out_refused(home, cdir, tmp_path, cmd, payload):
     out = cdir / ".state" / "out"
     out.rmdir()
@@ -507,8 +343,7 @@ def test_symlinked_out_refused(home, cdir, tmp_path, cmd, payload):
     assert list(elsewhere.iterdir()) == []
 
 
-@pytest.mark.parametrize("cmd,payload,name", [("sheet", BASIC, "demo.html"), ("svg", svg(), "dfa.svg"),
-                                              ("page", PAGE, "demo.html")])
+@pytest.mark.parametrize("cmd,payload,name", [("svg", svg(), "dfa.svg"), ("page", PAGE, "demo.html")])
 def test_symlinked_target_refused(home, cdir, tmp_path, cmd, payload, name):
     victim = tmp_path / "victim.txt"
     victim.write_text("keep")
@@ -521,12 +356,12 @@ def test_out_that_is_a_file_refused(home, cdir):
     out = cdir / ".state" / "out"
     out.rmdir()
     out.write_text("x")
-    fails(home, "sheet", BASIC, "is not a folder")
+    fails(home, "page", PAGE, "is not a folder")
 
 
 def test_target_that_is_a_folder_refused(home, cdir):
     (cdir / ".state" / "out" / "demo.html").mkdir()
-    fails(home, "sheet", BASIC, "is not a regular file")
+    fails(home, "page", PAGE, "is not a regular file")
 
 
 @pytest.mark.parametrize("which", ["term", "course", ".state"])
@@ -537,13 +372,11 @@ def test_symlinked_course_folders_refused(home, root, tmp_path, which):
     elsewhere = tmp_path / "elsewhere"
     target.rename(elsewhere)
     target.symlink_to(elsewhere)
-    for cmd, payload in (("sheet", BASIC), ("svg", svg()), ("page", PAGE),
-                         ("open", {"term": TERM, "course": COURSE, "file": "demo.html"})):
+    for cmd, payload in (("svg", svg()), ("page", PAGE), ("open", {"term": TERM, "course": COURSE, "file": "demo.html"})):
         fails(home, cmd, payload, "is a symlink")
 
 
 def test_requires_workspace(home):
-    fails(home, "sheet", BASIC, "no workspace")
     fails(home, "svg", svg(), "no workspace")
     fails(home, "page", PAGE, "no workspace")
 
@@ -570,7 +403,7 @@ OPEN = {"term": TERM, "course": COURSE, "file": "demo.html"}
 
 @pytest.fixture
 def built(home, cdir):
-    return Path(ok(home, "sheet", BASIC)["path"])
+    return Path(ok(home, "page", PAGE)["path"])
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux") or visual._is_wsl(), reason="plain Linux only")
@@ -671,11 +504,11 @@ def test_open_without_out_folder(home, cdir):
 
 @pytest.mark.parametrize("raw", [b"", b"not json", b"[1]", b"\xff\xfe", b'"x"'])
 def test_bad_json_exits_2(home, cdir, raw):
-    for cmd in ("sheet", "svg", "open"):
+    for cmd in ("page", "svg", "open"):
         fails(home, cmd, raw)
 
 
-@pytest.mark.parametrize("argv", [["pdf"], [], ["sheet", "extra"]])
+@pytest.mark.parametrize("argv", [["pdf"], [], ["page", "extra"]])
 def test_usage_errors_are_one_line(home, argv):
     proc = subprocess.run([sys.executable, str(VIS), *argv], input=b"{}", capture_output=True, env=_env(home))
     assert proc.returncode == 2 and proc.stdout == b""
@@ -687,11 +520,23 @@ def test_internal_error_exits_1(home, monkeypatch, capsys):
     def boom(data):
         raise KeyError("bug")
 
-    monkeypatch.setitem(visual.COMMANDS, "sheet", (boom, "x"))
+    monkeypatch.setitem(visual.COMMANDS, "page", (boom, "x"))
     monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}")))
-    assert visual.main(["sheet"]) == 1
+    assert visual.main(["page"]) == 1
     captured = capsys.readouterr()
     assert captured.out == "" and captured.err == "visual.py: internal error (KeyError)\n"
+
+
+@pytest.mark.parametrize("kind", ["sheet", "steps", "trace"])
+def test_old_template_kinds_are_unknown(home, cdir, kind):
+    """#94: the fixed templates are gone; pages are written through ``page``."""
+    proc = _run(home, kind, {"term": TERM, "course": COURSE, "name": "old", "title": "Old", "blocks": []})
+    assert proc.returncode == 2 and proc.stdout == b""
+    assert f"invalid choice: '{kind}'".encode() in proc.stderr
+    assert kind not in visual.COMMANDS and list(visual.COMMANDS) == ["page", "svg", "open"]
+    assert not (cdir / ".state" / "out" / "old.html").exists()
+    assert not (ROOT_DIR / "assets" / "math-sheet.html").exists()
+    assert not (ROOT_DIR / "assets" / "interactive").exists()
 
 
 def test_stdlib_plus_own_scripts_only():
@@ -725,6 +570,9 @@ def assert_safe_page(page: str, plain_scripts: int) -> None:
     hashes = {"'sha256-" + base64.b64encode(hashlib.sha256(b.encode()).digest()).decode() + "'" for b in bodies}
     directives = dict(d.strip().split(" ", 1) for d in csp(page).split(";"))
     assert set(directives["script-src"].split()) == (hashes or {"'none'"}) and directives["default-src"] == "'none'"
+    assert directives["font-src"] == "data:" and directives["img-src"] == "data:"
+    assert directives["style-src"] == "'unsafe-inline'"
+    assert "connect-src" not in directives and "http" not in csp(page)
     assert not re.search(r"""(?:src|href)\s*=\s*["']?\s*(?:https?:)?//""", page, re.I)
     assert "prefers-color-scheme: dark" in page and "animation: none" in page
     assert not re.search(r"\{\{[A-Z_]+\}\}", page)
@@ -739,98 +587,7 @@ def json_data(page: str, ident: str):
     return json.loads(match.group(1))
 
 
-# --- steps ---------------------------------------------------------------------------
-
-def steps_payload(*steps, blocks=None, name="q2-steps", title="Q2 worked answer") -> dict:
-    return {"term": TERM, "course": COURSE, "name": name, "title": title,
-            "blocks": blocks or [{"text": "[practice] Show that L is not regular."}],
-            "steps": list(steps)}
-
-
-THREE_STEPS = steps_payload([{"text": r"Assume \(L\) is regular."}], [{"math": "s = a^p b^p"}],
-                            [{"text": f"Contradiction {INJECT}"}, {"math": r"\frac{1}{2}"}])
-
-
-def test_steps_page(home, cdir):
-    out = ok(home, "steps", THREE_STEPS)
-    page = Path(out["path"]).read_text(encoding="utf-8")
-    assert out["path"] == str(cdir / ".state" / "out" / "q2-steps.html")
-    assert_safe_page(page, 4)
-    body = main_part(page)
-    assert body.count('<li class="step"') == 3 and "<h2>Step 3</h2>" in body
-    assert "&lt;/p&gt;&lt;script&gt;alert(1)&lt;/script&gt;" in body and "alert(1)</script>" not in page
-    assert '<div class="mimir-display" tabindex="0">s = a^p b^p</div>' in body
-    assert "<p>[practice] Show that L is not regular.</p>" in body.split('<ol class="steps">')[0]
-    ui = scripts(page)[3]
-    for key in ("ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"):
-        assert f'"{key}"' in ui
-    assert 'id="mimir-next"' in body and 'role="status" aria-live="polite"' in body
-    assert 'id="mimir-controls" hidden' in body  # shown by the script, so no-JS readers see every step
-
-
-@pytest.mark.parametrize("cmd", ["sheet", "steps"])
-def test_plain_page_is_small_without_katex(home, cdir, cmd):
-    payload = (sheet({"text": "Explain the method."}) if cmd == "sheet" else
-               steps_payload([{"text": "Explain the method."}]))
-    page = Path(ok(home, cmd, payload)["path"]).read_text(encoding="utf-8")
-    assert len(page.encode("utf-8")) < 50_000
-    assert (KATEX / "katex.min.js").read_text() not in page
-    assert (KATEX / "contrib" / "auto-render.min.js").read_text() not in page
-    assert "data:font/woff2;base64," not in page
-    assert_safe_page(page, 3 if cmd == "sheet" else 4)
-    assert "<p>Explain the method.</p>" in main_part(page)
-    if cmd == "steps":
-        assert '<li class="step"' in main_part(page)
-        assert 'id="mimir-next"' in main_part(page)
-
-
-@pytest.mark.parametrize("cmd,payload", [
-    ("sheet", sheet({"math": r"\frac{1}{2}"})),
-    ("sheet", sheet({"text": r"Let \(x\) be the length."})),
-    ("sheet", sheet({"heading": r"Length \(x\)"})),
-    ("sheet", sheet({"text": "plain"}, title=r"Length \(x\)")),
-    ("steps", steps_payload([{"math": r"\frac{1}{2}"}])),
-    ("steps", steps_payload([{"text": r"Let \(x\) be the length."}])),
-    ("steps", steps_payload([{"text": "plain"}], blocks=[{"math": r"\frac{1}{2}"}])),
-    ("steps", steps_payload([{"text": "plain"}], blocks=[{"text": r"Length \(x\)"}])),
-    ("steps", steps_payload([{"text": "plain"}], blocks=[{"heading": r"Length \(x\)"}])),
-    ("steps", steps_payload([{"text": "plain"}], title=r"Length \(x\)")),
-])
-def test_math_page_still_inlines_katex(home, cdir, cmd, payload):
-    page = Path(ok(home, cmd, payload)["path"]).read_text(encoding="utf-8")
-    assert (KATEX / "katex.min.js").read_text() in page
-    assert (KATEX / "contrib" / "auto-render.min.js").read_text() in page
-    assert "data:font/woff2;base64," in page
-    assert_safe_page(page, 3 if cmd == "sheet" else 4)
-
-
-def test_steps_original_beside_question(home, cdir):
-    payload = steps_payload([{"text": "one"}], blocks=[{"text": "[real, from photo/scan, wording may be off]"},
-                                                       {"original": {"path": "past-papers/q.jpg", "page": 1}}])
-    page = Path(ok(home, "steps", payload)["path"]).read_text(encoding="utf-8")
-    assert 'alt="Original: past-papers/q.jpg, p.1"' in page
-
-
-@pytest.mark.parametrize("payload, needle", [
-    (steps_payload(), "steps is required"),
-    (steps_payload([]), "steps[1] must be a non-empty list"),
-    (steps_payload([{"heading": "x"}]), "steps[1][1]: unknown field 'heading'"),
-    (steps_payload([{"text": "a"}], [{"original": {"path": "past-papers/q.jpg", "page": 1}}]),
-     "steps[2][1]: unknown field 'original'"),
-    (steps_payload([{"text": "x"}] * 21), "steps[1] has 21 blocks"),
-    (steps_payload(*[[{"text": "x"}]] * 51), "steps has 51 steps"),
-    (steps_payload([{"text": r"\[x\]"}]), "steps[1][1].text: inline math only"),
-    ({**steps_payload([{"text": "x"}]), "blocks": []}, "blocks is required"),
-])
-def test_bad_steps(home, cdir, payload, needle):
-    fails(home, "steps", payload, needle)
-
-
-def test_steps_limits_accept_the_maximum(home, cdir):
-    ok(home, "steps", steps_payload(*[[{"text": "x"}] * 20] * 50))
-
-
-# --- trace ---------------------------------------------------------------------------
+# --- machine fixtures and the simulator engine ---------------------------------------------------------------------------
 
 def _diagram(n: int, extra: str = "") -> str:
     circles = "".join(f'<circle id="state-{i}" cx="{40 * i}" cy="40" r="15"/>' for i in range(1, n + 1))
@@ -858,45 +615,13 @@ TREE = {"kind": "tree", "states": ["root", "c", "ca", "cat", "d"], "start": "roo
         "transitions": _moves(("root", "c", "c"), ("c", "a", "ca"), ("ca", "t", "cat"), ("root", "d", "d"))}
 
 
-def trace(machine, *, svg_doc=None, name="machine", **extra) -> dict:
-    return {"term": TERM, "course": COURSE, "name": name, "title": "Step through",
-            "machine": machine, "svg": svg_doc or _diagram(len(machine["states"])), **extra}
-
-
-def build_trace(home, machine, **extra) -> str:
-    return Path(ok(home, "trace", trace(machine, **extra))["path"]).read_text(encoding="utf-8")
-
-
-def test_trace_page(home, cdir):
-    page = build_trace(home, PDA, example="aabb")
-    assert_safe_page(page, 2)
-    data = json_data(page, "mimir-machine")
-    assert data["kind"] == "pda" and data["stack_start"] == "Z" and data["states"] == ["p", "q", "f"]
-    assert data["max_configs"] == 256 and data["max_stack"] == 64 and data["max_symbols"] == 64
-    assert data["transitions"][1] == {"from": "p", "read": "", "to": "q", "pop": "", "push": ""}
-    body = main_part(page)
-    assert 'value="aabb"' in body and 'id="state-3"' in body and "<title>M</title>" in body
-    assert "<th scope=\"col\">Pop</th>" in body and "<td>ε</td>" in body
-    assert "PDA, accepting by final state" in body
-    ui = scripts(page)[1]
-    assert '"ArrowRight"' in ui and '"ArrowLeft"' in ui and "mimir-current" in ui and "innerHTML" not in page
-
-
-def test_trace_escapes_names_and_example(home, cdir):
+def test_machine_page_escapes_names_and_example(home, cdir):
     machine = {**DFA, "states": ["<b>q0", "q1"], "start": "<b>q0", "accept": ["<b>q0"],
                "transitions": _moves(("<b>q0", "<", "q1"))}
-    page = build_trace(home, machine, example='"><script>x</script>')
+    page = build_machine_page(home, machine, example='"><script>x</script>')
     assert "<b>q0" not in page and "&lt;b&gt;q0" in page
     assert 'value="&quot;&gt;&lt;script&gt;x&lt;/script&gt;"' in page
     assert page.count("<script") == 3
-
-
-def test_trace_svg_is_reserialized(home, cdir):
-    doc = _diagram(2, '<text x="1" y="1"><![CDATA[</svg><script>alert(1)</script>]]></text><!-- c -->')
-    page = build_trace(home, DFA, svg_doc=doc)
-    assert "alert(1)</script>" not in page and "CDATA" not in page and "<!-- c -->" not in page
-    assert "&lt;/svg&gt;&lt;script&gt;alert(1)&lt;/script&gt;" in page
-    assert '<svg xmlns="http://www.w3.org/2000/svg"' in page
 
 
 BAD_MACHINES = [
@@ -932,16 +657,6 @@ BAD_MACHINES = [
 ]
 
 
-@pytest.mark.parametrize("machine, svg_doc, needle", BAD_MACHINES)
-def test_bad_machine(home, cdir, machine, svg_doc, needle):
-    fails(home, "trace", trace(machine, svg_doc=svg_doc), needle)
-
-
-def test_trace_example_limit(home, cdir):
-    ok(home, "trace", trace(DFA, example="0 " * 64))
-    fails(home, "trace", trace(DFA, example="0" * 65), "example has 65 symbols; at most 64")
-
-
 NODE = __import__("shutil").which("node")
 
 
@@ -967,7 +682,7 @@ console.log(JSON.stringify(out));
 
 @pytest.mark.skipif(NODE is None, reason="node not installed")
 def test_simulator_dfa(home, cdir, tmp_path):
-    full, partial = (build_trace(home, m, name=n) for m, n in ((DFA, "full"), (DFA_PARTIAL, "partial")))
+    full, partial = (build_machine_page(home, m, name=n) for m, n in ((DFA, "full"), (DFA_PARTIAL, "partial")))
     accepted, rejected = simulate(tmp_path, full, ["0101", "0 1"])
     assert accepted["verdict"] == {"result": "accepted"}
     assert [f["configs"] for f in accepted["frames"]] == [["q0/"], ["q1/"], ["q1/"], ["q0/"], ["q0/"]]
@@ -978,7 +693,7 @@ def test_simulator_dfa(home, cdir, tmp_path):
 
 @pytest.mark.skipif(NODE is None, reason="node not installed")
 def test_simulator_nfa_epsilon(home, cdir, tmp_path):
-    (empty, ys, xs) = simulate(tmp_path, build_trace(home, NFA), ["", "yy", "xy"])
+    (empty, ys, xs) = simulate(tmp_path, build_machine_page(home, NFA), ["", "yy", "xy"])
     assert empty["frames"][0]["configs"] == ["s/", "a/", "b/"] and empty["verdict"]["result"] == "accepted"
     assert ys["verdict"]["result"] == "accepted" and ys["frames"][-1]["configs"] == ["b/"]
     assert xs["verdict"]["result"] == "stuck"
@@ -986,12 +701,12 @@ def test_simulator_nfa_epsilon(home, cdir, tmp_path):
 
 @pytest.mark.skipif(NODE is None, reason="node not installed")
 def test_simulator_pda(home, cdir, tmp_path):
-    good, short, extra = simulate(tmp_path, build_trace(home, PDA), ["aabb", "aab", "abb"])
+    good, short, extra = simulate(tmp_path, build_machine_page(home, PDA), ["aabb", "aab", "abb"])
     assert good["verdict"] == {"result": "accepted"}
     assert "f/Z" in good["frames"][-1]["configs"] and "p/AAZ" in good["frames"][2]["configs"]
     assert short["verdict"] == {"result": "rejected"}
     assert extra["verdict"]["result"] == "stuck"
-    (loop,) = simulate(tmp_path, build_trace(home, LOOP, name="loop"), [""])
+    (loop,) = simulate(tmp_path, build_machine_page(home, LOOP, name="loop"), [""])
     frame = loop["frames"][0]
     assert frame["limited"] is True and len(frame["configs"]) == 64  # stack depths 1..64; deeper is cut
     assert max(len(c.split("/")[1]) for c in frame["configs"]) == 64
@@ -999,7 +714,7 @@ def test_simulator_pda(home, cdir, tmp_path):
 
 @pytest.mark.skipif(NODE is None, reason="node not installed")
 def test_simulator_tree(home, cdir, tmp_path):
-    ca, c, cx = simulate(tmp_path, build_trace(home, TREE), ["ca", "c", "cx"])
+    ca, c, cx = simulate(tmp_path, build_machine_page(home, TREE), ["ca", "c", "cx"])
     assert [f["configs"] for f in ca["frames"]] == [["root/"], ["c/"], ["ca/"]]
     assert ca["verdict"]["result"] == "accepted" and c["verdict"]["result"] == "rejected"
     assert cx["verdict"] == {"result": "stuck", "symbol": "x", "read": 2}
@@ -1016,37 +731,11 @@ def test_delay_subcommand_is_gone(home, root, cdir):
     assert not (cdir / ".state" / "out" / "cost-of-delay.html").exists()
 
 
-def test_new_commands_require_workspace(home):
-    fails(home, "steps", THREE_STEPS, "no workspace")
-    fails(home, "trace", trace(DFA), "no workspace")
-
-
 def test_new_constants_are_the_spec_values():
-    assert visual.STEPS_MAX == 50 and visual.STEP_MAX_BLOCKS == 20
+    assert visual.STEPS_MAX == 50
     assert visual.TRACE_MAX_STATES == 60 and visual.TRACE_MAX_TRANSITIONS == 400
     assert visual.STATE_NAME_MAX_CHARS == 20 and visual.TRACE_MAX_SYMBOLS == 64
     assert visual.TRACE_MAX_CONFIGS == 256 and visual.TRACE_MAX_STACK == 64
-
-
-# --- review regressions --------------------------------------------------------------
-
-def test_trace_diagram_css_is_scoped(home, cdir):
-    style = ("<style>/* c */ text, button { display: none } "
-             "@media (prefers-color-scheme: dark) { circle { stroke: #eee } }</style>")
-    page = build_trace(home, DFA, svg_doc=_diagram(2, style))
-    assert "#mimir-diagram text,#mimir-diagram button{ display: none }" in page
-    assert "@media (prefers-color-scheme: dark){#mimir-diagram circle{ stroke: #eee }}" in page
-    assert "/* c */" not in page
-
-
-@pytest.mark.parametrize("style, needle", [
-    ("<style>@font-face { font-family: x }</style>", "allows only top-level @media"),
-    ("<style>a { b { c: d } }</style>", "nested in a rule"),
-    ("<style>a { c: d </style>", "unbalanced"),
-    ("<style>{ c: d }</style>", "without a selector"),
-])
-def test_trace_diagram_css_refused(home, cdir, style, needle):
-    fails(home, "trace", trace(DFA, svg_doc=_diagram(2, style)), needle)
 
 
 @pytest.mark.parametrize("field, machine", [
@@ -1054,11 +743,7 @@ def test_trace_diagram_css_refused(home, cdir, style, needle):
     ("stack_start", {**PDA, "stack_start": "\U0001d44d"}),
 ])
 def test_symbols_outside_the_bmp_refused(home, cdir, field, machine):
-    fails(home, "trace", trace(machine), f"machine.{field} must be one character")
-
-
-def test_example_total_length_capped(home, cdir):
-    fails(home, "trace", trace(DFA, example="0" + " " * 4000 + "0"), "example is longer than 4000")
+    fails(home, "page", machine_page(machine), f"machine.{field} must be one character")
 
 
 CAP = {"kind": "pda", "states": [f"s{i}" for i in range(5)], "start": "s0", "accept": [], "stack_start": "Z",
@@ -1069,9 +754,9 @@ CUT = {"kind": "pda", "states": ["p", "q"], "start": "p", "accept": ["q"], "stac
 
 @pytest.mark.skipif(NODE is None, reason="node not installed")
 def test_simulator_config_cap_and_limited_carry_over(home, cdir, tmp_path):
-    (cap,) = simulate(tmp_path, build_trace(home, CAP, name="cap", svg_doc=_diagram(5)), [""])
+    (cap,) = simulate(tmp_path, build_machine_page(home, CAP, name="cap", svg_doc=_diagram(5)), [""])
     assert len(cap["frames"][0]["configs"]) == 256 and cap["frames"][0]["limited"] is True
-    (cut,) = simulate(tmp_path, build_trace(home, CUT, name="cut"), ["x"])
+    (cut,) = simulate(tmp_path, build_machine_page(home, CUT, name="cut"), ["x"])
     assert cut["frames"][0]["limited"] is True
     assert len(cut["frames"][1]["configs"]) == 63 and cut["frames"][1]["limited"] is True
 
@@ -1117,94 +802,6 @@ def run_ui(tmp_path: Path, code: str, setup: str, actions: str) -> dict:
     return json.loads(proc.stdout)
 
 
-@pytest.mark.skipif(NODE is None, reason="node not installed")
-@pytest.mark.parametrize("cmd", ["sheet", "steps"])
-def test_plain_page_scripts_run_without_katex(home, cdir, tmp_path, cmd):
-    payload = (sheet({"text": "Explain the method."}) if cmd == "sheet" else
-               steps_payload([{"text": "Explain the method."}]))
-    page = Path(ok(home, cmd, payload)["path"]).read_text(encoding="utf-8")
-    out = run_ui(tmp_path, "\n".join(scripts(page)), 'var steps = list(".step", 1);', """
-out.loaded = true;
-out.initially_hidden = steps[0].hidden;
-byId["mimir-next"] && byId["mimir-next"].click();
-out.hidden = steps[0].hidden;
-""")
-    assert out == {"loaded": True, "initially_hidden": cmd == "steps", "hidden": False}
-
-
-@pytest.mark.skipif(NODE is None, reason="node not installed")
-def test_step_reveal_ui(home, cdir, tmp_path):
-    page = Path(ok(home, "steps", THREE_STEPS)["path"]).read_text(encoding="utf-8")
-    out = run_ui(tmp_path, scripts(page)[-1], 'var steps = list(".step", 3);', r"""
-function snap(tag) { out[tag] = {hidden: steps.map(function (s) { return s.hidden; }),
-                                 status: byId["mimir-status"].textContent}; }
-out.controls = byId["mimir-controls"].hidden; snap("load");
-key("ArrowRight"); snap("one");
-byId["mimir-next"].click(); key("ArrowDown"); snap("three");
-byId["mimir-next"].click(); snap("past");
-key("ArrowLeft"); snap("back");
-var formula = new El(null); formula.classList.add("mimir-display"); key("ArrowRight", formula); snap("formula");
-key("ArrowUp"); byId["mimir-back"].click(); byId["mimir-back"].click(); snap("none");
-""")
-    assert out["controls"] is False
-    assert out["load"] == {"hidden": [True, True, True], "status": "3 steps to reveal."}
-    assert out["one"] == {"hidden": [False, True, True], "status": "Step 1 of 3."}
-    assert out["three"] == {"hidden": [False, False, False], "status": "Step 3 of 3, the last step."}
-    assert out["past"]["status"] == "All 3 steps are shown."
-    assert out["back"] == {"hidden": [False, False, True], "status": "Step 2 of 3 is the last one shown."}
-    assert out["formula"] == out["back"]
-    assert out["none"] == {"hidden": [True, True, True], "status": "No steps are shown."}
-
-
-def trace_ui(tmp_path: Path, page: str, text: str, actions: str) -> dict:
-    data = json.dumps(json.dumps(json_data(page, "mimir-machine")))
-    setup = (f'document.getElementById("mimir-machine").textContent = {data};\n'
-             f'document.getElementById("mimir-input").value = {json.dumps(text)};')
-    helpers = r"""
-function snap(tag) { out[tag] = {status: byId["mimir-status"].textContent,
-  history: byId["mimir-history"].children.map(function (c) { return c.textContent; }),
-  current: Object.keys(byId).filter(function (k) { return k.indexOf("state-") === 0 && byId[k].classList.contains("mimir-current"); })}; }
-"""
-    bodies = scripts(page)
-    return run_ui(tmp_path, bodies[0] + "\n" + bodies[1], setup, helpers + actions)
-
-
-@pytest.mark.skipif(NODE is None, reason="node not installed")
-def test_step_through_ui(home, cdir, tmp_path):
-    page = build_trace(home, DFA)
-    out = trace_ui(tmp_path, page, "0101", r"""
-out.controls = byId["mimir-controls"].hidden; snap("load");
-byId["mimir-start"].click(); snap("start");
-key("ArrowRight"); snap("one");
-key("ArrowRight"); key("ArrowRight"); byId["mimir-next"].click(); snap("end");
-byId["mimir-back"].click(); snap("back");
-key("ArrowRight", byId["mimir-input"]); snap("typing");
-byId["mimir-input"].fire("input"); snap("edited");
-""")
-    assert out["controls"] is False and out["load"]["status"] == "Type an input and press Start."
-    assert out["start"] == {"status": "Start: in q0. Remaining: 0101.", "history": ["Start: in q0. Remaining: 0101."],
-                            "current": ["state-1"]}
-    assert out["one"]["status"] == "Read '0' (1 of 4): in q1. Remaining: 101." and out["one"]["current"] == ["state-2"]
-    assert out["end"]["status"].endswith("Accepted: the whole input was read and an accepting state was reached.")
-    assert len(out["end"]["history"]) == 5
-    assert out["back"]["status"] == "Read '0' (3 of 4): in q0. Remaining: 1." and len(out["back"]["history"]) == 4
-    assert out["typing"] == out["back"]
-    assert out["edited"] == {"status": "Press Start to run the new input.", "history": [], "current": []}
-
-
-@pytest.mark.skipif(NODE is None, reason="node not installed")
-@pytest.mark.parametrize("machine, text, ending", [
-    (DFA, "011", "Rejected: the whole input was read, but no accepting state was reached."),
-    (DFA_PARTIAL, "00", "Stuck on '0': no move from the previous state, so the input is rejected."),
-    (CUT, "", "No verdict: the search was cut, so an accepting path may have been missed. "
-              "Search limit reached: some paths were not followed."),
-])
-def test_step_through_verdicts(home, cdir, tmp_path, machine, text, ending):
-    page = build_trace(home, machine)
-    out = trace_ui(tmp_path, page, text, 'byId["mimir-start"].click(); for (var i = 0; i < 5; i++) key("ArrowRight"); snap("end");')
-    assert out["end"]["status"].endswith(ending), out["end"]["status"]
-
-
 # --- page ----------------------------------------------------------------------------
 
 PAGE_BODY = ('<header class="head"><p class="tag">[practice, not from a real paper]</p>'
@@ -1215,6 +812,10 @@ SKALD_FONT = base64.b64encode((ROOT_DIR / "assets" / "skald" / "fonts" / "kalam-
 
 def free_page(body: str = PAGE_BODY, name="demo", title="Even zeros") -> dict:
     return {"term": TERM, "course": COURSE, "name": name, "title": title, "body": body}
+
+
+def original(path: str, page: int) -> str:
+    return f'<p>Q2</p><mimir-original path="{path}" page="{page}"></mimir-original>'
 
 
 def build_page(home: Path, payload) -> tuple[dict, str]:
@@ -1316,6 +917,7 @@ def test_math_page_inlines_katex_offline(home, cdir):
     katex_js, auto_render, render = scripts(built)
     assert katex_js == (KATEX / "katex.min.js").read_text() and "renderMathInElement" in auto_render
     assert 'trust: false' in render and 'throwOnError: false' in render and '"svg"' in render
+    assert re.findall(r'left: "([^"]*)"', render) == [r"\\(", r"\\["]
     assert "\\[ T = \\frac{2\\pi}{B} \\]" in main_part(built)
     assert "</main>\n<script>" in built  # the scripts run after the body
 
@@ -1470,6 +1072,12 @@ def test_unsafe_page_body_refused(home, cdir, body, needle):
     (free_page(title="x" * 121), "title is longer than 120"),
     ({**free_page(), "body": ["<p>a</p>"]}, "body is required"),
     (free_page(name="Bad Name"), "name must match"),
+    (free_page(name="a--b"), "name must match"),
+    (free_page(name="-a"), "name must match"),
+    (free_page(name="../x"), "name must match"),
+    (free_page(name="a" * 61), "at most 60"),
+    ({**free_page(), "term": "Fall"}, "term must be"),
+    ({**free_page(), "course": "CS999 Missing"}, "no course folder"),
 ])
 def test_bad_page_payload(home, cdir, payload, needle):
     fails(home, "page", payload, needle)
@@ -1605,14 +1213,6 @@ def test_bad_machine_page_payload(home, cdir, payload, needle):
 
 def test_machine_page_example_at_the_limit(home, cdir):
     ok(home, "page", machine_page(DFA, example="0 " * 64))
-
-
-@pytest.mark.skipif(NODE is None, reason="node not installed")
-def test_machine_page_simulates_like_trace(home, cdir, tmp_path):
-    page = build_machine_page(home, PDA)
-    good, short, extra = simulate(tmp_path, page, ["aabb", "aab", "abb"])
-    assert good["verdict"] == {"result": "accepted"} and "p/AAZ" in good["frames"][2]["configs"]
-    assert short["verdict"] == {"result": "rejected"} and extra["verdict"]["result"] == "stuck"
 
 
 def page_sim_ui(tmp_path: Path, page: str, text: str, actions: str) -> dict:

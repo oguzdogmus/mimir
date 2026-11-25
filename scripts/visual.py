@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Mimir visual builder: Skald pages, math sheets, safe SVG files, interactive pages and the browser open.
+"""Mimir visual builder: Skald pages, safe SVG files and the browser open.
 
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``verify.py`` (same folder). Run as::
 
-    python3 visual.py <page|sheet|svg|steps|trace|open>  < input.json
+    python3 visual.py <page|svg|open>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -18,13 +18,15 @@ only to ``<course>/.state/out/<name>.<ext>``: ``out/`` is created when
 missing, neither ``out/`` nor the target may be a symlink, and the file is
 written atomically (a rebuild replaces it). ``name`` matches
 ``[a-z0-9]+(-[a-z0-9]+)*``, at most NAME_MAX_CHARS (60) characters. Errors
-name the field, e.g. ``blocks[3].math`` (blocks are numbered from 1).
+name the field, e.g. ``body.original[2].page`` (lists are numbered from 1).
 
 page -- an offline page in the Skald house style from a body the builder wrote.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "even-zeros",
           "title": "Even number of 0s", "body": "<header class=\\"head\\"><h1>...</h1></header>
            <p>Let \\(p\\) be ...</p><mimir-original path=\\"past-papers/q.jpg\\" page=\\"1\\"></mimir-original>"}
-    out: as ``sheet``.
+    out: {"course_dir": "/home/u/learning/2026-Fall/CS201 Theory",
+          "path": "/home/u/learning/2026-Fall/CS201 Theory/.state/out/even-zeros.html",
+          "line": "Built /home/u/learning/2026-Fall/CS201 Theory/.state/out/even-zeros.html."}
     ``title`` (required, one line, at most TITLE_MAX_CHARS) is the ``<title>``.
     ``body`` (required, at most PAGE_BODY_MAX_BYTES (1 MiB) as UTF-8, no
     control characters other than tab, newline and carriage return) is HTML
@@ -68,64 +70,57 @@ page -- an offline page in the Skald house style from a body the builder wrote.
     animation. Without step markup the page carries no step script.
     An original is placed with ``<mimir-original path="..." page="N">`` (empty,
     closed by ``</mimir-original>`` or ``/>``, not inside an SVG); ``path`` and
-    ``page`` follow the ``sheet`` ``original`` rules, and errors name
-    ``body.original[k]`` (markers numbered from 1). The page carries the Skald
+    ``page`` name the original of an ``ocr`` transcription, and errors name
+    ``body.original[k]`` (markers numbered from 1). ``path`` is a registry
+    path of this course's INDEX.md that resolves inside the course folder,
+    ``page`` a whole number >= 1 within the row's pages when known. A png,
+    jpg, jpeg, gif or webp file of at most ORIGINAL_EMBED_MAX_BYTES (10 MiB)
+    is embedded as an image with alt text "Original: <path>, p.<page>";
+    anything else becomes a ``file://`` link with that text (the whole page
+    stands in for the crop). The page carries the Skald
     tokens (``assets/skald/tokens.css`` with its fonts as data URIs), the
     shell's chalk and marker filters (``#sk-chalk``, ``#sk-marker``) and
     ``data-motion`` on its root: the profile's ``motion:`` line (none, gentle
     or full) read at build time, none when it is missing or malformed; the
     system's reduced-motion setting is not consulted. When the body's text
-    (outside SVG and ``<style>``) holds ``\\(`` or ``\\[``, KaTeX is inlined as in ``sheet`` and
-    renders ``\\(...\\)`` and ``\\[...\\]`` in ``<main>``, skipping SVG.
-    A page with no math, no steps and no machine has no script at all
-    (``script-src 'none'``).
+    (outside SVG and ``<style>``) holds ``\\(`` or ``\\[``, KaTeX (``assets/vendor/katex``) is inlined:
+    its JS, auto-render and CSS, with the woff2 fonts as data URIs and other
+    font formats dropped. It renders ``\\(...\\)`` and ``\\[...\\]`` in
+    ``<main>``, skipping SVG, with ``throwOnError: false`` and
+    ``trust: false``.
+    A Content-Security-Policy meta allows only ``data:`` fonts and images,
+    inline styles and the page's own scripts by sha256 hash: nothing loads
+    from the network. A page with no math, no steps and no machine has no
+    script at all (``script-src 'none'``).
     ``machine`` (optional) attaches the automata simulator to the body's
-    inline diagram. It and ``example`` follow the ``trace`` rules and limits,
-    and the body needs an element ``id="state-<i>"`` inside an inline SVG for
+    inline diagram:
+    {"kind": "dfa", "states": ["q0", "q1"], "start": "q0", "accept": ["q0"],
+     "transitions": [{"from": "q0", "read": "0", "to": "q1"}, ...]}.
+    ``kind`` is dfa, nfa, pda or tree. Symbols (``read``, ``pop``, the
+    characters of ``push``, ``stack_start``) are single characters that are
+    not spaces, from the Basic Multilingual Plane; ``read`` "" is ε, allowed
+    in nfa and pda only. A pda needs ``stack_start``; its moves take ``pop``
+    ("" or one symbol) and ``push`` (the new top first; at most
+    TRACE_MAX_STACK symbols); other kinds refuse those fields. dfa and tree
+    allow at most one move per (state, symbol). A tree's root has no incoming
+    edge, every other node exactly one, and every node is reachable from the
+    root. Limits: TRACE_MAX_STATES (60) states with names of at most
+    STATE_NAME_MAX_CHARS (20), TRACE_MAX_TRANSITIONS (400) moves.
+    ``example`` (optional) is the input the simulator starts with: at most
+    TRACE_MAX_SYMBOLS (64) symbols (spaces ignored) and EXAMPLE_MAX_CHARS
+    (4000) characters. The body needs an element ``id="state-<i>"`` inside an inline SVG for
     each state i (counting from 1). After the body the shell adds the
     simulator controls (``#mimir-sim``) and the machine as a table, the
     machine as JSON data and the simulator scripts (allowed by hash); current
     states get ``data-highlight-on`` (the teaching highlight), and the arrow
-    keys act only while focus is in the simulator. The body's ``<style>`` is
+    keys act only while focus is in the simulator. The page simulates sets of
+    configurations with ε-closure, at most TRACE_MAX_CONFIGS (256) at once
+    and a PDA stack of at most TRACE_MAX_STACK, saying "Search limit reached"
+    when it cuts; it accepts by final state after the whole input. A live
+    region and an ordered history say each step in words, ending Accepted,
+    Rejected or Stuck. The body's ``<style>`` is
     not scoped, since the builder writes the whole page. ``example`` without
     ``machine`` is refused; a page without ``machine`` has no simulator.
-
-sheet -- an offline HTML math sheet from ``assets/math-sheet.html``.
-    in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "pumping-lemma",
-          "title": "Pumping lemma, worked answer", "blocks": [
-            {"heading": "Setup"},
-            {"text": "Let \\(p\\) be the pumping length."},
-            {"math": "\\frac{a}{b} = \\sum_{i=0}^{n} x_i"},
-            {"original": {"path": "past-papers/q.jpg", "page": 1}}]}
-    out: {"course_dir": "/home/u/learning/2026-Fall/CS201 Theory",
-          "path": "/home/u/learning/2026-Fall/CS201 Theory/.state/out/pumping-lemma.html",
-          "line": "Built /home/u/learning/2026-Fall/CS201 Theory/.state/out/pumping-lemma.html."}
-    Each block is an object with exactly one of:
-    * ``heading``: a section heading (``<h2>``), at most HEADING_MAX_CHARS (120).
-    * ``text``: a paragraph; inline math only as ``\\(...\\)``.
-    * ``math``: one display formula, LaTeX without delimiters, in a
-      keyboard-focusable (``tabindex="0"``) block so a wide formula can scroll.
-    * ``original``: ``{path, page}``, the original of an ``ocr`` transcription.
-      ``path`` is a registry path of this course's INDEX.md that resolves
-      inside the course folder, ``page`` an integer >= 1 within the row's
-      pages when known. A png, jpg, jpeg, gif or webp file of at most
-      ORIGINAL_EMBED_MAX_BYTES (10 MiB) is embedded as an image with alt text
-      "Original: <path>, p.<page>"; anything else becomes a ``file://`` link
-      with that text (the whole page stands in for the crop).
-    ``\\[`` and ``\\]`` are refused in ``title``, ``heading`` and ``text``
-    (auto-render scans the whole page body; display math is a ``math`` block).
-    ``title`` (required) is at most TITLE_MAX_CHARS (120); ``text`` and
-    ``math`` at most BLOCK_MAX_CHARS (4000); at most SHEET_MAX_BLOCKS (200)
-    blocks. Strings have no control characters (one line each). The template
-    is filled in one pass, so inserted values are never re-scanned, and every
-    string is HTML-escaped. When a math block or inline ``\\(...\\)`` is present,
-    KaTeX (``assets/vendor/katex``) is inlined: its
-    JS, auto-render and CSS, with the woff2 fonts as data URIs and other font
-    formats dropped. KaTeX runs with ``output: "htmlAndMathml"``,
-    ``throwOnError: false``, ``trust: false`` and the delimiters ``\\(\\)``
-    and ``\\[\\]`` only. A Content-Security-Policy meta allows only ``data:``
-    fonts and images, inline styles and the page's own scripts by sha256
-    hash: nothing loads from the network.
 
 svg -- check one SVG document and write it with the Skald tokens.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "dfa-even-zeros",
@@ -149,50 +144,6 @@ svg -- check one SVG document and write it with the Skald tokens.
     attribute value or ``style`` text (CSS escapes would hide the checks).
     The document is written as given, with one ``<style>`` added as the root's
     last child: the Skald tokens, fonts inlined, in a CDATA section.
-
-steps -- a step-reveal worked answer from ``assets/interactive/step-reveal.html``.
-    in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "q2-steps",
-          "title": "Q2, worked", "blocks": [{"text": "[practice, not from a real paper]"},
-          {"text": "Show that L is not regular."}],
-          "steps": [[{"text": "Assume \\(L\\) is regular."}], [{"math": "s = a^p b^p"}]]}
-    out: as ``sheet``.
-    ``blocks`` are sheet blocks, always shown (label, question, ``original``).
-    ``steps``: 1 to STEPS_MAX (50) steps, each 1 to STEP_MAX_BLOCKS (20)
-    ``text`` or ``math`` blocks with the sheet's rules. Each step is an
-    ``<li class="step">`` the page script hides at load (without JavaScript
-    every step stays visible); a button reveals the next one (Enter, Space),
-    ArrowRight/ArrowDown reveal, ArrowLeft/ArrowUp hide the last, and a
-    polite live region says "Step k of n". KaTeX and the CSP are as in ``sheet``.
-
-trace -- a structure step-through from ``assets/interactive/step-through.html``.
-    in : {"term": ..., "course": ..., "name": "dfa-even-zeros", "title": "...",
-          "example": "0101", "svg": "<svg ...>...</svg>",
-          "machine": {"kind": "dfa", "states": ["q0", "q1"], "start": "q0",
-            "accept": ["q0"], "transitions": [{"from": "q0", "read": "0", "to": "q1"}, ...]}}
-    out: as ``sheet``.
-    ``kind`` is dfa, nfa, pda or tree. Symbols (``read``, ``pop``, the
-    characters of ``push``, ``stack_start``) are single characters that are
-    not spaces, from the Basic Multilingual Plane; ``read`` "" is ε, allowed in nfa and pda only. A pda needs
-    ``stack_start``; its moves take ``pop`` ("" or one symbol) and ``push``
-    (the new top first; at most TRACE_MAX_STACK symbols); other kinds refuse
-    those fields. dfa and tree allow at most one move per (state, symbol). A
-    tree's root has no incoming edge, every other node exactly one, and every
-    node is reachable from the root. Limits: TRACE_MAX_STATES (60) states
-    with names of at most STATE_NAME_MAX_CHARS (20), TRACE_MAX_TRANSITIONS
-    (400) moves, ``example`` at most TRACE_MAX_SYMBOLS (64) symbols (spaces
-    ignored). ``svg`` passes the ``svg`` checks below, has an element with
-    ``id="state-<i>"`` for each state i (counting from 1), no repeated id and
-    no id starting with ``mimir-``; it is re-serialized (no comments, CDATA or
-    declarations) before it is inlined, and every selector in its ``<style>``
-    is prefixed with ``#mimir-diagram`` (only top-level ``@media`` at-rules
-    are allowed) so it cannot restyle the page. The machine goes in as JSON data
-    (``<script type="application/json">``, with ``<``, ``>`` and ``&``
-    escaped); the page simulates sets of configurations with ε-closure, at
-    most TRACE_MAX_CONFIGS (256) at once and a PDA stack of at most
-    TRACE_MAX_STACK, saying "Search limit reached" when it cuts; it accepts by
-    final state after the whole input. Current states get the class
-    ``mimir-current`` (a thick outline); a live region and an ordered history
-    say each step in words, ending Accepted, Rejected or Stuck.
 
 open -- open a built file in the default browser.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "file": "pumping-lemma.html"}
@@ -240,30 +191,24 @@ from workspace import InputError, _check_keys, _has_control, _short, parse_segme
 
 NAME_MAX_CHARS = 60
 TITLE_MAX_CHARS = 120
-HEADING_MAX_CHARS = 120
-BLOCK_MAX_CHARS = 4000
-SHEET_MAX_BLOCKS = 200
 ORIGINAL_EMBED_MAX_BYTES = 10 * 1024 * 1024
 SVG_MAX_BYTES = 1024 * 1024
 PAGE_BODY_MAX_BYTES = 1024 * 1024
 OPEN_WAIT_SECONDS = 5
-STEPS_MAX = 50                 # steps in a step-reveal page
-STEP_MAX_BLOCKS = 20           # blocks in one step
+STEPS_MAX = 50                 # data-step numbers on one page
 TRACE_MAX_STATES = 60
 TRACE_MAX_TRANSITIONS = 400
 STATE_NAME_MAX_CHARS = 20
 TRACE_MAX_SYMBOLS = 64         # symbols in one fed input
+EXAMPLE_MAX_CHARS = 4000       # the example input, spaces included
 TRACE_MAX_CONFIGS = 256        # configurations followed at once (NFA/PDA)
 TRACE_MAX_STACK = 64           # PDA stack depth
 
 _ASSETS = Path(__file__).resolve().parent.parent / "assets"
-_TEMPLATE = _ASSETS / "math-sheet.html"
-_STEPS_TEMPLATE = _ASSETS / "interactive" / "step-reveal.html"
-_TRACE_TEMPLATE = _ASSETS / "interactive" / "step-through.html"
 _KATEX = _ASSETS / "vendor" / "katex"
 _PAGE_TEMPLATE = _ASSETS / "page" / "page.html"
 _PAGE_MATH_JS = _ASSETS / "page" / "math.js"
-_MACHINE_JS = _ASSETS / "page" / "machine.js"       # the simulator engine (MimirSim), page and trace
+_MACHINE_JS = _ASSETS / "page" / "machine.js"       # the simulator engine (MimirSim)
 _PAGE_SIM_JS = _ASSETS / "page" / "simulator.js"
 _PAGE_STEPS_JS = _ASSETS / "page" / "steps.js"
 _SKALD = _ASSETS / "skald"
@@ -271,8 +216,6 @@ _SKALD = _ASSETS / "skald"
 _NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 _FILE = re.compile(r"([a-z0-9]+(?:-[a-z0-9]+)*)\.(html|svg)")
 _SLOT = re.compile(r"\{\{([A-Z_]+)\}\}")
-_SCRIPT = re.compile(r"<script>(.*?)</script>", re.S)
-_BLOCK_KINDS = ("heading", "text", "math", "original")
 _IMAGE_MIME = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
                "webp": "image/webp"}
 
@@ -288,7 +231,6 @@ _SVG_ALLOWED_CONTROL = {"\t", "\n", "\r"}
 _XLINK_NS = "http://www.w3.org/1999/xlink"
 ET.register_namespace("", _SVG_NS)
 ET.register_namespace("xlink", _XLINK_NS)
-_STEP_KINDS = ("text", "math")
 _TRACE_KINDS = ("dfa", "nfa", "pda", "tree")
 _KIND_TEXT = {"dfa": "DFA", "nfa": "NFA", "pda": "PDA, accepting by final state",
               "tree": "tree: the input walks the labelled edges from the root"}
@@ -314,7 +256,7 @@ def _out_dir(course_dir: Path, create: bool) -> Path:
         raise InputError(f"output folder {out} exists and is not a folder")
     if not out.exists():
         if not create:
-            raise InputError(f"no output folder at {out}; build a sheet or an SVG first")
+            raise InputError(f"no output folder at {out}; build a page or an SVG first")
         out.mkdir()
     return out
 
@@ -348,7 +290,7 @@ def _write_out(course_dir: Path, name: str, ext: str, content: bytes) -> dict:
     return {"course_dir": str(course_dir), "path": str(target), "line": f"Built {target}."}
 
 
-# --- sheet -------------------------------------------------------------------------
+# --- shared page parts -------------------------------------------------------------------------
 
 def _vendor_text(rel: str) -> str:
     return (_KATEX / rel).read_text(encoding="utf-8")
@@ -416,44 +358,12 @@ def _original(value, where: str, rows: dict, course_dir: Path, index: Path) -> s
     return (f'<p class="original original-link"><a href="{html.escape(uri)}">{html.escape(text)}</a></p>')
 
 
-def _inline_only(value, where: str, limit: int) -> str:
-    """A title, heading or text string: auto-render scans all of <main>, so no display delimiters."""
-    text = verify._text(value, where, limit)
-    if "\\[" in text or "\\]" in text:
-        raise InputError(f"{where}: inline math only as \\(...\\); display math goes in a math block")
-    return text
-
-
-def _sheet_block(block, where: str, rows: dict, course_dir: Path, index: Path,
-                 kinds: tuple[str, ...] = _BLOCK_KINDS) -> str:
-    if not isinstance(block, dict) or len(block) != 1 or next(iter(block)) not in kinds:
-        if isinstance(block, dict) and len(block) == 1:
-            raise InputError(f"{where}: unknown field {_short(next(iter(block)))}; a block is one of "
-                             f"{', '.join(kinds)}")
-        raise InputError(f"{where} must be an object with exactly one of {', '.join(kinds)}")
-    kind, value = next(iter(block.items()))
-    if kind == "heading":
-        return f"<h2>{html.escape(_inline_only(value, f'{where}.heading', HEADING_MAX_CHARS))}</h2>"
-    if kind == "text":
-        return f"<p>{html.escape(_inline_only(value, f'{where}.text', BLOCK_MAX_CHARS))}</p>"
-    if kind == "math":
-        return f'<div class="mimir-display" tabindex="0">{html.escape(verify._text(value, f"{where}.math", BLOCK_MAX_CHARS))}</div>'
-    return _original(value, f"{where}.original", rows, course_dir, index)
-
-
 def _fill(template: str, values: dict[str, str]) -> str:
     """Replace every ``{{SLOT}}`` in one pass; inserted values are never re-scanned."""
     found = set(_SLOT.findall(template))
     if found != set(values):
         raise RuntimeError("page template slots do not match")
     return _SLOT.sub(lambda m: values[m.group(1)], template)
-
-
-def _katex_values(*content: str) -> dict[str, str]:
-    """Load KaTeX only for display blocks or inline delimiters in escaped page content."""
-    if not any('class="mimir-display"' in part or r"\(" in part for part in content):
-        return {"KATEX_CSS": "", "KATEX_JS": "", "AUTO_RENDER_JS": ""}
-    return _katex()
 
 
 def _katex() -> dict[str, str]:
@@ -471,94 +381,11 @@ def _json_script(value) -> str:
     return text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 
-def render_sheet(title: str, blocks_html: list[str]) -> str:
-    title = html.escape(title)
-    return render_page(_TEMPLATE, {"TITLE": title, "BLOCKS": "\n".join(blocks_html),
-                                   **_katex_values(title, *blocks_html)})
-
-
-def render_page(template_path: Path, values: dict[str, str]) -> str:
-    """Fill a page template; the CSP allows exactly its plain ``<script>`` bodies by hash."""
-    template = template_path.read_text(encoding="utf-8")
-    values = dict(values)
-    hashes = []
-    for body in _SCRIPT.findall(template):
-        slot = _SLOT.fullmatch(body)
-        if slot:
-            hashes.append(_csp_hash(values[slot.group(1)]))
-        elif "{{" in body:
-            raise RuntimeError("page template script mixes code and a slot")
-        else:
-            hashes.append(_csp_hash(body))
-    values["CSP"] = _csp(hashes)
-    return _fill(template, values)
-
-
 def _csp(hashes: list[str]) -> str:
     """The page's Content-Security-Policy: nothing from the network, only these scripts by hash."""
     return html.escape("default-src 'none'; script-src " + (" ".join(hashes) or "'none'") + "; "
                        "style-src 'unsafe-inline'; font-src data:; img-src data:; "
                        "base-uri 'none'; form-action 'none'", quote=False)
-
-
-def cmd_sheet(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "name", "title", "blocks"})
-    term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
-    if "title" not in data:
-        raise InputError("title is required")
-    title = _inline_only(data["title"], "title", TITLE_MAX_CHARS)
-    blocks = data.get("blocks")
-    if not isinstance(blocks, list) or not blocks:
-        raise InputError("blocks is required (a non-empty list)")
-    if len(blocks) > SHEET_MAX_BLOCKS:
-        raise InputError(f"blocks has {len(blocks)} blocks; at most {SHEET_MAX_BLOCKS}")
-    course_dir = verify._course_dir(term, course)
-    index = course_dir / "INDEX.md"
-    rows = {p: r for p, r in ingest.registry(index).items() if verify._inside(course_dir, p)}
-    parts = [_sheet_block(block, f"blocks[{n}]", rows, course_dir, index) for n, block in enumerate(blocks, 1)]
-    return _write_out(course_dir, name, "html", render_sheet(title, parts).encode("utf-8"))
-
-
-# --- steps ---------------------------------------------------------------------------
-
-def _title(data: dict) -> str:
-    if "title" not in data:
-        raise InputError("title is required")
-    return _inline_only(data["title"], "title", TITLE_MAX_CHARS)
-
-
-def cmd_steps(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "name", "title", "blocks", "steps"})
-    term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
-    title = _title(data)
-    blocks, steps = data.get("blocks"), data.get("steps")
-    if not isinstance(blocks, list) or not blocks:
-        raise InputError("blocks is required (a non-empty list: the label, the question, any original)")
-    if len(blocks) > SHEET_MAX_BLOCKS:
-        raise InputError(f"blocks has {len(blocks)} blocks; at most {SHEET_MAX_BLOCKS}")
-    if not isinstance(steps, list) or not steps:
-        raise InputError("steps is required (a non-empty list of steps, each a list of text and math blocks)")
-    if len(steps) > STEPS_MAX:
-        raise InputError(f"steps has {len(steps)} steps; at most {STEPS_MAX}")
-    for k, step in enumerate(steps, 1):
-        if not isinstance(step, list) or not step:
-            raise InputError(f"steps[{k}] must be a non-empty list of text and math blocks")
-        if len(step) > STEP_MAX_BLOCKS:
-            raise InputError(f"steps[{k}] has {len(step)} blocks; at most {STEP_MAX_BLOCKS}")
-    course_dir = verify._course_dir(term, course)
-    index = course_dir / "INDEX.md"
-    rows = {p: r for p, r in ingest.registry(index).items() if verify._inside(course_dir, p)}
-    intro = [_sheet_block(block, f"blocks[{n}]", rows, course_dir, index) for n, block in enumerate(blocks, 1)]
-    items = []
-    for k, step in enumerate(steps, 1):
-        parts = [_sheet_block(block, f"steps[{k}][{n}]", rows, course_dir, index, _STEP_KINDS)
-                 for n, block in enumerate(step, 1)]
-        items.append(f'<li class="step" id="mimir-step-{k}"><h2>Step {k}</h2>\n' + "\n".join(parts) + "</li>")
-    title = html.escape(title)
-    page = render_page(_STEPS_TEMPLATE, {"TITLE": title, "BLOCKS": "\n".join(intro),
-                                         "STEPS": "\n".join(items),
-                                         **_katex_values(title, *intro, *items)})
-    return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
 # --- svg ---------------------------------------------------------------------------
@@ -992,7 +819,7 @@ def cmd_page(data: dict) -> dict:
     return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
-# --- trace ---------------------------------------------------------------------------
+# --- machine ---------------------------------------------------------------------------
 
 def _symbol(value, where: str, epsilon: bool) -> str:
     """One input or stack symbol: a single character that is not a space; "" is ε when allowed."""
@@ -1109,73 +936,6 @@ def _machine(value) -> dict:
     return out
 
 
-_BRACE = re.compile(r"[{}]")
-
-
-def _scope_css(css: str) -> str:
-    """Prefix every selector with ``#mimir-diagram`` so an inlined diagram's CSS styles only the diagram."""
-    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
-    out, stack, pos = [], [], 0
-    while True:
-        match = _BRACE.search(css, pos)
-        if match is None:
-            if css[pos:].strip() or stack:
-                raise InputError("svg: <style> has an unbalanced block")
-            return "".join(out)
-        prelude = css[pos:match.start()]
-        if match.group() == "{":
-            head = prelude.strip()
-            if stack and stack[-1] == "rule":
-                raise InputError("svg: <style> has a block nested in a rule")
-            if head.startswith("@"):
-                if stack or not head.lower().startswith("@media"):
-                    raise InputError("svg: <style> in a step-through diagram allows only top-level @media at-rules")
-                out.append(head + "{")
-                stack.append("media")
-            else:
-                selectors = [part.strip() for part in head.split(",")]
-                if not all(selectors):
-                    raise InputError("svg: <style> has a rule without a selector")
-                out.append(",".join(f"#mimir-diagram {sel}" for sel in selectors) + "{")
-                stack.append("rule")
-        else:
-            if not stack or (stack[-1] == "media" and prelude.strip()):
-                raise InputError("svg: <style> has an unbalanced block")
-            out.append((prelude if stack.pop() == "rule" else "") + "}")
-        pos = match.end()
-
-
-def _inline_svg(value, states: list[str]) -> str:
-    """Check the diagram, require one ``state-<i>`` element per state, and re-serialize it."""
-    if not isinstance(value, str) or not value.strip():
-        raise InputError("svg is required (the SVG document as a string)")
-    if any(c not in _SVG_ALLOWED_CONTROL and unicodedata.category(c) in ("Cc", "Cs") for c in value):
-        raise InputError("svg contains control characters or lone surrogates")
-    raw = value.encode("utf-8")
-    if len(raw) > SVG_MAX_BYTES:
-        raise InputError(f"svg is {len(raw)} bytes; at most {SVG_MAX_BYTES}")
-    root = check_svg(raw)
-    ids: set[str] = set()
-    for element in root.iter():
-        ident = element.get("id")
-        if ident is None:
-            continue
-        if ident in ids:
-            raise InputError(f"svg: id {_short(ident)} is used twice")
-        if ident.startswith("mimir-"):
-            raise InputError(f"svg: id {_short(ident)} is reserved for the page (mimir-...)")
-        ids.add(ident)
-    for i, name in enumerate(states, 1):
-        if f"state-{i}" not in ids:
-            raise InputError(f'svg: no element with id "state-{i}" for machine.states[{i}] {_short(name)}')
-    for element in root.iter(f"{{{_SVG_NS}}}style"):
-        css = "".join(element.itertext())
-        for child in list(element):
-            element.remove(child)
-        element.text = _scope_css(css)
-    return ET.tostring(root, encoding="unicode")
-
-
 def _machine_html(machine: dict) -> str:
     def cell(text: str) -> str:
         return f"<td>{html.escape(text) if text else 'ε'}</td>"
@@ -1206,7 +966,7 @@ def _example(data: dict) -> str:
     """The optional input the simulator starts with."""
     if data.get("example") is None:
         return ""
-    example = verify._text(data["example"], "example", BLOCK_MAX_CHARS, required=False)
+    example = verify._text(data["example"], "example", EXAMPLE_MAX_CHARS, required=False)
     symbols = sum(1 for c in example if not c.isspace())
     if symbols > TRACE_MAX_SYMBOLS:
         raise InputError(f"example has {symbols} symbols; at most {TRACE_MAX_SYMBOLS}")
@@ -1217,22 +977,6 @@ def _machine_data(machine: dict) -> dict:
     """The simulator's JSON data: the machine and its limits."""
     return {**machine, "max_configs": TRACE_MAX_CONFIGS, "max_stack": TRACE_MAX_STACK,
             "max_symbols": TRACE_MAX_SYMBOLS}
-
-
-def cmd_trace(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "name", "title", "machine", "svg", "example"})
-    term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
-    title = _title(data)
-    machine = _machine(data.get("machine"))
-    example = _example(data)
-    diagram = _inline_svg(data.get("svg"), machine["states"])
-    course_dir = verify._course_dir(term, course)
-    engine = _check_raw(_MACHINE_JS.read_text(encoding="utf-8"), "</script", "simulator")
-    page = render_page(_TRACE_TEMPLATE, {"TITLE": html.escape(title), "SVG": diagram,
-                                         "EXAMPLE": html.escape(example), "MAX_SYMBOLS": str(TRACE_MAX_SYMBOLS),
-                                         "MACHINE": _machine_html(machine), "SIM_JS": engine,
-                                         "DATA": _json_script(_machine_data(machine))})
-    return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
 # --- open --------------------------------------------------------------------------
@@ -1322,17 +1066,14 @@ def cmd_open(data: dict) -> dict:
 
 COMMANDS = {
     "page": (cmd_page, "build an offline Skald page from a checked page body in <course>/.state/out/"),
-    "sheet": (cmd_sheet, "build an offline HTML math sheet in <course>/.state/out/"),
     "svg": (cmd_svg, "check an SVG document and write it to <course>/.state/out/"),
-    "steps": (cmd_steps, "build a step-reveal worked answer page in <course>/.state/out/"),
-    "trace": (cmd_trace, "build a structure step-through page in <course>/.state/out/"),
     "open": (cmd_open, "open a built file in the default browser"),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("visual.py",
-                             ("Mimir visual builder. Subcommands: page, sheet, svg, steps, trace, open. Reads one JSON object on "
+                             ("Mimir visual builder. Subcommands: page, svg, open. Reads one JSON object on "
                               "stdin and prints one JSON object on stdout."),
                              COMMANDS, argv)
 

@@ -174,6 +174,27 @@ def test_no_learning_time_forecasts():
             assert not FORECAST.search(line), f"{path}:{n}: {line.strip()[:80]}"
 
 
+# #94: the fixed `sheet`, `steps` and `trace` templates are gone; pages are written in the house style
+# through `page` (and `svg`). Living docs must not describe the old kinds or their template files.
+# Historical records (CHANGELOG.md, the rest of docs/, the user feedback) keep their wording.
+REMOVED_VISUALS = re.compile(
+    r"\bmath[- ]sheets?\b|math-sheet\.html|step-reveal|step-through|assets/interactive|"
+    r"`{1,2}(?:sheet|steps|trace)`{1,2}|visual\.py\W+(?:sheet|steps|trace)\b|cmd_(?:sheet|steps|trace)\b|"
+    r"\"(?:sheet|steps|trace)\": \(", re.I)
+LIVING_DOCS = (MARKDOWN + sorted((ROOT_DIR / "scripts").glob("*.py"))
+               + sorted((ROOT_DIR / "docs" / "agents").glob("*.md"))
+               + [ROOT_DIR / name for name in ("README.md", "RELEASE.md", "AGENTS.md", "GLOSSARY.md", "plugin.json",
+                                               ".claude-plugin/plugin.json", ".claude-plugin/marketplace.json")])
+
+
+def test_no_living_doc_names_the_removed_visual_kinds():
+    for path in LIVING_DOCS:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            assert not REMOVED_VISUALS.search(line), f"{path}:{n}: {line.strip()[:100]}"
+    assert not (ROOT_DIR / "assets" / "math-sheet.html").exists()
+    assert not (ROOT_DIR / "assets" / "interactive").exists()
+
+
 # Sessions end only when the student says "end session": no episode timer and
 # no close the agent triggers itself (a finished set, route or drill list).
 AUTO_CLOSE = re.compile(r"session\.py clock|`clock`|episode timer|20 to 25 min|Good luck|"
