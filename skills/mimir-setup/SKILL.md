@@ -16,7 +16,8 @@ All workspace changes go through `python3 "<mimir>/scripts/workspace.py" <cmd>`.
    1. Learning folder: currently `<root>`. Keep it, or give another path?
    2. Which language are your courses and exams in, and which language do you want explanations in?
    3. Exams you already know, each with its date and time and what it covers (course code, exam, date, time, what it covers; "Don't know" is fine for the time and for what it covers), or "none".
-   For anything left unanswered, pick a default and declare it: keep the folder; teaching language = the language the student writes in; course language = the teaching language; no exam dates.
+   4. How much animation do you want in the visuals I build: none, gentle or full? You can change it any time.
+   For anything left unanswered, pick a default and declare it: keep the folder; teaching language = the language the student writes in; course language = the teaching language; no exam dates; motion none.
 4. Apply the folder choice:
    - Kept: `init` with `{}`.
    - New path and `exists` was true: `relocate` with `{"to": "<path>"}`.
@@ -25,6 +26,7 @@ All workspace changes go through `python3 "<mimir>/scripts/workspace.py" <cmd>`.
    Print each returned `line`. If any other `init` or `relocate` call exits non-zero, show its stderr line and stop without editing the profile.
 5. Edit `.state/profile.md` under the `root` from the last returned JSON, keeping the template's shape:
    - `course_language:` and `teaching_language:`.
+   - `motion:` none, gentle or full, as answered; none when the answer names no clear choice.
    - First run `python3 "<mimir>/scripts/session.py" now` with `{}` on stdin once: `N` is its `now`.
    - One `| CODE | exam | <exam> |` row per known exam under `## Exam dates`, `<exam>` being its `exam` from `python3 "<mimir>/scripts/session.py" parse-date` with `{"now": "<N>", "phrase": "<the date and time as the student gave them>"}` (escape it as a JSON string; leave the time out when they don't know it). It accepts only `YYYY-MM-DD`, today, tomorrow, an English weekday name (today's own weekday means today) and "N days" or "in N days", each optionally with a time such as `12:30` or `2pm` before or after it ("12:30 tomorrow"). Its `exam` keeps the time when one was given, else it is the date alone. When it exits 2, ask for the date as YYYY-MM-DD and the time as HH:MM in the same setup exchange. Never do date arithmetic yourself. Replace `|` and newlines in cell values with spaces.
    - For each exam whose coverage the student stated, after its row is written: the course has no files yet, so its scope cannot be resolved into topics now. Note the student's words with `python3 "<mimir>/scripts/session.py" scope` and `{"now": "<N>", "code": "<CODE>", "exam_name": "<the row's exam>", "exam_date": "<parse-date's date>", "words": "<the student's words>"}` and print its `line`; the first study session of the course runs core rules' Exam scope confirm step with them. "Don't know" notes nothing. On exit 2, show its stderr line and go on.

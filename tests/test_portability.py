@@ -646,6 +646,45 @@ def test_whats_new_line_is_said_once_at_session_start_and_setup_marks_it_seen():
             assert "whats-new-seen" not in text, rel
 
 
+# The motion level (issue #91): setup asks it in its numbered message; a student without one is
+# asked once at the start of the next study session, and the answer is always saved.
+MOTION_QUESTION = ("How much animation do you want in the visuals I build: none, gentle or full? "
+                   "You can change it any time.")
+
+
+def test_setup_asks_the_motion_level_in_its_numbered_message_and_saves_it():
+    setup = _read(SETUP)
+    message = setup[setup.index("3. Ask everything in one numbered message"):setup.index("4. Apply the folder choice")]
+    assert f"   4. {MOTION_QUESTION}" in message
+    assert "motion none" in message[message.index("For anything left unanswered"):]  # the declared default
+    profile_edit = setup[setup.index("5. Edit `.state/profile.md`"):setup.index("6. Teaching-style sampler")]
+    assert "`motion:`" in profile_edit and "none" in profile_edit
+
+
+def test_a_student_without_a_motion_level_is_asked_once_beside_the_whats_new_line():
+    session = _read("skills/mimir-study/references/session.md")
+    start = session[session.index("## Start"):session.index("## 2. Urgent")]  # both classes
+    announce = start[start.index("6. Announce."):start.index("7. Log:")]
+    assert MOTION_QUESTION in announce and "`motion` null" in announce
+    assert announce.index("`whats_new`") < announce.index(MOTION_QUESTION)
+    after = announce[announce.index(MOTION_QUESTION):]
+    assert "`motion:`" in after and "no clear choice" in after and "saves none" in after
+    admin = session[:session.index("## Start")]
+    assert "the motion question of Start step 6" in admin  # the only admin questions in this flow
+    for path in MARKDOWN:
+        rel = path.relative_to(ROOT_DIR).as_posix()
+        if rel not in (SETUP, "skills/mimir-study/references/session.md"):
+            assert MOTION_QUESTION not in path.read_text(encoding="utf-8"), rel
+
+
+def test_core_rules_keep_the_motion_level_out_of_the_teaching_settings():
+    core = _read("reference/core-rules.md")
+    rules = core[core.index("## Motion level"):]
+    rules = rules[:rules.index("\n## ", 1)]
+    assert "`motion:`" in rules and "none, gentle or full" in rules
+    assert "not a teaching setting" in rules and "only when the student asks" in rules
+    assert "built from now on" in rules  # visuals already built keep their motion
+
 # --- speed slice (#77): show what is ready first, check behind the first question ----
 
 VERIFIED = "reference/verified-items.md"

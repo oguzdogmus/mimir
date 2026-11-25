@@ -296,6 +296,22 @@ def read_setup_done(root: Path) -> str | None:
     return None
 
 
+MOTION_LEVELS = ("none", "gentle", "full")
+
+
+def read_motion(root: Path) -> str | None:
+    """The profile's motion level (none, gentle or full); None when the line is missing, empty or malformed."""
+    profile = root / ".state" / "profile.md"
+    if not profile.is_file():
+        return None
+    for line in profile.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = re.fullmatch(r"motion:(.*)", line.strip())
+        if match:
+            value = match.group(1).strip()
+            return value if value in MOTION_LEVELS else None
+    return None
+
+
 # --- Templates and tree building -------------------------------------------------
 
 def instance_template(text: str) -> str:

@@ -2698,3 +2698,33 @@ def test_new_users_never_see_the_whats_new_line(home, root):
     _setup_done(root, "2026-10-17")
     assert ok(home, "prefs", {})["whats_new"] is None  # first study session after setup
     assert ok(home, "prefs", {})["sampler"]["open"] is False
+
+
+# --- motion level (issue #91): saved in the profile, never a teaching setting ---------------
+
+def _motion(root: Path, line: str) -> None:
+    path = root / ".state" / "profile.md"
+    path.write_text(path.read_text(encoding="utf-8").replace("level:\n", f"level:\n{line}\n"), encoding="utf-8")
+
+
+def test_prefs_reports_no_motion_level_for_a_student_who_never_answered(home, root):
+    """The template's empty line and an unknown value both read as not chosen, so the session asks."""
+    assert ok(home, "prefs", {})["motion"] is None  # fresh workspace: the template's `motion:` line
+    profile(root)
+    _setup_done(root)
+    before = snapshot(home)
+    assert ok(home, "prefs", {})["motion"] is None
+    assert snapshot(home) == before  # prefs stays read-only
+    _motion(root, "motion: lots")
+    assert ok(home, "prefs", {})["motion"] is None
+
+
+@pytest.mark.parametrize("level", ["none", "gentle", "full"])
+def test_prefs_and_pref_events_report_the_saved_motion_level(home, root, level):
+    profile(root)
+    _setup_done(root)
+    _motion(root, f"motion: {level}")
+    assert ok(home, "prefs", {})["motion"] == level
+    out = ok(home, "pref-event", {"event": "whats-new-seen"})
+    assert out["motion"] == level
+    assert "motion" not in json.loads((root / ".state" / "preferences.json").read_text(encoding="utf-8"))

@@ -392,7 +392,8 @@ prefs -- the global teaching settings. Read-only.
           "default", "wording": null}, "frequency": {...}, "depth": {...}},
           "saved": false, "sampler": {"open": true, "started": false,
           "remaining": ["support", "frequency", "depth"]}, "trial": null,
-          "trial_paused": false, "probe_axes": [], "whats_new": null, "line": "Teaching settings:
+          "trial_paused": false, "probe_axes": [], "whats_new": null,
+          "motion": null, "line": "Teaching settings:
           support method-first (default), ..."}
     Axes and levels, more guided to more independent: support example-first,
     method-first, try-first; frequency checks only, key decisions, every
@@ -423,6 +424,10 @@ prefs -- the global teaching settings. Read-only.
     course has a readable ``.state/logs/*.md`` session log, e.g. from a lazy
     setup), else null. A new user has neither when setup or the first study
     session sets the marker, so they never get it.
+    ``motion``: the profile's motion level (none, gentle or full), null when
+    its ``motion:`` line is missing, empty or not one of those (the student
+    has not chosen yet). It is not a teaching setting: no event changes it,
+    and ``preferences.json`` does not hold it.
 
 pref-event -- apply one teaching-settings event and save the state.
     in : {"event": "explicit", "axis": "frequency", "level": "checks only",
@@ -2156,7 +2161,7 @@ def _prefs_out(state: dict, saved: bool, root: Path, in_session: bool = False) -
     return {"axes": axes, "saved": saved, "sampler": _sampler(state, root), "trial": state["trial"],
             "trial_paused": state["trial"] is not None and not in_session,
             "probe_axes": [a for a in AXES if _probe_block(state, a) is None], "whats_new": _whats_new(state, root),
-            "line": f"Teaching settings: {parts}."}
+            "motion": workspace.read_motion(root), "line": f"Teaching settings: {parts}."}
 
 
 def cmd_prefs(data: dict) -> dict:

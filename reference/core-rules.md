@@ -70,6 +70,11 @@ A short check of what the student can already solve in a course, before teaching
 - Content is not a question under this budget: quiz, drill, practice and study items, the cliffhanger and the end-of-set hand-off are what the student came for.
 - Anything else you would ask: pick a sensible default and declare it instead.
 
+## Motion level
+- How much the visuals Mimir builds animate: none, gentle or full, saved as the profile's `motion:` line and the same in every course. `visual.py` reads it when it builds a page; missing or malformed means none.
+- It is not a teaching setting: never probe, infer or learn it, and change it only when the student asks. Then Edit the `motion:` line of `<root>/.state/profile.md` to the level they name and say "Motion level: <level>, for visuals built from now on." Visuals already built keep theirs.
+- Setup asks it. A student whose profile has no motion level is asked once, at the start of their next study session (`<mimir>/skills/mimir-study/references/session.md` Start step 6).
+
 ## Declared changes
 - Declare every change of delivery class, teaching setting, language, or mode with its reason in one line, or offer it first. A temporary simplification for the current step is not a change and is not declared.
 - Declare inferred choices too: the active course ("Continuing CS201, say if not"), filing paths (full path), gaps filled from your own knowledge.
