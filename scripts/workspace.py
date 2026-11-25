@@ -160,11 +160,12 @@ def short(value) -> str:
     return repr(text)
 
 
-def refuse_symlinks(*paths: Path, field: str = "") -> None:
-    """Refuse the first of ``paths`` that is a symlink; ``field`` names the input it came from, if any."""
+def refuse_symlinks(*paths: Path, field: str = "", reason: str = "refusing to work through it") -> None:
+    """Refuse the first of ``paths`` that is a symlink; ``field`` names the input or folder it came from, if any,
+    and ``reason`` follows the semicolon. Every refusal of a symlink goes through here (tests/test_symlinks.py)."""
     for path in paths:
         if path.is_symlink():
-            raise InputError(f"{field + ' ' if field else ''}{path} is a symlink; refusing to work through it")
+            raise InputError(f"{field + ' ' if field else ''}{path} is a symlink; {reason}")
 
 
 def check_keys(data: dict, allowed: set[str]) -> None:

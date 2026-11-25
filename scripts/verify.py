@@ -274,8 +274,7 @@ def _course_dir(term: str, course: str) -> Path:
     course_dir = root / term / course
     for folder, kind in ((root / term, "term"), (course_dir, "course"), (course_dir / ".state", "course .state"),
                          (course_dir / ".state" / "checks", "course .state/checks")):
-        if folder.is_symlink():
-            raise InputError(f"{kind} folder {folder} is a symlink; refusing to work through it")
+        workspace.refuse_symlinks(folder, field=f"{kind} folder")
     if not course_dir.is_dir():
         raise InputError(f"no course folder at {course_dir}")
     return course_dir
@@ -294,8 +293,7 @@ def ledger_path(course_dir: Path, session: str) -> Path:
 
 def _load(path: Path, session: str | None = None) -> dict | None:
     """The ledger at ``path``, None when there is none; a damaged one is refused."""
-    if path.is_symlink():
-        raise InputError(f"check ledger {path} is a symlink; refusing to use it")
+    workspace.refuse_symlinks(path, field="check ledger", reason="refusing to use it")
     text = ingest.read_text(path)
     if text is None:
         return None

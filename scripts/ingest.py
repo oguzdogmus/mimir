@@ -487,8 +487,7 @@ def cmd_scan(data: dict) -> dict:
     root = _workspace_root()
     inbox = root / "_inbox"
     out: dict = {"items": [], "skipped": [], "unpacked": []}
-    if inbox.is_symlink():
-        raise InputError(f"{inbox} is a symlink; the inbox must be a real folder inside the workspace")
+    workspace.refuse_symlinks(inbox, reason="the inbox must be a real folder inside the workspace")
     if inbox.exists() and not inbox.is_dir():
         raise InputError(f"{inbox} exists and is not a folder")
     if inbox.is_dir():
@@ -670,8 +669,7 @@ def cmd_index(data: dict) -> dict:
     root = _workspace_root()
     term_dir, course_dir = root / term, root / term / course
     for folder, what in ((term_dir, "term"), (course_dir, "course")):
-        if folder.is_symlink():
-            raise InputError(f"{what} folder {folder} is a symlink; refusing to index through it")
+        workspace.refuse_symlinks(folder, field=f"{what} folder", reason="refusing to index through it")
     if not course_dir.is_dir():
         raise InputError(f"no course folder at {course_dir}")
     plan: dict[str, list] = {}  # rel -> [path, role, found, cells]

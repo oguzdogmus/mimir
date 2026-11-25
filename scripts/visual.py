@@ -310,8 +310,7 @@ def out_folder(course_dir: Path) -> Path:
 
 def _out_dir(course_dir: Path, create: bool) -> Path:
     out = out_folder(course_dir)
-    if out.is_symlink():
-        raise InputError(f"output folder {out} is a symlink; refusing to write through it")
+    workspace.refuse_symlinks(out, field="output folder", reason="refusing to write through it")
     if out.exists() and not out.is_dir():
         raise InputError(f"output folder {out} exists and is not a folder")
     if not out.exists():
@@ -323,8 +322,7 @@ def _out_dir(course_dir: Path, create: bool) -> Path:
 
 def _write_new_or_replace(target: Path, data: bytes) -> None:
     """Write ``data`` to ``target`` atomically (temp file in the same folder, then replace)."""
-    if target.is_symlink():
-        raise InputError(f"{target} is a symlink; refusing to replace it")
+    workspace.refuse_symlinks(target, reason="refusing to replace it")
     if target.exists() and not target.is_file():
         raise InputError(f"{target} exists and is not a regular file")
     fd, tmp = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
