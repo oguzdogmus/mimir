@@ -48,13 +48,17 @@ page -- an offline page in the Skald house style from a body the builder wrote.
     base, math, template, foreignObject, ...); an ``on*`` attribute; an
     ``href`` (any namespace) not starting with ``#``; in a ``style``
     attribute, a ``<style>`` or any SVG attribute, ``javascript:``, ``url(``
-    other than ``url(#...)``, ``@import``, ``image-set(`` or a backslash;
-    ``<`` or ``&`` in ``<style>`` text; an outermost inline ``svg`` whose
+    other than ``url(#...)``, ``@import``, another CSS function that loads
+    something (``image(``, ``image-set(``, ``cross-fade(``, ``element(``,
+    ``src(``, ``paint(``) or a backslash; ``<`` or ``&`` in ``<style>`` text;
+    ``<style>`` text naming the shell's ``mimir-``/``sk-`` ids or classes
+    (it could restyle or hide the controls); an outermost inline ``svg`` whose
     first two children are not a non-empty ``title`` then ``desc``, unless it
     has ``aria-hidden="true"``; elements inside an SVG ``title`` or ``desc``;
     a repeated id or one starting with ``mimir-`` or ``sk-``; a malformed or
     repeated attribute name; an end tag that does not close the open
-    element, or an element left open; declarations, CDATA sections and
+    element, or an element left open; a body that ends inside an unfinished
+    tag, comment or declaration; declarations, CDATA sections and
     processing instructions. Errors start ``body:``.
     Steps are markup: ``data-step="N"`` on any element, HTML or SVG (a text
     block, an SVG group), hides it until step N is revealed;
@@ -101,21 +105,21 @@ page -- an offline page in the Skald house style from a body the builder wrote.
     not spaces, from the Basic Multilingual Plane; ``read`` "" is ε, allowed
     in nfa and pda only. A pda needs ``stack_start``; its moves take ``pop``
     ("" or one symbol) and ``push`` (the new top first; at most
-    TRACE_MAX_STACK symbols); other kinds refuse those fields. dfa and tree
+    MACHINE_MAX_STACK symbols); other kinds refuse those fields. dfa and tree
     allow at most one move per (state, symbol). A tree's root has no incoming
     edge, every other node exactly one, and every node is reachable from the
-    root. Limits: TRACE_MAX_STATES (60) states with names of at most
-    STATE_NAME_MAX_CHARS (20), TRACE_MAX_TRANSITIONS (400) moves.
+    root. Limits: MACHINE_MAX_STATES (60) states with names of at most
+    STATE_NAME_MAX_CHARS (20), MACHINE_MAX_TRANSITIONS (400) moves.
     ``example`` (optional) is the input the simulator starts with: at most
-    TRACE_MAX_SYMBOLS (64) symbols (spaces ignored) and EXAMPLE_MAX_CHARS
+    MACHINE_MAX_SYMBOLS (64) symbols (spaces ignored) and EXAMPLE_MAX_CHARS
     (4000) characters. The body needs an element ``id="state-<i>"`` inside an inline SVG for
     each state i (counting from 1). After the body the shell adds the
     simulator controls (``#mimir-sim``) and the machine as a table, the
     machine as JSON data and the simulator scripts (allowed by hash); current
     states get ``data-highlight-on`` (the teaching highlight), and the arrow
     keys act only while focus is in the simulator. The page simulates sets of
-    configurations with ε-closure, at most TRACE_MAX_CONFIGS (256) at once
-    and a PDA stack of at most TRACE_MAX_STACK, saying "Search limit reached"
+    configurations with ε-closure, at most MACHINE_MAX_CONFIGS (256) at once
+    and a PDA stack of at most MACHINE_MAX_STACK, saying "Search limit reached"
     when it cuts; it accepts by final state after the whole input. A live
     region and an ordered history say each step in words, ending Accepted,
     Rejected or Stuck. The body's ``<style>`` is
@@ -143,7 +147,8 @@ svg -- check one SVG document and write it with the Skald tokens.
     polygon, text, tspan, marker, linearGradient, radialGradient, stop,
     clipPath, mask); an ``on*`` attribute; an ``href`` (any namespace) not
     starting with ``#``; ``javascript:`` in an attribute or style; ``url(``
-    other than ``url(#...)``; ``@import`` or ``image-set(``; a backslash in an
+    other than ``url(#...)``; ``@import`` or another CSS function that loads
+    something (``image(``, ``image-set(``, ``src(``, ...); a backslash in an
     attribute value or ``style`` text (CSS escapes would hide the checks).
     The document is written as given, with one ``<style>`` added as the root's
     last child: the Skald tokens, fonts inlined, in a CDATA section.
@@ -210,13 +215,13 @@ SVG_MAX_BYTES = 1024 * 1024
 PAGE_BODY_MAX_BYTES = 1024 * 1024
 OPEN_WAIT_SECONDS = 5
 STEPS_MAX = 50                 # data-step numbers on one page
-TRACE_MAX_STATES = 60
-TRACE_MAX_TRANSITIONS = 400
+MACHINE_MAX_STATES = 60
+MACHINE_MAX_TRANSITIONS = 400
 STATE_NAME_MAX_CHARS = 20
-TRACE_MAX_SYMBOLS = 64         # symbols in one fed input
+MACHINE_MAX_SYMBOLS = 64         # symbols in one fed input
 EXAMPLE_MAX_CHARS = 4000       # the example input, spaces included
-TRACE_MAX_CONFIGS = 256        # configurations followed at once (NFA/PDA)
-TRACE_MAX_STACK = 64           # PDA stack depth
+MACHINE_MAX_CONFIGS = 256        # configurations followed at once (NFA/PDA)
+MACHINE_MAX_STACK = 64           # PDA stack depth
 
 _ASSETS = Path(__file__).resolve().parent.parent / "assets"
 _KATEX = _ASSETS / "vendor" / "katex"
@@ -239,13 +244,16 @@ _SVG_ELEMENTS = {"svg", "g", "defs", "symbol", "use", "title", "desc", "style", 
                  "radialGradient", "stop", "clipPath", "mask"}
 _URL = re.compile(r"url\(", re.I)
 _URL_LOCAL = re.compile(r"url\(\s*['\"]?#", re.I)
+# CSS functions besides url() that can load an image or a resource: all refused
+_CSS_FETCH = re.compile(r"(?<![\w-])(-webkit-image-set|image-set|-webkit-cross-fade|cross-fade|-moz-element|element"
+                        r"|image|src|paint)\(", re.I)
 _XML_DECL = re.compile(r"\ufeff?<\?xml\s[^>]*\?>")
 _ENCODING = re.compile(r"""\bencoding\s*=\s*["']([^"']*)["']""")
-_SVG_ALLOWED_CONTROL = {"\t", "\n", "\r"}
+_ALLOWED_CONTROL = {"\t", "\n", "\r"}
 _XLINK_NS = "http://www.w3.org/1999/xlink"
 ET.register_namespace("", _SVG_NS)
 ET.register_namespace("xlink", _XLINK_NS)
-_TRACE_KINDS = ("dfa", "nfa", "pda", "tree")
+_MACHINE_KINDS = ("dfa", "nfa", "pda", "tree")
 _KIND_TEXT = {"dfa": "DFA", "nfa": "NFA", "pda": "PDA, accepting by final state",
               "tree": "tree: the input walks the labelled edges from the root"}
 
@@ -419,8 +427,9 @@ def _check_css_text(value: str, where: str, field: str = "svg") -> None:
         raise InputError(f"{field}: {where} contains javascript:")
     if "@import" in low:
         raise InputError(f"{field}: {where} contains @import")
-    if "image-set(" in low:
-        raise InputError(f"{field}: {where} contains image-set(")
+    fetch = _CSS_FETCH.search(value)
+    if fetch:
+        raise InputError(f"{field}: {where} contains {fetch.group(1).lower()}( (only url(#...) may point at anything)")
     if len(_URL.findall(value)) != len(_URL_LOCAL.findall(value)):
         raise InputError(f"{field}: {where} has url( that is not url(#...)")
 
@@ -480,21 +489,30 @@ def check_svg(raw: bytes) -> ET.Element:
     return root
 
 
+def _markup_field(value, field: str, what: str, max_bytes: int) -> bytes:
+    """A builder-written markup field (``svg``, ``body``) as UTF-8: non-empty, no control characters, not too big."""
+    if not isinstance(value, str) or not value.strip():
+        raise InputError(f"{field} is required ({what})")
+    if any(c not in _ALLOWED_CONTROL and unicodedata.category(c) in ("Cc", "Cs") for c in value):
+        raise InputError(f"{field} contains control characters or lone surrogates")
+    raw = value.encode("utf-8")
+    if len(raw) > max_bytes:
+        raise InputError(f"{field} is {len(raw)} bytes; at most {max_bytes}")
+    return raw
+
+
+def build_svg(svg) -> str:
+    """The standalone SVG file for ``svg``: every check of ``visual.py svg``, then the Skald tokens added."""
+    figure = _tree_from_svg(check_svg(_markup_field(svg, "svg", "the SVG document as a string", SVG_MAX_BYTES)))
+    check_labels([figure], _style_texts(figure), "svg", _SVG_FONT_PX)
+    return _svg_with_tokens(svg)
+
+
 def cmd_svg(data: dict) -> dict:
     _check_keys(data, {"term", "course", "name", "svg"})
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
-    svg = data.get("svg")
-    if not isinstance(svg, str) or not svg.strip():
-        raise InputError("svg is required (the SVG document as a string)")
-    if any(c not in _SVG_ALLOWED_CONTROL and unicodedata.category(c) in ("Cc", "Cs") for c in svg):
-        raise InputError("svg contains control characters or lone surrogates")
-    raw = svg.encode("utf-8")
-    if len(raw) > SVG_MAX_BYTES:
-        raise InputError(f"svg is {len(raw)} bytes; at most {SVG_MAX_BYTES}")
     course_dir = verify._course_dir(term, course)
-    figure = _tree_from_svg(check_svg(raw))
-    check_labels([figure], _style_texts(figure), "svg", 16.0)
-    return _write_out(course_dir, name, "svg", _svg_with_tokens(svg).encode("utf-8"))
+    return _write_out(course_dir, name, "svg", build_svg(data.get("svg")).encode("utf-8"))
 
 
 # --- Skald tokens --------------------------------------------------------------------
@@ -542,6 +560,7 @@ LABEL_DESCENT = 0.22           # box bottom below the baseline, in em
 LABEL_MARGIN = 1.5             # clearance between a label's box and a stroke, in the label's units
 LABEL_PROBLEMS_SHOWN = 5
 _PAGE_FONT_PX = 17.0           # the page's body font (tokens.css --fs-body, 1.0625rem), inherited by inline SVG
+_SVG_FONT_PX = 16.0            # a standalone SVG's root font: the browser default
 
 _CSS_PROPS = ("font-size", "stroke", "stroke-width", "stroke-linecap", "display", "visibility", "text-anchor",
               "dominant-baseline")
@@ -1341,6 +1360,9 @@ _SVG_CASE = {name.lower(): name for name in _SVG_ELEMENTS | {
     "markerWidth", "markerHeight", "markerUnits", "refX", "refY", "clipPathUnits", "maskUnits",
     "maskContentUnits", "textLength", "lengthAdjust", "startOffset"}}
 _RESERVED_ID = re.compile(r"(?:mimir|sk)-")
+# in a builder's <style>: a shell id or class (#mimir-controls, .mimir-js, .sk-defs, ...) or an attribute selector
+# on id or class that names one; url(#sk-chalk) and the like are fine (taken out before the search)
+_SHELL_NAME = re.compile(r"(?<![\w-])(?:mimir|sk)-|\[\s*(?:id|class)\b[^\]]*(?:mimir|sk)", re.I)
 _STEP_NUMBER = re.compile(r"[1-9][0-9]*")
 
 
@@ -1499,6 +1521,9 @@ class _PageBody(HTMLParser):
             if "<" in data or "&" in data:
                 self._fail("<style> must not contain < or &")
             _check_css_text(data, "<style>", "body")
+            if _SHELL_NAME.search(re.sub(r"url\([^)]*\)", "", data)):
+                self._fail("<style> must not name the page's own mimir-... or sk-... ids and classes "
+                           "(the step controls, the simulator and the mascot belong to the shell)")
             self.out.append(data)
             return
         if parent is not None and parent["name"] == "mimir-original" and data.strip():
@@ -1523,6 +1548,8 @@ class _PageBody(HTMLParser):
         self._fail("processing instructions (<?...>) are not allowed")
 
     def finish(self) -> str:
+        if "<" in self.rawdata:  # close() would drop it silently (an unclosed quote, tag or comment)
+            self._fail(f"the body ends inside an unfinished tag, comment or declaration: {_short(self.rawdata)}")
         self.close()
         if self.stack:
             self._fail(f"<{self.stack[-1]['name']}> is not closed")
@@ -1562,7 +1589,7 @@ def _simulator_html(machine: dict, example: str) -> str:
         f'value="{html.escape(example)}" autocomplete="off" spellcheck="false" '
         'aria-describedby="mimir-sim-hint"></p>\n'
         f'<p class="sim-hint" id="mimir-sim-hint">One symbol per character; spaces are ignored. '
-        f"At most {TRACE_MAX_SYMBOLS} symbols.</p>\n"
+        f"At most {MACHINE_MAX_SYMBOLS} symbols.</p>\n"
         '<p class="sim-buttons"><button type="button" id="mimir-sim-start">Start</button>'
         '<button type="button" id="mimir-sim-next">Next symbol</button>'
         '<button type="button" id="mimir-sim-back">Back</button></p>\n'
@@ -1574,8 +1601,9 @@ def _simulator_html(machine: dict, example: str) -> str:
         "</section>")
 
 
-def render_free_page(title: str, body: str, math: bool, steps: bool = False,
-                     machine: dict | None = None, example: str = "", motion: str = "none") -> str:
+def render_page(title: str, body: str, math: bool, steps: bool = False,
+                machine: dict | None = None, example: str = "", motion: str | None = None) -> str:
+    """The page file around a checked body. ``motion`` is ``workspace.read_motion``'s level; None builds as none."""
     katex = _katex() if math else None
     scripts = [katex["KATEX_JS"], katex["AUTO_RENDER_JS"],
                _check_raw(_PAGE_MATH_JS.read_text(encoding="utf-8"), "</script", "page math")] if katex else []
@@ -1590,7 +1618,7 @@ def render_free_page(title: str, body: str, math: bool, steps: bool = False,
     template = _PAGE_TEMPLATE.read_text(encoding="utf-8")
     return _fill(template, {
         "CSP": _csp([_csp_hash(s) for s in scripts]),
-        "MOTION": motion if motion in workspace.MOTION_LEVELS else "none",
+        "MOTION": motion or "none",
         "TITLE": html.escape(title),
         "KATEX_STYLE": f"<style>{katex['KATEX_CSS']}</style>\n" if katex else "",
         "TOKENS": _check_raw(skald_tokens(), "</style", "Skald tokens"),
@@ -1609,13 +1637,7 @@ def cmd_page(data: dict) -> dict:
         raise InputError("example is only for a page with a machine")
     example = _example(data)
     body = data.get("body")
-    if not isinstance(body, str) or not body.strip():
-        raise InputError("body is required (the page body as an HTML string)")
-    if any(c not in _SVG_ALLOWED_CONTROL and unicodedata.category(c) in ("Cc", "Cs") for c in body):
-        raise InputError("body contains control characters or lone surrogates")
-    size = len(body.encode("utf-8"))
-    if size > PAGE_BODY_MAX_BYTES:
-        raise InputError(f"body is {size} bytes; at most {PAGE_BODY_MAX_BYTES}")
+    _markup_field(body, "body", "the page body as an HTML string", PAGE_BODY_MAX_BYTES)
     course_dir = verify._course_dir(term, course)
     index = course_dir / "INDEX.md"
     rows = {p: r for p, r in ingest.registry(index).items() if verify._inside(course_dir, p)}
@@ -1627,8 +1649,8 @@ def cmd_page(data: dict) -> dict:
     tree.close()
     figures = [n for n in _walk(tree.root) if n.tag == "svg" and not any(a.tag == "svg" for a in _ancestors(n))]
     check_labels(figures, _style_texts(tree.root), "body", _PAGE_FONT_PX)
-    motion = workspace.read_motion(course_dir.parents[1]) or "none"  # course_dir is <root>/<term>/<course>
-    page = render_free_page(title, body_html, math, steps, machine, example, motion)
+    page = render_page(title, body_html, math, steps, machine, example,
+                       workspace.read_motion(ingest._workspace_root()))
     return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
@@ -1659,14 +1681,14 @@ def _machine(value) -> dict:
         raise InputError("machine must be an object")
     verify._keys(value, {"kind", "states", "start", "accept", "transitions", "stack_start"}, "machine")
     kind = value.get("kind")
-    if kind not in _TRACE_KINDS:
-        raise InputError(f"machine.kind must be one of {', '.join(_TRACE_KINDS)}: {_short(kind)}")
+    if kind not in _MACHINE_KINDS:
+        raise InputError(f"machine.kind must be one of {', '.join(_MACHINE_KINDS)}: {_short(kind)}")
     pda = kind == "pda"
     raw_states = value.get("states")
     if not isinstance(raw_states, list) or not raw_states:
         raise InputError("machine.states is required (a non-empty list of state names)")
-    if len(raw_states) > TRACE_MAX_STATES:
-        raise InputError(f"machine.states has {len(raw_states)} states; at most {TRACE_MAX_STATES}")
+    if len(raw_states) > MACHINE_MAX_STATES:
+        raise InputError(f"machine.states has {len(raw_states)} states; at most {MACHINE_MAX_STATES}")
     states: list[str] = []
     for i, item in enumerate(raw_states, 1):
         name = verify._text(item, f"machine.states[{i}]", STATE_NAME_MAX_CHARS)
@@ -1694,8 +1716,8 @@ def _machine(value) -> dict:
     raw_moves = value.get("transitions")
     if not isinstance(raw_moves, list):
         raise InputError("machine.transitions is required (a list of moves)")
-    if len(raw_moves) > TRACE_MAX_TRANSITIONS:
-        raise InputError(f"machine.transitions has {len(raw_moves)} moves; at most {TRACE_MAX_TRANSITIONS}")
+    if len(raw_moves) > MACHINE_MAX_TRANSITIONS:
+        raise InputError(f"machine.transitions has {len(raw_moves)} moves; at most {MACHINE_MAX_TRANSITIONS}")
     moves, seen = [], set()
     for i, item in enumerate(raw_moves, 1):
         where = f"machine.transitions[{i}]"
@@ -1714,8 +1736,8 @@ def _machine(value) -> dict:
         if pda:
             move["pop"] = _symbol(item.get("pop", ""), f"{where}.pop", epsilon=True)
             push = item.get("push", "")
-            if not isinstance(push, str) or len(push) > TRACE_MAX_STACK:
-                raise InputError(f"{where}.push must be a string of at most {TRACE_MAX_STACK} stack symbols")
+            if not isinstance(push, str) or len(push) > MACHINE_MAX_STACK:
+                raise InputError(f"{where}.push must be a string of at most {MACHINE_MAX_STACK} stack symbols")
             for c in push:
                 _symbol(c, f"{where}.push", epsilon=False)
             move["push"] = push
@@ -1781,15 +1803,15 @@ def _example(data: dict) -> str:
         return ""
     example = verify._text(data["example"], "example", EXAMPLE_MAX_CHARS, required=False)
     symbols = sum(1 for c in example if not c.isspace())
-    if symbols > TRACE_MAX_SYMBOLS:
-        raise InputError(f"example has {symbols} symbols; at most {TRACE_MAX_SYMBOLS}")
+    if symbols > MACHINE_MAX_SYMBOLS:
+        raise InputError(f"example has {symbols} symbols; at most {MACHINE_MAX_SYMBOLS}")
     return example
 
 
 def _machine_data(machine: dict) -> dict:
     """The simulator's JSON data: the machine and its limits."""
-    return {**machine, "max_configs": TRACE_MAX_CONFIGS, "max_stack": TRACE_MAX_STACK,
-            "max_symbols": TRACE_MAX_SYMBOLS}
+    return {**machine, "max_configs": MACHINE_MAX_CONFIGS, "max_stack": MACHINE_MAX_STACK,
+            "max_symbols": MACHINE_MAX_SYMBOLS}
 
 
 # --- open --------------------------------------------------------------------------

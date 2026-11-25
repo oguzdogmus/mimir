@@ -23,7 +23,8 @@ It refuses, so never write:
   tspan, marker, linearGradient, radialGradient, stop, clipPath, mask (so no
   `<pattern>`, no `<filter>` or `fe*` elements).
 - Links or resources outside the page: `href` only as `#id`, `url()` only as
-  `url(#id)`, no `@import`.
+  `url(#id)`, no `@import`, no other CSS function that loads something
+  (`image()`, `image-set()`, `cross-fade()`, `element()`, `src()`, `paint()`).
 - A backslash anywhere in CSS or an SVG attribute: write a character such as `…`
   itself, never `content: "\2026"`.
 - `<` or `&` inside `<style>`, not even in a CSS comment. Never paste markup into a
@@ -90,7 +91,9 @@ the work. Check 390 px: nothing may overflow sideways.
 
 **The bottom-right corner belongs to the shell** (the step controls and the mascot).
 The tokens reserve it. Never put content, or anything positioned or fixed, in that
-corner, and never override `main`'s right padding or `#mimir-controls`' padding.
+corner, and never override `main`'s right padding. Your `<style>` must not name the
+shell's own ids and classes (`mimir-...`, `sk-...`, e.g. `#mimir-controls`): the shell
+refuses it. `url(#sk-chalk)` and `url(#sk-marker)` are fine.
 
 **Originals.** The original of a scanned question goes right beside its transcription,
 before or after it, as `<mimir-original path="<registry path>" page="N"></mimir-original>`
