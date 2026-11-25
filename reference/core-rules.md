@@ -26,7 +26,7 @@ Field research runs in the background: the skill that starts it never waits for 
 - Antigravity: `define_subagent` from the body of `<mimir>/helpers/field-researcher.md`, then `invoke_subagent` with the input after the skill's final line.
 - Only when the host has no independent agent: after the skill's final line, a fresh separate pass following the helper body, with the same input and nothing from the course files in its queries.
 
-When the reply arrives, the starting skill finishes the step that dispatched it (`mimir-ingest` step 10). A course whose research does not finish stays without a pack until the next ingest that indexes it.
+When the reply arrives, the starting skill finishes the step that dispatched it: `mimir-ingest` step 10, or Field pack first in Building a file (`<mimir>/reference/notation.md`), which then dispatches the visual builder. A course whose research does not finish stays without a pack until the next ingest that indexes it.
 
 ## Resolve the course
 Use this block wherever a skill resolves a course; keep the caller's action word and declaration timing.

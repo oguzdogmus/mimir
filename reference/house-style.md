@@ -1,6 +1,8 @@
 # Skald: Mimir's house style
 
-Read this in full before every visual. It is the whole style: you need no other file.
+Read this in full before every visual, together with the course's field pack or packs and
+its notation section. This guide is the look and the markup the shell accepts; the packs hold
+the field's conventions, and the course's own notation wins over both.
 You write either the body of a `page` (HTML that may hold inline SVG) or one standalone
 `svg`, never JavaScript. Mimir's visual script (the shell) does the rest from your
 markup.

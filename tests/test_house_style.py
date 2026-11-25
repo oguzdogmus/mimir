@@ -134,3 +134,31 @@ def test_builder_offers_the_machine_of_a_page():
         assert f'"{field}"' in body, field
     guide = GUIDE.read_text(encoding="utf-8")
     assert "## A machine page" in guide and 'id="state-<i>"' in guide
+
+
+def test_builder_reads_the_core_guide_the_field_packs_and_the_notation_section():
+    """#100: every builder reads the core guide, the course's field packs and its notation section,
+    from ``visual.py inputs``, which refuses a course with no pack before anything is composed."""
+    body = _helper()[1]
+    given = body.split("\n## Input\n", 1)[1].split("\n## ", 1)[0]
+    for part in ("core house style guide", "field pack", "notation section"):
+        assert part in given, part
+    run = body.index('python3 "<script>" inputs')
+    assert body.index("## Read the house style guide") < run < body.index("## Compose")
+    assert "`packs`" in body and "`notation`" in body
+    refusal = body[run:body.index("## Compose")]
+    assert "`visual.py: field pack missing" in refusal and "stop" in refusal
+
+
+def test_builder_puts_the_professor_first_then_the_field_pack_then_the_core_guide():
+    order = _helper()[1].split("\n## Precedence\n", 1)[1].split("\n## ", 1)[0]
+    own, pack, guide = (order.index(s) for s in ("course's own materials", "field pack", "core guide"))
+    assert own < pack < guide
+    assert "notation section" in order[own:pack] and "slides" in order[own:pack]
+    assert "the professor always wins" in order.lower()
+
+
+def test_guide_says_the_builder_reads_the_field_packs_beside_it():
+    head = _guide().split("\n## ", 1)[0]
+    assert "no other file" not in head
+    assert "field pack" in head and "notation section" in head
