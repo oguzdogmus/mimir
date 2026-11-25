@@ -9,9 +9,9 @@ Dev only, standard library only, Python 3.11+. No skill uses this script; see
 It builds ``mimir-release-check.html`` through the shell of ``visual.py page``
 (the Skald tokens, a formula for KaTeX and two steps for the step script, all
 inline and allowed by the page's CSP) and ``mimir-release-check.svg`` through
-the checks of ``visual.py svg`` (with ``<title>``, ``<desc>`` and the Skald
-tokens), both showing "Mimir release check" and the detected platform, into a
-new temp folder whose name contains a space. It then opens each one through
+the checks of ``visual.py svg`` (with ``<title>``, ``<desc>``, the label
+overlap check and the Skald tokens), both showing "Mimir release check" and
+the detected platform, into a new temp folder whose name contains a space. It then opens each one through
 ``visual.open_in_browser``, the opener the skills ship with (never a copy),
 and prints one JSON object::
 
@@ -72,7 +72,8 @@ def render_svg(platform: str) -> str:
            f"<text class=\"label\" x=\"240\" y=\"72\" text-anchor=\"middle\" font-size=\"28\">{HEADING}</text>\n"
            f"<text x=\"240\" y=\"115\" text-anchor=\"middle\" font-size=\"22\">Platform: {p}</text>\n"
            "</svg>\n")
-    visual.check_svg(svg.encode("utf-8"))
+    figure = visual._tree_from_svg(visual.check_svg(svg.encode("utf-8")))
+    visual.check_labels([figure], visual._style_texts(figure), "svg", 16.0)  # as cmd_svg does
     return visual._svg_with_tokens(svg)
 
 
