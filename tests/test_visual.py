@@ -900,7 +900,7 @@ def test_trace_svg_is_reserialized(home, cdir):
     assert '<svg xmlns="http://www.w3.org/2000/svg"' in page
 
 
-@pytest.mark.parametrize("machine, svg_doc, needle", [
+BAD_MACHINES = [
     ({**DFA, "transitions": _moves(("q0", "", "q1"))}, None, "machine.transitions[1].read must be one character"),
     ({**DFA, "transitions": _moves(("q0", "0", "q1"), ("q0", "0", "q0"))}, None,
      "machine.transitions[2]: a second move from 'q0' on '0'"),
@@ -930,7 +930,10 @@ def test_trace_svg_is_reserialized(home, cdir):
     ({**DFA, "states": ["q" * 21]}, None, "machine.states[1] is longer than 20"),
     ({**DFA, "states": [f"s{i}" for i in range(61)]}, None, "machine.states has 61 states"),
     ({**DFA, "transitions": _moves(*[("q0", "0", "q1")] * 401)}, None, "machine.transitions has 401 moves"),
-])
+]
+
+
+@pytest.mark.parametrize("machine, svg_doc, needle", BAD_MACHINES)
 def test_bad_machine(home, cdir, machine, svg_doc, needle):
     fails(home, "trace", trace(machine, svg_doc=svg_doc), needle)
 
@@ -1286,12 +1289,12 @@ def test_inline_svg_kept_with_its_case(home, cdir):
 
 
 def test_page_body_is_rebuilt_from_what_was_checked(home, cdir):
-    body = ('<!-- a note --><P CLASS=lead data-step=2>Plain <B>bold</B> &amp; 5 &lt; 6</P>'
+    body = ('<!-- a note --><P CLASS=lead data-step=1>Plain <B>bold</B> &amp; 5 &lt; 6</P>'
             '<br/><div/><table><tr><th scope=row>x</th><td colspan="2">1</td></tr></table>'
             '<a href="#q2">see Q2</a><ol reversed start="3"><li id="q2">two</li></ol>')
     _, built = build_page(home, free_page(body))
     assert main_part(built).split("</svg>\n", 1)[1] == (
-        '<p class="lead" data-step="2">Plain <b>bold</b> &amp; 5 &lt; 6</p><br><div></div>'
+        '<p class="lead" data-step="1">Plain <b>bold</b> &amp; 5 &lt; 6</p><br><div></div>'
         '<table><tr><th scope="row">x</th><td colspan="2">1</td></tr></table>'
         '<a href="#q2">see Q2</a><ol reversed="" start="3"><li id="q2">two</li></ol>\n')
 
@@ -1490,6 +1493,332 @@ def test_page_rebuild_replaces_and_opens(home, cdir, monkeypatch):
     assert opened == [first] and out["line"] == f"Opened `{first}` in your browser."
 
 
+# --- page with a machine -------------------------------------------------------------
+
+def machine_page(machine, *, svg_doc=None, name="machine", **extra) -> dict:
+    """A page whose inline diagram holds the machine's states (the trace fixtures, as a page body)."""
+    figure = f"<figure>{svg_doc or _diagram(len(machine['states']))}</figure>"
+    return {**free_page(f"<h1>Step through</h1>\n{figure}", name=name), "machine": machine, **extra}
+
+
+def build_machine_page(home, machine, **extra) -> str:
+    return build_page(home, machine_page(machine, **extra))[1]
+
+
+def test_page_with_a_machine_carries_the_simulator(home, cdir):
+    page = build_machine_page(home, PDA, example="aabb")
+    assert_safe_page(page, 2)
+    assert_skald(page)
+    data = json_data(page, "mimir-machine")
+    assert data["kind"] == "pda" and data["stack_start"] == "Z" and data["states"] == ["p", "q", "f"]
+    assert data["max_configs"] == 256 and data["max_stack"] == 64 and data["max_symbols"] == 64
+    assert data["transitions"][1] == {"from": "p", "read": "", "to": "q", "pop": "", "push": ""}
+    body = main_part(page)
+    assert body.index('id="state-3"') < body.index('id="mimir-sim"')  # the controls follow the builder's body
+    assert 'id="mimir-sim-input"' in body and 'value="aabb"' in body
+    assert "<th scope=\"col\">Pop</th>" in body and "<td>ε</td>" in body and "PDA, accepting by final state" in body
+    engine, ui = scripts(page)
+    assert "MimirSim" in engine and "data-highlight-on" in ui and "innerHTML" not in page
+
+
+def test_page_without_a_machine_has_no_simulator(home, cdir):
+    _, built = build_page(home, free_page(_diagram(2)))
+    assert_safe_page(built, 0)
+    assert "MimirSim" not in built and "mimir-machine" not in built and "mimir-sim" not in main_part(built)
+
+
+@pytest.mark.parametrize("machine, svg_doc, needle", BAD_MACHINES)
+def test_bad_machine_on_a_page(home, cdir, machine, svg_doc, needle):
+    fails(home, "page", machine_page(machine, svg_doc=svg_doc), needle)
+
+
+@pytest.mark.parametrize("payload, needle", [
+    (machine_page(DFA, svg_doc='<svg viewBox="0 0 9 9" aria-hidden="true"></svg><p id="state-1">a</p>'
+                  '<p id="state-2">b</p>'), 'body: no element with id "state-1" for machine.states[1]'),
+    (machine_page(DFA, example="0" * 65), "example has 65 symbols; at most 64"),
+    (machine_page(DFA, example="0" + " " * 4000 + "0"), "example is longer than 4000"),
+    ({**free_page(), "example": "01"}, "example is only for a page with a machine"),
+    ({**free_page(), "machine": None}, "machine must be an object"),
+    ({**free_page(), "svg": _diagram(2)}, "svg"),
+])
+def test_bad_machine_page_payload(home, cdir, payload, needle):
+    fails(home, "page", payload, needle)
+
+
+def test_machine_page_example_at_the_limit(home, cdir):
+    ok(home, "page", machine_page(DFA, example="0 " * 64))
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_machine_page_simulates_like_trace(home, cdir, tmp_path):
+    page = build_machine_page(home, PDA)
+    good, short, extra = simulate(tmp_path, page, ["aabb", "aab", "abb"])
+    assert good["verdict"] == {"result": "accepted"} and "p/AAZ" in good["frames"][2]["configs"]
+    assert short["verdict"] == {"result": "rejected"} and extra["verdict"]["result"] == "stuck"
+
+
+def page_sim_ui(tmp_path: Path, page: str, text: str, actions: str) -> dict:
+    data = json.dumps(json.dumps(json_data(page, "mimir-machine")))
+    setup = (f'document.getElementById("mimir-machine").textContent = {data};\n'
+             f'document.getElementById("mimir-sim-input").value = {json.dumps(text)};')
+    helpers = r"""
+function arrow(name, target) {
+  byId["mimir-sim"].fire("keydown", {key: name, target: target || byId["mimir-sim-next"],
+                                     preventDefault: function () {}});
+}
+function snap(tag) { out[tag] = {status: byId["mimir-sim-status"].textContent,
+  history: byId["mimir-sim-history"].children.map(function (c) { return c.textContent; }),
+  current: Object.keys(byId).filter(function (k) {
+    return k.indexOf("state-") === 0 && "data-highlight-on" in byId[k].attrs; })}; }
+"""
+    return run_ui(tmp_path, "\n".join(scripts(page)), setup, helpers + actions)
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_machine_page_ui_marks_the_current_states(home, cdir, tmp_path):
+    page = build_machine_page(home, DFA)
+    out = page_sim_ui(tmp_path, page, "0101", r"""
+out.controls = byId["mimir-sim-controls"].hidden; snap("load");
+byId["mimir-sim-start"].click(); snap("start");
+arrow("ArrowRight"); snap("one");
+key("ArrowRight"); snap("document");
+arrow("ArrowRight"); arrow("ArrowRight"); byId["mimir-sim-next"].click(); snap("end");
+byId["mimir-sim-back"].click(); snap("back");
+arrow("ArrowRight", byId["mimir-sim-input"]); snap("typing");
+byId["mimir-sim-input"].fire("input"); snap("edited");
+""")
+    assert out["controls"] is False and out["load"]["status"] == "Type an input and press Start."
+    assert out["start"] == {"status": "Start: in q0. Remaining: 0101.", "history": ["Start: in q0. Remaining: 0101."],
+                            "current": ["state-1"]}
+    assert out["one"]["status"] == "Read '0' (1 of 4): in q1. Remaining: 101." and out["one"]["current"] == ["state-2"]
+    assert out["document"] == out["one"]  # arrows outside the simulator are left to the page
+    assert out["end"]["status"].endswith("Accepted: the whole input was read and an accepting state was reached.")
+    assert len(out["end"]["history"]) == 5 and out["end"]["current"] == ["state-1"]
+    assert out["back"]["status"] == "Read '0' (3 of 4): in q0. Remaining: 1." and len(out["back"]["history"]) == 4
+    assert out["typing"] == out["back"]
+    assert out["edited"] == {"status": "Press Start to run the new input.", "history": [], "current": []}
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+@pytest.mark.parametrize("machine, text, ending", [
+    (DFA, "011", "Rejected: the whole input was read, but no accepting state was reached."),
+    (DFA_PARTIAL, "00", "Stuck on '0': no move from the previous state, so the input is rejected."),
+    (CUT, "", "No verdict: the search was cut, so an accepting path may have been missed. "
+              "Search limit reached: some paths were not followed."),
+    (DFA, "0" * 65, "Use at most 64 symbols."),
+])
+def test_machine_page_verdicts(home, cdir, tmp_path, machine, text, ending):
+    page = build_machine_page(home, machine)
+    out = page_sim_ui(tmp_path, page, text,
+                      'byId["mimir-sim-start"].click(); for (var i = 0; i < 5; i++) arrow("ArrowRight"); snap("end");')
+    assert out["end"]["status"].endswith(ending), out["end"]["status"]
+
+
+def test_machine_page_with_math_keeps_both_script_sets(home, cdir):
+    payload = machine_page(DFA)
+    payload["body"] = "<p>Read \\(w\\) one symbol at a time.</p>\n" + payload["body"]
+    _, built = build_page(home, payload)
+    assert_safe_page(built, 5)
+    bodies = scripts(built)
+    assert "renderMathInElement" in bodies[1] and "MimirSim" in bodies[3] and "mimir-sim" in bodies[4]
+
+
+# --- page steps ----------------------------------------------------------------------
+
+STEP_BODY = ('<header class="head"><h1>Bacterium</h1></header>\n<div class="board"><figure>'
+             '<svg viewBox="0 0 200 100" role="img"><title>A bacterium</title><desc>Built layer by layer.</desc>'
+             '<path class="ghost" d="M10 50h180"/>'
+             '<g class="layer" data-step="1"><ellipse cx="100" cy="50" rx="90" ry="40" pathLength="1"/></g>'
+             '<g class="layer" data-step="2"><ellipse cx="100" cy="50" rx="80" ry="32" pathLength="1"/></g>'
+             '<path class="mark-loop" data-highlight="2" pathLength="1" d="M0 0L9 9"/></svg></figure>\n'
+             '<div class="work"><section class="step" data-step="1"><p>Cell wall.</p></section>'
+             '<section class="step" data-step="2"><p>Membrane.</p></section>'
+             '<section class="step" data-step="3"><p>That is <span data-highlight="3">all</span>.</p></section>'
+             '</div></div>')
+STEPS_JS = (ROOT_DIR / "assets" / "page" / "steps.js").read_text(encoding="utf-8")
+
+
+def test_step_markup_gets_the_step_script(home, cdir):
+    _, built = build_page(home, free_page(STEP_BODY))
+    assert_safe_page(built, 1)
+    assert scripts(built) == [STEPS_JS]
+    body = main_part(built)
+    assert '<g class="layer" data-step="2"><ellipse' in body and '<span data-highlight="3">all</span>' in body
+    assert 'id="mimir-controls"' not in body  # the script makes the controls, so no-JS readers get none
+
+
+def test_step_script_runs_after_math(home, cdir):
+    _, built = build_page(home, free_page(MATH_BODY + '<p data-step="1">Then \\(x\\).</p>'))
+    assert_safe_page(built, 4)
+    assert scripts(built)[3] == STEPS_JS and "renderMathInElement" in scripts(built)[2]
+
+
+def test_unrevealed_steps_hide_on_screen_only(home, cdir):
+    """JS off: no mimir-js class, nothing hidden. Print: the hiding rule does not apply."""
+    tokens = visual.skald_tokens()
+    rule = ".mimir-js [data-step]:not([data-revealed]) { display: none !important; }"
+    assert f"@media screen {{\n  {rule}\n}}" in tokens and tokens.count("[data-revealed]") == 1
+    assert "mimir-js" in STEPS_JS
+    # a step back sets data-step-back on the root (see the UI test), and nothing replays then
+    assert (":root[data-step-back] *, :root[data-step-back] *::before, :root[data-step-back] *::after "
+            "{ animation: none !important; }") in tokens
+
+
+@pytest.mark.parametrize("body,needle", [
+    ('<p data-step="two">a</p>', "body: <p> attribute data-step must be a whole number from 1 to 50: 'two'"),
+    ('<p data-step="">a</p>', "data-step must be a whole number"),
+    ('<p data-step="0">a</p>', "data-step must be a whole number"),
+    ('<p data-step="01">a</p>', "data-step must be a whole number"),
+    ('<p data-step=" 1">a</p>', "data-step must be a whole number"),
+    ('<p data-step="1.5">a</p>', "data-step must be a whole number"),
+    ('<p data-step="51">a</p>', "data-step must be a whole number from 1 to 50: '51'"),
+    ('<p data-step="１">a</p>', "data-step must be a whole number"),
+    ('<svg viewBox="0 0 9 9"><title>t</title><desc>d</desc><g data-step="x"/></svg>',
+     "body: <g> attribute data-step must be a whole number"),
+    ('<p data-step="1"><span data-highlight="first">a</span></p>',
+     "body: <span> attribute data-highlight must be a whole number"),
+    ('<p data-step="1">a</p><p data-step="3">b</p>',
+     'body: data-step must number the steps 1 to 3 without gaps; no element has data-step="2"'),
+    ('<p data-step="1">a</p><p><span data-highlight="2">b</span></p>',
+     'body: <span> has data-highlight="2", but the steps run 1 to 1'),
+    ('<p><span data-highlight="1">b</span></p>', "but the page has no data-step markup"),
+    ('<section data-step="2"><p data-step="1">a</p></section>',
+     'body: <p> has data-step="1" inside a data-step="2" element, so it could not show before step 2'),
+    ('<svg viewBox="0 0 9 9" data-step="2"><title>t</title><desc>d</desc><g><circle data-step="1"/></g></svg>',
+     'body: <circle> has data-step="1" inside a data-step="2" element'),
+])
+def test_bad_step_markup_refused(home, cdir, body, needle):
+    fails(home, "page", free_page(body), needle)
+    assert not (cdir / ".state" / "out" / "demo.html").exists()
+
+
+def test_page_without_step_markup_has_no_step_script(home, cdir):
+    _, built = build_page(home, free_page('<p data-note="1" class="step">Plain.</p>'))
+    assert_safe_page(built, 0)
+    _, built = build_page(home, free_page(MATH_BODY))
+    assert STEPS_JS not in scripts(built)
+
+
+STEP_DOM = r"""
+function Node(tag, attrs, parent, svg) {
+  this.tagName = tag; this.attrs = attrs || {}; this.parent = parent || null; this.children = [];
+  this.listeners = {}; this.textContent = ""; this.props = {}; this.scrolled = [];
+  if (svg) this.ownerSVGElement = parent && parent.svgRoot ? parent : (parent ? parent.ownerSVGElement || null : null);
+  if (svg && tag === "svg") this.svgRoot = true;
+  var self = this;
+  this.classList = {add: function (c) { self.attrs["class"] = ((self.attrs["class"] || "") + " " + c).trim(); }};
+  this.style = {setProperty: function (k, v) { self.props[k] = v; }};
+  if (parent) parent.children.push(this);
+}
+Node.prototype.getAttribute = function (k) { return k in this.attrs ? this.attrs[k] : null; };
+Node.prototype.hasAttribute = function (k) { return k in this.attrs; };
+Node.prototype.setAttribute = function (k, v) { this.attrs[k] = String(v); };
+Node.prototype.removeAttribute = function (k) { delete this.attrs[k]; };
+Node.prototype.appendChild = function (c) { c.parent = this; this.children.push(c); return c; };
+Node.prototype.addEventListener = function (t, f) { (this.listeners[t] = this.listeners[t] || []).push(f); };
+Node.prototype.click = function () { (this.listeners.click || []).forEach(function (f) { f({}); }); };
+Node.prototype.scrollIntoView = function (o) { scrolls.push([this.attrs.id || this.tagName, o.behavior]); };
+Node.prototype.closest = function (sel) {
+  for (var n = this; n; n = n.parent) if (sel.split(", ").some(function (s) {
+    return s === "[tabindex]" ? "tabindex" in n.attrs : s.charAt(0) === "." ? (n.attrs["class"] || "").split(" ").indexOf(s.slice(1)) >= 0 : s === n.tagName;
+  })) return n;
+  return null;
+};
+Object.defineProperty(Node.prototype, "id", {get: function () { return this.attrs.id; }, set: function (v) { this.attrs.id = v; }});
+Object.defineProperty(Node.prototype, "type", {set: function (v) { this.attrs.type = v; }});
+var scrolls = [], keyListeners = [];
+var root = new Node("html", {"data-motion": "gentle"});
+var main = new Node("main", {}, root);
+function all(n, out) { out.push(n); n.children.forEach(function (c) { all(c, out); }); return out; }
+global.document = {
+  documentElement: root, body: root,
+  querySelector: function (sel) { return sel === "main" ? main : null; },
+  querySelectorAll: function (sel) { var a = sel.slice(1, -1); return all(root, []).filter(function (n) { return a in n.attrs; }); },
+  getElementById: function (id) { return all(root, []).filter(function (n) { return n.attrs.id === id; })[0] || null; },
+  createElement: function (tag) { return new Node(tag); },
+  addEventListener: function (t, f) { if (t === "keydown") keyListeners.push(f); }
+};
+function key(name, target, extra) {
+  var ev = {key: name, target: target || main, preventDefault: function () { ev.prevented = true; }};
+  for (var k in extra || {}) ev[k] = extra[k];
+  keyListeners.forEach(function (f) { f(ev); });
+  return !!ev.prevented;
+}
+// the figure: an svg with a ghost, two layers and a mark; the work: three text steps
+var svg = new Node("svg", {}, main, true);
+var ghost = new Node("path", {"class": "ghost"}, svg, true);
+var wall = new Node("g", {"data-step": "1"}, svg, true);
+var membrane = new Node("g", {"id": "membrane", "data-step": "2"}, svg, true);
+var loop = new Node("path", {"data-highlight": "2"}, svg, true);
+var t1 = new Node("section", {"id": "t1", "data-step": "1"}, main);
+var t3 = new Node("section", {"id": "t3", "data-step": "3"}, main);
+var word = new Node("span", {"data-highlight": "3"}, t3);
+var table = new Node("div", {"tabindex": "0"}, main);
+function st(n) { return ["revealed", "latest"].filter(function (a) { return n.hasAttribute("data-" + a); }).join(","); }
+function snap(tag) {
+  var c = document.getElementById("mimir-controls");
+  out[tag] = {wall: st(wall), membrane: st(membrane), t1: st(t1), t3: st(t3),
+    loop: loop.hasAttribute("data-highlight-on"), word: word.hasAttribute("data-highlight-on"),
+    status: document.getElementById("mimir-status").textContent,
+    progress: document.getElementById("mimir-progress").textContent,
+    next: document.getElementById("mimir-next").textContent,
+    ends: [document.getElementById("mimir-back").getAttribute("aria-disabled"),
+           document.getElementById("mimir-next").getAttribute("aria-disabled")],
+    current: root.getAttribute("data-step-current"), cur: root.props["--cur"],
+    back: root.hasAttribute("data-step-back"), scrolls: scrolls.splice(0)};
+}
+"""
+
+
+def step_ui(tmp_path: Path, actions: str) -> dict:
+    return run_ui(tmp_path, STEPS_JS, STEP_DOM, actions)
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_step_reveal_by_markup_ui(home, cdir, tmp_path):
+    out = step_ui(tmp_path, r"""
+var c = document.getElementById("mimir-controls");
+out.controls = [c.parent === main, c.children.map(function (b) { return b.attrs.id; })];
+out.live = [document.getElementById("mimir-status").attrs.role, document.getElementById("mimir-status").attrs["aria-live"]];
+out.keys = [document.getElementById("mimir-next").attrs["aria-keyshortcuts"], document.getElementById("mimir-back").attrs["aria-keyshortcuts"]];
+out.root = [root.attrs["class"], root.attrs["data-step-total"], root.props["--tot"]];
+snap("load");
+key("ArrowRight"); snap("one");
+document.getElementById("mimir-next").click(); snap("two");
+key("ArrowDown"); snap("three");
+key("ArrowRight"); snap("past");
+key("ArrowLeft"); snap("back");
+out.prevented = [key("ArrowRight", table), key("ArrowRight", main, {shiftKey: true}), key("Enter"), key(" ")];
+snap("ignored");
+key("ArrowRight"); snap("again");
+key("ArrowUp"); document.getElementById("mimir-back").click(); document.getElementById("mimir-back").click(); snap("none");
+""")
+    assert out["controls"] == [True, ["mimir-back", "mimir-progress", "mimir-next", "mimir-status"]]
+    assert out["live"] == ["status", "polite"] and out["keys"] == ["ArrowRight ArrowDown", "ArrowLeft ArrowUp"]
+    assert out["root"] == ["mimir-js", "3", "3"]
+    assert out["load"] == {"wall": "", "membrane": "", "t1": "", "t3": "", "loop": False, "word": False,
+                           "status": "3 steps to reveal.", "progress": "0 / 3", "next": "Start",
+                           "ends": ["true", "false"], "current": "0", "cur": "0", "back": False, "scrolls": []}
+    one = out["one"]
+    assert (one["wall"], one["t1"], one["membrane"], one["status"]) == ("revealed,latest", "revealed,latest", "",
+                                                                        "Step 1 of 3.")
+    assert one["scrolls"] == [["t1", "smooth"]]  # the text, not the SVG layer
+    two = out["two"]
+    assert (two["wall"], two["membrane"], two["t1"], two["loop"], two["next"]) == (
+        "revealed", "revealed,latest", "revealed", True, "Next step")
+    assert two["scrolls"] == [["svg", "smooth"]]  # an SVG-only step scrolls its whole figure into view
+    three = out["three"]
+    assert (three["t3"], three["loop"], three["word"], three["status"], three["ends"], three["next"]) == (
+        "revealed,latest", False, True, "Step 3 of 3, the last step.", ["false", "true"], "Done")
+    assert out["past"]["status"] == "All 3 steps are shown." and out["past"]["scrolls"] == []
+    back = out["back"]
+    assert (back["t3"], back["membrane"], back["loop"], back["back"], back["scrolls"], back["status"]) == (
+        "", "revealed,latest", True, True, [], "Step 2 of 3 is the last one shown.")
+    assert out["prevented"] == [False, False, False, False] and out["ignored"] == {**back, "scrolls": []}
+    assert out["again"]["back"] is False and out["again"]["t3"] == "revealed,latest"
+    assert (out["none"]["status"], out["none"]["wall"], out["none"]["current"]) == ("No steps are shown.", "", "0")
+
+
 # --- label overlap check (#92) ------------------------------------------------------
 
 def figure(inner: str, view: str = "0 0 400 200", style: str = "text { font-size: 20px; }") -> str:
@@ -1575,7 +1904,7 @@ SKALD_DFA = (
     '.machine svg .edge-label { font-size: 24px; } .machine svg .ink { stroke-width: 2; } }</style>'
     '<figure class="machine"><svg viewBox="22 30 526 196" role="img">'
     '<title>DFA for binary numbers divisible by 3</title><desc>Three states q0, q1, q2.</desc>'
-    '<g class="swipes"><path class="mark-swipe" data-highlight="2" d="M143.64 131.53Q215 94 286.36 131.53"/></g>'
+    '<g class="swipes"><path class="mark-swipe" d="M143.64 131.53Q215 94 286.36 131.53"/></g>'
     '<g class="machine"><path class="ink" d="M30 150H81"/>'
     '<path class="ink-fill" d="M90 150L79 153.75Q82.08 150 79 146.25Z"/>'
     '<path class="ink" d="M143.64 131.53Q215 94 278.39 127.34"/>'

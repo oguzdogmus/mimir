@@ -54,6 +54,18 @@ page -- an offline page in the Skald house style from a body the builder wrote.
     repeated attribute name; an end tag that does not close the open
     element, or an element left open; declarations, CDATA sections and
     processing instructions. Errors start ``body:``.
+    Steps are markup: ``data-step="N"`` on any element, HTML or SVG (a text
+    block, an SVG group), hides it until step N is revealed;
+    ``data-highlight="N"`` marks a target of the teaching highlight while step
+    N is the latest. N is a whole number from 1 to STEPS_MAX (50); the steps
+    run 1 to n without gaps, a highlight names one of them, and an element
+    never sits inside one with a higher step. With step markup the page gets
+    the shell's step script (``assets/page/steps.js``, after any KaTeX): Back
+    and Next controls (Enter and Space on them), the arrow keys anywhere
+    outside fields and focusable areas, and a polite live region saying
+    "Step k of n." Unrevealed steps are hidden on screen only, so with
+    JavaScript off or on paper every step shows; a step back replays no
+    animation. Without step markup the page carries no step script.
     An original is placed with ``<mimir-original path="..." page="N">`` (empty,
     closed by ``</mimir-original>`` or ``/>``, not inside an SVG); ``path`` and
     ``page`` follow the ``sheet`` ``original`` rules, and errors name
@@ -62,8 +74,19 @@ page -- an offline page in the Skald house style from a body the builder wrote.
     shell's chalk and marker filters (``#sk-chalk``, ``#sk-marker``) and
     ``data-motion="none"`` on its root. When the body's text (outside SVG and
     ``<style>``) holds ``\\(`` or ``\\[``, KaTeX is inlined as in ``sheet`` and
-    renders ``\\(...\\)`` and ``\\[...\\]`` in ``<main>``, skipping SVG;
-    otherwise the page has no script at all (``script-src 'none'``).
+    renders ``\\(...\\)`` and ``\\[...\\]`` in ``<main>``, skipping SVG.
+    A page with no math, no steps and no machine has no script at all
+    (``script-src 'none'``).
+    ``machine`` (optional) attaches the automata simulator to the body's
+    inline diagram. It and ``example`` follow the ``trace`` rules and limits,
+    and the body needs an element ``id="state-<i>"`` inside an inline SVG for
+    each state i (counting from 1). After the body the shell adds the
+    simulator controls (``#mimir-sim``) and the machine as a table, the
+    machine as JSON data and the simulator scripts (allowed by hash); current
+    states get ``data-highlight-on`` (the teaching highlight), and the arrow
+    keys act only while focus is in the simulator. The body's ``<style>`` is
+    not scoped, since the builder writes the whole page. ``example`` without
+    ``machine`` is refused; a page without ``machine`` has no simulator.
     Every ``<svg>`` in the body passes the label check of ``svg`` (errors name
     ``svg k`` when the body holds more than one), with the page's ``<style>``
     rules and a 17 px inherited font size.
@@ -252,6 +275,9 @@ _TRACE_TEMPLATE = _ASSETS / "interactive" / "step-through.html"
 _KATEX = _ASSETS / "vendor" / "katex"
 _PAGE_TEMPLATE = _ASSETS / "page" / "page.html"
 _PAGE_MATH_JS = _ASSETS / "page" / "math.js"
+_MACHINE_JS = _ASSETS / "page" / "machine.js"       # the simulator engine (MimirSim), page and trace
+_PAGE_SIM_JS = _ASSETS / "page" / "simulator.js"
+_PAGE_STEPS_JS = _ASSETS / "page" / "steps.js"
 _SKALD = _ASSETS / "skald"
 
 _NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
@@ -1486,6 +1512,7 @@ _SVG_CASE = {name.lower(): name for name in _SVG_ELEMENTS | {
     "markerWidth", "markerHeight", "markerUnits", "refX", "refY", "clipPathUnits", "maskUnits",
     "maskContentUnits", "textLength", "lengthAdjust", "startOffset"}}
 _RESERVED_ID = re.compile(r"(?:mimir|sk)-")
+_STEP_NUMBER = re.compile(r"[1-9][0-9]*")
 
 
 class _PageBody(HTMLParser):
@@ -1502,8 +1529,11 @@ class _PageBody(HTMLParser):
         self.out: list[str] = []
         self.stack: list[dict] = []      # open elements: {"name", "svg", "kids", "text"}
         self.ids: set[str] = set()
+        self.svg_ids: set[str] = set()
         self.markers = 0
         self.math = False
+        self.steps: set[int] = set()     # every data-step number
+        self.highlights: dict[int, str] = {}  # data-highlight number -> the first element with it
 
     # -- helpers
     def _fail(self, message: str):
@@ -1543,8 +1573,32 @@ class _PageBody(HTMLParser):
                 if _RESERVED_ID.match(value):
                     self._fail(f"id {_short(value)} is reserved for the page (mimir-..., sk-...)")
                 self.ids.add(value)
+                if svg:
+                    self.svg_ids.add(value)
             parts.append(f' {name}="{html.escape(value)}"')
         return "".join(parts)
+
+    def _step(self, tag: str, attrs: list) -> int:
+        """Check the step markup of one element; return the step it shows at (0: always shown)."""
+        values = dict(attrs)
+        numbers = {}
+        for name in ("data-step", "data-highlight"):
+            if name in values:
+                value = values[name] or ""
+                if not (_STEP_NUMBER.fullmatch(value) and int(value) <= STEPS_MAX):
+                    self._fail(f"<{tag}> attribute {name} must be a whole number from 1 to {STEPS_MAX}: "
+                               f"{_short(value)}")
+                numbers[name] = int(value)
+        if "data-highlight" in numbers:
+            self.highlights.setdefault(numbers["data-highlight"], tag)
+        outer = max((entry.get("step", 0) for entry in self.stack), default=0)
+        step = numbers.get("data-step", 0)
+        if step:
+            self.steps.add(step)
+            if step < outer:
+                self._fail(f'<{tag}> has data-step="{step}" inside a data-step="{outer}" element, '
+                           f"so it could not show before step {outer}")
+        return max(step, outer)
 
     def _open(self, tag: str, attrs: list, closed: bool) -> None:
         parent = self.stack[-1] if self.stack else None
@@ -1572,6 +1626,7 @@ class _PageBody(HTMLParser):
             return
         name = _SVG_CASE.get(tag, tag) if svg else tag
         text = f"<{name}{self._attrs(tag, attrs, svg)}"
+        step = self._step(tag, attrs)
         if svg and closed:
             self.out.append(text + "/>")
             return
@@ -1580,7 +1635,8 @@ class _PageBody(HTMLParser):
             return
         root = tag == "svg" and not self._in_svg()
         hidden = root and dict(attrs).get("aria-hidden") == "true"
-        self.stack.append({"name": tag, "svg": svg, "root": root and not hidden, "kids": [], "text": {}})
+        self.stack.append({"name": tag, "svg": svg, "root": root and not hidden, "kids": [], "text": {},
+                           "step": step})
         if closed:
             self.handle_endtag(tag)
 
@@ -1641,21 +1697,67 @@ class _PageBody(HTMLParser):
         self.close()
         if self.stack:
             self._fail(f"<{self.stack[-1]['name']}> is not closed")
+        total = max(self.steps, default=0)
+        missing = sorted(set(range(1, total + 1)) - self.steps)
+        if missing:
+            self._fail(f"data-step must number the steps 1 to {total} without gaps; "
+                       f'no element has data-step="{missing[0]}"')
+        for number, tag in sorted(self.highlights.items()):
+            if number > total:
+                self._fail(f'<{tag}> has data-highlight="{number}", but '
+                           + (f"the steps run 1 to {total}" if total else "the page has no data-step markup"))
         return "".join(self.out)
 
 
-def check_page_body(body: str, original) -> tuple[str, bool]:
-    """Check a page body (see the docstring); return it rebuilt and whether it holds math."""
+def check_page_body(body: str, original, states: list[str] = ()) -> tuple[str, bool, bool]:
+    """Check a page body (see the docstring); return it rebuilt, whether it holds math and whether it has steps.
+
+    ``states`` are a machine's states: each needs an element ``id="state-<i>"`` inside an inline SVG.
+    """
     parser = _PageBody(original)
     parser.feed(body)
     out = parser.finish()
-    return out, parser.math
+    for i, name in enumerate(states, 1):
+        if f"state-{i}" not in parser.svg_ids:
+            raise InputError(f'body: no element with id "state-{i}" for machine.states[{i}] {_short(name)} '
+                             "inside an inline <svg>")
+    return out, parser.math, bool(parser.steps)
 
 
-def render_free_page(title: str, body: str, math: bool) -> str:
+def _simulator_html(machine: dict, example: str) -> str:
+    """The shell's simulator controls and the machine as a table, placed after the builder's body."""
+    return (
+        '\n<section class="sim" id="mimir-sim">\n<div id="mimir-sim-controls" hidden>\n'
+        "<h2>Feed an input</h2>\n"
+        f'<p><label for="mimir-sim-input">Input</label> <input type="text" id="mimir-sim-input" '
+        f'value="{html.escape(example)}" autocomplete="off" spellcheck="false" '
+        'aria-describedby="mimir-sim-hint"></p>\n'
+        f'<p class="sim-hint" id="mimir-sim-hint">One symbol per character; spaces are ignored. '
+        f"At most {TRACE_MAX_SYMBOLS} symbols.</p>\n"
+        '<p class="sim-buttons"><button type="button" id="mimir-sim-start">Start</button>'
+        '<button type="button" id="mimir-sim-next">Next symbol</button>'
+        '<button type="button" id="mimir-sim-back">Back</button></p>\n'
+        '<p class="sim-hint">Enter in the input field starts; on the buttons, the right arrow reads the next '
+        "symbol and the left arrow goes back. The current states are marked in the diagram.</p>\n"
+        '<p id="mimir-sim-status" role="status" aria-live="polite"></p>\n'
+        '<h3>Steps so far</h3>\n<ol id="mimir-sim-history"></ol>\n</div>\n'
+        f'<details class="sim-machine"><summary>The machine</summary>\n{_machine_html(machine)}\n</details>\n'
+        "</section>")
+
+
+def render_free_page(title: str, body: str, math: bool, steps: bool = False,
+                     machine: dict | None = None, example: str = "") -> str:
     katex = _katex() if math else None
     scripts = [katex["KATEX_JS"], katex["AUTO_RENDER_JS"],
                _check_raw(_PAGE_MATH_JS.read_text(encoding="utf-8"), "</script", "page math")] if katex else []
+    if steps:
+        scripts.append(_check_raw(_PAGE_STEPS_JS.read_text(encoding="utf-8"), "</script", "page steps"))
+    data = ""
+    if machine is not None:
+        body += _simulator_html(machine, example)
+        data = f'<script type="application/json" id="mimir-machine">{_json_script(_machine_data(machine))}</script>\n'
+        scripts += [_check_raw(path.read_text(encoding="utf-8"), "</script", "simulator")
+                    for path in (_MACHINE_JS, _PAGE_SIM_JS)]
     template = _PAGE_TEMPLATE.read_text(encoding="utf-8")
     return _fill(template, {
         "CSP": _csp([_csp_hash(s) for s in scripts]),
@@ -1664,15 +1766,19 @@ def render_free_page(title: str, body: str, math: bool) -> str:
         "KATEX_STYLE": f"<style>{katex['KATEX_CSS']}</style>\n" if katex else "",
         "TOKENS": _check_raw(skald_tokens(), "</style", "Skald tokens"),
         "BODY": body,
-        "SCRIPTS": "".join(f"<script>{s}</script>\n" for s in scripts)})
+        "SCRIPTS": data + "".join(f"<script>{s}</script>\n" for s in scripts)})
 
 
 def cmd_page(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "name", "title", "body"})
+    _check_keys(data, {"term", "course", "name", "title", "body", "machine", "example"})
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
     if "title" not in data:
         raise InputError("title is required")
     title = verify._text(data["title"], "title", TITLE_MAX_CHARS)
+    machine = _machine(data["machine"]) if "machine" in data else None
+    if machine is None and "example" in data:
+        raise InputError("example is only for a page with a machine")
+    example = _example(data)
     body = data.get("body")
     if not isinstance(body, str) or not body.strip():
         raise InputError("body is required (the page body as an HTML string)")
@@ -1684,14 +1790,16 @@ def cmd_page(data: dict) -> dict:
     course_dir = verify._course_dir(term, course)
     index = course_dir / "INDEX.md"
     rows = {p: r for p, r in ingest.registry(index).items() if verify._inside(course_dir, p)}
-    body_html, math = check_page_body(
-        body, lambda marker, k: _original(marker, f"body.original[{k}]", rows, course_dir, index))
-    page = _BodyTree()
-    page.feed(body_html)
-    page.close()
-    figures = [n for n in _walk(page.root) if n.tag == "svg" and not any(a.tag == "svg" for a in _ancestors(n))]
-    check_labels(figures, _style_texts(page.root), "body", _PAGE_FONT_PX)
-    return _write_out(course_dir, name, "html", render_free_page(title, body_html, math).encode("utf-8"))
+    body_html, math, steps = check_page_body(
+        body, lambda marker, k: _original(marker, f"body.original[{k}]", rows, course_dir, index),
+        machine["states"] if machine else ())
+    tree = _BodyTree()
+    tree.feed(body_html)
+    tree.close()
+    figures = [n for n in _walk(tree.root) if n.tag == "svg" and not any(a.tag == "svg" for a in _ancestors(n))]
+    check_labels(figures, _style_texts(tree.root), "body", _PAGE_FONT_PX)
+    page = render_free_page(title, body_html, math, steps, machine, example)
+    return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
 # --- trace ---------------------------------------------------------------------------
@@ -1900,8 +2008,25 @@ def _machine_html(machine: dict) -> str:
         body.append(f"<tr>{cells}{cell(m['to'])}</tr>")
     if not body:
         body.append(f"<tr><td colspan=\"{5 if pda else 3}\">No moves.</td></tr>")
-    return (f"<p>{html.escape(facts)}</p>\n<table>\n<thead><tr>{head}</tr></thead>\n<tbody>\n"
-            + "\n".join(body) + "\n</tbody>\n</table>")
+    return (f"<p>{html.escape(facts)}</p>\n<div class=\"table-wrap\"><table>\n<thead><tr>{head}</tr></thead>\n"
+            "<tbody>\n" + "\n".join(body) + "\n</tbody>\n</table></div>")
+
+
+def _example(data: dict) -> str:
+    """The optional input the simulator starts with."""
+    if data.get("example") is None:
+        return ""
+    example = verify._text(data["example"], "example", BLOCK_MAX_CHARS, required=False)
+    symbols = sum(1 for c in example if not c.isspace())
+    if symbols > TRACE_MAX_SYMBOLS:
+        raise InputError(f"example has {symbols} symbols; at most {TRACE_MAX_SYMBOLS}")
+    return example
+
+
+def _machine_data(machine: dict) -> dict:
+    """The simulator's JSON data: the machine and its limits."""
+    return {**machine, "max_configs": TRACE_MAX_CONFIGS, "max_stack": TRACE_MAX_STACK,
+            "max_symbols": TRACE_MAX_SYMBOLS}
 
 
 def cmd_trace(data: dict) -> dict:
@@ -1909,19 +2034,14 @@ def cmd_trace(data: dict) -> dict:
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
     title = _title(data)
     machine = _machine(data.get("machine"))
-    example = ""
-    if data.get("example") is not None:
-        example = verify._text(data["example"], "example", BLOCK_MAX_CHARS, required=False)
-        symbols = sum(1 for c in example if not c.isspace())
-        if symbols > TRACE_MAX_SYMBOLS:
-            raise InputError(f"example has {symbols} symbols; at most {TRACE_MAX_SYMBOLS}")
+    example = _example(data)
     diagram = _inline_svg(data.get("svg"), machine["states"])
     course_dir = verify._course_dir(term, course)
-    payload = {**machine, "max_configs": TRACE_MAX_CONFIGS, "max_stack": TRACE_MAX_STACK,
-               "max_symbols": TRACE_MAX_SYMBOLS}
+    engine = _check_raw(_MACHINE_JS.read_text(encoding="utf-8"), "</script", "simulator")
     page = render_page(_TRACE_TEMPLATE, {"TITLE": html.escape(title), "SVG": diagram,
                                          "EXAMPLE": html.escape(example), "MAX_SYMBOLS": str(TRACE_MAX_SYMBOLS),
-                                         "MACHINE": _machine_html(machine), "DATA": _json_script(payload)})
+                                         "MACHINE": _machine_html(machine), "SIM_JS": engine,
+                                         "DATA": _json_script(_machine_data(machine))})
     return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
