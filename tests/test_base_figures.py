@@ -299,15 +299,26 @@ def out_file(root: Path, name: str, ext: str = "svg", course: str = COURSE) -> P
 
 def test_inputs_for_a_subject_hand_the_builder_its_base_figure(home, saved):
     out = run_ok(VISUAL, home, "inputs", {"term": TERM, "course": COURSE, "subject": SUBJECT})
-    assert out["base"] == {"subject": SUBJECT, "source": "pack", "field": FIELD, "path": str(saved),
-                           "parts": ["outer-membrane", "peptidoglycan", "inner-membrane"]}
+    assert out["base"] == {"subject": SUBJECT, "status": "found", "source": "pack", "field": FIELD,
+                           "path": str(saved), "parts": ["outer-membrane", "peptidoglycan", "inner-membrane"]}
     assert out["line"].endswith(f"base figure {SUBJECT} from the field pack {FIELD}.")
 
 
 def test_inputs_for_a_subject_with_no_base_figure_say_so(home, root):
     out = run_ok(VISUAL, home, "inputs", {"term": TERM, "course": COURSE, "subject": SUBJECT})
-    assert out["base"] is None
+    assert out["base"] == {"subject": SUBJECT, "status": "missing", "source": None, "field": None, "path": None,
+                           "parts": []}
     assert out["line"].endswith(f"no base figure {SUBJECT} yet.")
+
+
+@pytest.mark.parametrize("professor", [False, True])
+def test_inputs_and_find_base_report_one_lookup(home, saved, professor):
+    """One owner for the lookup: the builder's ``base`` is exactly what find-base finds."""
+    if professor:
+        run_ok(FP, home, "save-course-base", local(professor_diagram(saved.parents[4])))
+    found = run_ok(FP, home, "find-base", find())
+    given = run_ok(VISUAL, home, "inputs", {"term": TERM, "course": COURSE, "subject": SUBJECT})
+    assert given["base"] == {k: v for k, v in found.items() if k not in ("course_dir", "line")}
 
 
 def test_a_reuse_that_keeps_every_part_and_adds_labels_and_leaders_is_built(home, root, saved):

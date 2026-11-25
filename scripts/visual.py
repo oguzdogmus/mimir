@@ -49,11 +49,11 @@ inputs -- what the builder reads beside the core house style guide.
     none ("no notation section." in ``line``). Writes nothing.
     With ``subject`` (optional, a base figure subject as ``fieldpack.py``
     names it), ``base`` is the base figure the course builds that subject
-    from, ``{"subject", "source", "field", "path", "parts"}`` as
-    ``fieldpack.py find-base`` finds it (the course's own first), or null
-    when it has none yet; ``line`` ends "; base figure <subject> from the
-    field pack <field>." (or "the course's own diagram", or "; no base figure
-    <subject> yet.").
+    from, ``{"subject", "status", "source", "field", "path", "parts"}``
+    exactly as ``fieldpack.py find-base`` reports it (the course's own
+    first; ``status`` "missing" when it has none yet); ``line`` ends "; base
+    figure <subject> from the field pack <field>." (or "the course's own
+    diagram", or "; no base figure <subject> yet.").
 
 page -- an offline page in the Skald house style from a body the builder wrote.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "even-zeros",
@@ -384,14 +384,9 @@ def cmd_inputs(data: dict) -> dict:
             f"{'notation section included' if notation else 'no notation section'}")
     out = {"course_dir": str(course_dir), "packs": packs, "notation": notation}
     if subject is not None:
-        found = fieldpack.find_base(ingest._workspace_root(), course_dir, subject)
-        if found is None:
-            out["base"] = None
-            line += f"; no base figure {subject} yet"
-        else:
-            out["base"] = {"subject": subject, **{k: found[k] for k in ("source", "field", "path", "parts")}}
-            origin = "the course's own diagram" if found["source"] == "course" else f"the field pack {found['field']}"
-            line += f"; base figure {subject} from {origin}"
+        out["base"] = fieldpack.lookup_base(ingest._workspace_root(), course_dir, subject)
+        line += (f"; no base figure {subject} yet" if out["base"]["status"] == "missing"
+                 else f"; base figure {subject} from {fieldpack.base_origin(out['base'])}")
     return {**out, "line": line + "."}
 
 

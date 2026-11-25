@@ -612,19 +612,33 @@ def find_base(root: Path, course_dir: Path, subject: str) -> dict | None:
     return None
 
 
+def lookup_base(root: Path, course_dir: Path, subject: str) -> dict:
+    """The base figure lookup as ``find-base`` and ``visual.py inputs`` report it.
+
+    ``{"subject", "status": "found" | "missing", "source", "field", "path", "parts"}``; with none, ``source``,
+    ``field`` and ``path`` are None and ``parts`` is [].
+    """
+    base = find_base(root, course_dir, subject)
+    if base is None:
+        return {"subject": subject, "status": "missing", "source": None, "field": None, "path": None, "parts": []}
+    return {"subject": subject, "status": "found", **{k: base[k] for k in ("source", "field", "path", "parts")}}
+
+
+def base_origin(found: dict) -> str:
+    """Where a found base figure comes from, for a ``line``: the course's own diagram or a field pack."""
+    return "the course's own diagram" if found["source"] == "course" else f"the field pack {found['field']}"
+
+
 def cmd_find_base(data: dict) -> dict:
     check_keys(data, {"term", "course", "subject"})
     subject = parse_subject(data)
     root, course_dir, _, _, course = _course(data)
-    base = find_base(root, course_dir, subject)
-    if base is None:
-        return {"course_dir": str(course_dir), "subject": subject, "status": "missing", "source": None,
-                "field": None, "path": None, "parts": [],
-                "line": f"No base figure {subject} for {course} yet; it grows on first use."}
-    origin = "the course's own diagram" if base["source"] == "course" else f"the field pack {base['field']}"
-    return {"course_dir": str(course_dir), "subject": subject, "status": "found",
-            **{k: base[k] for k in ("source", "field", "path", "parts")},
-            "line": f"Base figure {subject} for {course}: {origin}, {len(base['parts'])} parts."}
+    found = lookup_base(root, course_dir, subject)
+    if found["status"] == "missing":
+        line = f"No base figure {subject} for {course} yet; it grows on first use."
+    else:
+        line = f"Base figure {subject} for {course}: {base_origin(found)}, {len(found['parts'])} parts."
+    return {"course_dir": str(course_dir), **found, "line": line}
 
 
 def cmd_save_course_base(data: dict) -> dict:

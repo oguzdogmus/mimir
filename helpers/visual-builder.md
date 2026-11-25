@@ -66,7 +66,7 @@ python3 "<script>" inputs <<'EOF'
 EOF
 ```
 
-Read the base figure in full with `cat "<path>"` for the `path` in `base` (the course's own diagram comes first, then the pack's). If `base` is null, build as if you had no `subject`.
+Read the base figure in full with `cat "<path>"` for the `path` in `base` (the course's own diagram comes first, then the pack's). If its `status` is `"missing"`, build as if you had no `subject`.
 
 1. Start from its markup: keep its `viewBox` and every part (each element with an id) exactly, with the same id, the same geometry and the same shapes inside it. Copy it; never redraw, move, resize or reshape a part. In a page, it is the inline `<svg>`.
 2. Add only labels, steps, highlights and leader lines: `<text>` labels, leader lines (`class="leader"` alone, an open stroke with no fill: a `<path>` without `Z`, a `<line>` or a `<polyline>`; draw a content arrow's head as part of the leader's stroke), `class="anchor"` end dots (a small `<circle>`), highlight marks (a `<path>` of class `mark-loop` or `mark-swipe` with `data-highlight`), `data-step` and `data-highlight` attributes, and step groups `<g data-step="N">` round parts, without a `transform`. On a part, change only its class, `data-step` and `data-highlight`. Add no `<style>` rule that reaches a part or a shape (size labels with `text` selectors only), and no clip path, mask, opacity or `style` attribute. Every part stays, even one the content does not name: leave it unlabelled.
