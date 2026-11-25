@@ -11,7 +11,7 @@ Mimir is an exam study plugin for AI coding agents: [Claude Code](https://claude
 - **Follows your professor.** Mimir reads the outline, slides and past papers, learns how the professor writes questions, and labels every question with where it came from. Answer keys are checked before you see them.
 - **Teaches in your language.** Your course and exams can be in one language and the explanations in another. You choose both during setup.
 - **Remembers you.** It keeps dated evidence of what you solved alone and with help, and picks up where you left off.
-- **Keeps your files on your machine.** Everything lives in one folder (default `~/learning/`). Generated pages work offline, and Mimir sends no telemetry. The course files Mimir reads are sent to your agent's model provider, like any other file your agent reads.
+- **Keeps your files on your machine.** Everything lives in one folder (default `~/learning/`). Generated pages work offline, and Mimir sends no telemetry. The course files Mimir reads are sent to your agent's model provider, like any other file your agent reads. When ingest meets a course's field for the first time, a helper searches the web for that field's figure conventions; its searches carry only the field name and public topic names, never text from your files.
 
 ## What it looks like
 

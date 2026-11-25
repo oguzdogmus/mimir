@@ -28,7 +28,7 @@ def test_no_claude_only_paths_or_command_names():
         text = path.read_text(encoding="utf-8")
         assert "CLAUDE_PLUGIN_ROOT" not in text, path
         assert not re.search(r"/mimir:(?!mimir-)", text), path
-        assert not re.search(r"`mimir:(?!verifier`|visual-builder`)", text), path
+        assert not re.search(r"`mimir:(?!verifier`|visual-builder`|field-researcher`)", text), path
 
 
 INTERNAL = {"mimir-core-rules", "mimir-notation"}
@@ -797,3 +797,65 @@ def test_record_writes_the_results_line_and_skills_no_longer_append_it():
         assert "## Quiz results" not in text, path
         assert not re.search(r"[Aa]ppend (the outcome|to the log)|logging under `## Results`|"
                              r"Log each under `## Results`", text), path
+
+
+# Field research (#98): ingest dispatches the field researcher in the background
+# with only the field name and public topic names, never course text or paths.
+RESEARCHER = "helpers/field-researcher.md"
+INGEST = "skills/mimir-ingest/SKILL.md"
+
+
+def _ingest_step(number):
+    text = _read(INGEST)
+    return text.split(f"\n{number}. ", 1)[1].split(f"\n{number + 1}. ", 1)[0]
+
+
+def test_field_researcher_is_a_registered_helper_with_web_tools_and_no_file_readers():
+    front = frontmatter(ROOT_DIR / RESEARCHER)
+    assert front["name"] == "field-researcher"
+    assert front["description"].endswith("Dispatched by Mimir skills; not for direct use.")
+    assert front["tools"] == "WebSearch, WebFetch, Bash"  # no Read, Grep or Glob over the workspace
+    agents = json.loads(_read(".claude-plugin/plugin.json"))["agents"]
+    assert f"./{RESEARCHER}" in agents
+    assert "mimir:field-researcher" in _read("docs/agents/plugin-from-worktree.md")
+
+
+def test_field_researcher_input_is_only_the_field_name_and_public_topic_names():
+    helper = _read(RESEARCHER)
+    contract = "only the field name and public topic names"
+    given = helper.split("\n## Input\n", 1)[1].split("\n## ", 1)[0]
+    assert contract in given
+    assert "`script`" in given and "`field`" in given and "`topics`" in given
+    assert "never receive" in given and "course files" in given and "paths" in given
+    queries = helper.split("\n## Queries\n", 1)[1].split("\n## ", 1)[0]
+    assert "only the field name and topic names" in queries
+    research = _ingest_step(10)
+    assert contract in research and "`fieldpack.py match`" in research and "`brief`" in research
+    assert "nothing else" in research
+    assert "`mimir:field-researcher`" in research or "Background dispatch" in research
+    core = core_section("Background dispatch")
+    assert contract in core and "field-researcher.md" in core
+
+
+def test_ingest_asks_nothing_about_the_field_and_never_waits_for_research():
+    research = _ingest_step(10)
+    assert "?" not in research and "ask nothing" in research.lower()
+    assert "background" in research and "never waits" in research
+    assert "`fieldpack.py report`" in research and "`fieldpack.py list`" in research
+    assert "one researcher per field" in research
+    assert "one line" in research  # the result, when the research finishes
+    final = _read(INGEST).split("\n11. ", 1)[1]
+    assert final.startswith("Finish with one line")
+
+
+def test_background_dispatch_names_one_recipe_per_host_and_leaves_the_checker_in_the_foreground():
+    dispatch = core_section("Background dispatch")
+    claude = dispatch.index("`run_in_background: true`")
+    codex = dispatch.index("`spawn_agent`")
+    antigravity = dispatch.index("`define_subagent`")
+    fallback = dispatch.index("no independent agent")
+    assert claude < codex < antigravity < fallback
+    assert "`mimir:field-researcher`" in dispatch and "`fork_turns` none" in dispatch
+    assert "never the checker" in dispatch
+    helpers = core_section("Paths, commands and helpers")
+    assert "field research" in helpers and "<mimir>/helpers/field-researcher.md" in helpers

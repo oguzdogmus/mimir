@@ -1,6 +1,6 @@
 # Running the plugin from a worktree
 
-An installed Mimir (`/plugin install mimir@mimir`, from GitHub or from a local clone) is a snapshot copied into Claude Code's plugin cache under `~/.claude/plugins/cache/mimir/`. It does not follow any branch: its skills, its helpers (`mimir:verifier`, `mimir:visual-builder`) and the scripts they run stay at the installed version until you update or reinstall.
+An installed Mimir (`/plugin install mimir@mimir`, from GitHub or from a local clone) is a snapshot copied into Claude Code's plugin cache under `~/.claude/plugins/cache/mimir/`. It does not follow any branch: its skills, its helpers (`mimir:verifier`, `mimir:visual-builder`, `mimir:field-researcher`) and the scripts they run stay at the installed version until you update or reinstall.
 
 To test a branch as it would ship, start Claude Code from the worktree with the worktree loaded as a session-only plugin:
 

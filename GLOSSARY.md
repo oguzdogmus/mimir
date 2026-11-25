@@ -128,6 +128,10 @@ Conventions that hold across fields, kept one line each in the house style guide
 The builder guidance for one field, saved once in the student's workspace and shared by all of the student's courses in that field: the field's figure kinds mapped to the four figure kinds, its conventions and recipes, an accuracy checklist per figure kind, its base figures and the content of its blind test page. Researched from public sources when a course's field is first known, every rule with its source. A course uses one field pack, or two when it spans two fields. The course's own materials override it.
 _Avoid_: Field notes, field guide, domain pack
 
+**Field researcher**:
+The helper that researches a field pack from high-trust public sources, in the background, when ingest first meets a course's field. Its whole input is the field name and public topic names, never text, names or paths from the student's course files. It saves the pack through the field pack store, which refuses a rule without a source or a figure kind without a checklist.
+_Avoid_: Field scout, pack builder
+
 **Base figure**:
 A recurring subject of a field (a heart, a truss, a neuron) built carefully once, checked against its field pack's checklist and saved in the field pack as a reusable SVG with stable part ids. Later visuals of that subject start from it and only add labels, steps and highlights.
 _Avoid_: Template, stock figure
