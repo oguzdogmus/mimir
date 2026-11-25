@@ -1,6 +1,6 @@
 """#101: base figures, grown on first use (run: uv run --with pytest pytest tests -q).
 
-Driven from outside: JSON into fieldpack.py and visual.py, JSON and files out. Every figure here is
+Driven from outside: JSON into fieldpack.py, basefigure.py and visual.py, JSON and files out. Every figure here is
 synthetic; a professor's real diagrams never enter the repo.
 """
 
@@ -17,10 +17,12 @@ import pytest
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT_DIR / "scripts"
 FP = SCRIPTS / "fieldpack.py"
+BF = SCRIPTS / "basefigure.py"
+FC = SCRIPTS / "figurecheck.py"
 VISUAL = SCRIPTS / "visual.py"
 WS = SCRIPTS / "workspace.py"
 PACK = json.loads((ROOT_DIR / "tests" / "fixtures" / "field-pack-microbiology.json").read_text(encoding="utf-8"))
-FIELD, FIGURE = PACK["field"], PACK["figure_kinds"][0]["name"]
+FIELD, FIGURE = PACK["field"], PACK["figures"][0]["name"]
 TERM, COURSE, OTHER = "2026-Fall", "MICRO201 Bacteria", "MICRO305 Pathogens"
 SUBJECT = "gram-negative-envelope"
 
@@ -86,8 +88,14 @@ def built(home: Path, svg: str = BASE, name: str = f"base-{SUBJECT}", course: st
     return Path(run_ok(VISUAL, home, "svg", {"term": TERM, "course": course, "name": name, "svg": svg})["path"])
 
 
-def save(path: Path, reply: str = PASS, subject: str = SUBJECT) -> dict:
-    return {"field": FIELD, "subject": subject, "figure": FIGURE, "path": str(path), "reply": reply}
+def checked(home: Path, path: Path, reply: str = PASS) -> str:
+    """The figure checker's reply on ``path``: the check token from its brief, then the verdicts."""
+    brief = run_ok(FC, home, "brief", {"field": FIELD, "figure": FIGURE, "path": str(path)})["brief"]
+    return brief.splitlines()[0].removeprefix("Check token: ") + "\n" + reply
+
+
+def save(home: Path, path: Path, reply: str = PASS, subject: str = SUBJECT) -> dict:
+    return {"field": FIELD, "subject": subject, "figure": FIGURE, "path": str(path), "reply": checked(home, path, reply)}
 
 
 def pack_base(root: Path, subject: str = SUBJECT) -> Path:
@@ -103,11 +111,11 @@ def snapshot(root: Path) -> dict:
     return out
 
 
-# --- save-base ----------------------------------------------------------------------
+# --- save ---------------------------------------------------------------------------
 
 def test_a_built_figure_the_checker_passed_is_saved_in_its_pack_without_the_shell_tokens(home, root):
     """#101: saved only after the checker passes it; stored as the figure itself, without the 300 KB of tokens."""
-    out = run_ok(FP, home, "save-base", save(built(home)))
+    out = run_ok(BF, home, "save", save(home, built(home)))
     target = pack_base(root)
     assert out["path"] == str(target) and out["subject"] == SUBJECT and out["field"] == FIELD
     assert target.read_text(encoding="utf-8") == BASE
@@ -129,7 +137,7 @@ def test_a_figure_without_stable_part_ids_is_refused_and_not_saved(home, root, s
     """#101: every drawn shape belongs to a part with a stable id, or the figure is not saved."""
     path = built(home, svg)
     before = snapshot(root)
-    err = run_fails(FP, home, "save-base", save(path), needle)
+    err = run_fails(BF, home, "save", save(home, path), needle)
     assert str(path) in err
     assert snapshot(root) == before
 
@@ -140,14 +148,14 @@ def test_a_figure_that_fails_the_shell_svg_checks_is_refused_and_not_saved(home,
     path.write_text(path.read_text(encoding="utf-8").replace("</desc>", '</desc><image href="https://x.test/a.png"/>'),
                     encoding="utf-8")
     before = snapshot(root)
-    run_fails(FP, home, "save-base", save(path), "element <image> is not allowed")
+    run_fails(BF, home, "save", save(home, path), "element <image> is not allowed")
     assert snapshot(root) == before
 
 
 def test_a_figure_the_shell_did_not_build_is_refused(home, root, tmp_path):
     raw = tmp_path / "raw.svg"
     raw.write_text(BASE, encoding="utf-8")
-    run_fails(FP, home, "save-base", save(raw), "is not an SVG built by visual.py svg")
+    run_fails(BF, home, "save", save(home, raw), "is not an SVG built by visual.py svg")
     assert not pack_base(root).parent.exists()
 
 
@@ -160,17 +168,26 @@ def test_a_figure_that_fails_its_checklist_is_refused_and_not_saved(home, root, 
     """#101: saved only when every checklist item passes; the next need of the subject tries again."""
     path = built(home)
     before = snapshot(root)
-    err = run_fails(FP, home, "save-base", save(path, reply), needle)
+    err = run_fails(BF, home, "save", save(home, path, reply), needle)
     assert f"the base figure {SUBJECT} is not saved" in err
     assert snapshot(root) == before
-    run_ok(FP, home, "save-base", save(path))  # a later passing check saves it
+    run_ok(BF, home, "save", save(home, path))  # a later passing check saves it
+
+
+def test_a_reply_given_on_another_file_is_refused_and_nothing_is_saved(home, root):
+    """The checker's reply counts only for the file it checked: its check token is that file's."""
+    path = built(home)
+    other = built(home, BASE.replace("Gram-negative envelope</title>", "Envelope</title>"), name="other")
+    before = snapshot(root)
+    run_fails(BF, home, "save", {**save(home, path), "reply": checked(home, other)}, "check token")
+    assert snapshot(root) == before
 
 
 def test_a_subject_with_a_base_figure_is_not_saved_again(home, root):
     path = built(home)
-    run_ok(FP, home, "save-base", save(path))
+    run_ok(BF, home, "save", save(home, path))
     before = snapshot(root)
-    run_fails(FP, home, "save-base", save(path), f"already has a base figure {SUBJECT}")
+    run_fails(BF, home, "save", save(home, path), f"already has a base figure {SUBJECT}")
     assert snapshot(root) == before
 
 
@@ -178,16 +195,16 @@ def test_a_subject_with_a_base_figure_is_not_saved_again(home, root):
     ({"subject": "Human Heart"}, "subject must be lowercase letters"),
     ({"subject": "a" * 41}, "at most 40 characters"),
     ({"field": "civil-engineering"}, "no field pack 'civil-engineering'"),
-    ({"figure": "truss"}, "figure 'truss' is not one of the figure kinds"),
+    ({"figure": "truss"}, "figure 'truss' is not one of the figures"),
     ({"path": "relative.svg"}, "path must be the absolute path of an .svg file"),
     ({"extra": 1}, "unknown field 'extra'"),
 ])
 def test_save_base_refuses_bad_input_naming_the_field(home, root, change, needle):
-    run_fails(FP, home, "save-base", {**save(built(home)), **change}, needle)
+    run_fails(BF, home, "save", {**save(home, built(home)), **change}, needle)
     assert not pack_base(root).parent.exists()
 
 
-# --- find-base and the professor's diagrams ------------------------------------------
+# --- find and the professor's diagrams ------------------------------------------
 
 PROFESSOR = BASE.replace("Gram-negative envelope</title>", "Gram-negative envelope, as in lecture 3</title>").replace(
     'width="180" height="12"', 'width="180" height="16"')
@@ -210,15 +227,15 @@ def local(path: Path, subject: str = SUBJECT) -> dict:
 
 
 def test_a_subject_with_no_base_figure_is_missing(home, root):
-    out = run_ok(FP, home, "find-base", find())
+    out = run_ok(BF, home, "find", find())
     assert out["status"] == "missing" and out["subject"] == SUBJECT and out["path"] is None
     assert SUBJECT in out["line"]
 
 
 def test_a_saved_base_figure_is_found_for_every_course_of_its_field(home, root):
-    run_ok(FP, home, "save-base", save(built(home)))
+    run_ok(BF, home, "save", save(home, built(home)))
     for course in (COURSE, OTHER):
-        out = run_ok(FP, home, "find-base", find(course=course))
+        out = run_ok(BF, home, "find", find(course=course))
         assert out["status"] == "found" and out["source"] == "pack" and out["field"] == FIELD
         assert out["path"] == str(pack_base(root))
         assert out["parts"] == ["outer-membrane", "peptidoglycan", "inner-membrane"]
@@ -226,25 +243,25 @@ def test_a_saved_base_figure_is_found_for_every_course_of_its_field(home, root):
 
 def test_a_professors_diagram_is_the_courses_base_figure_before_the_packs_and_stays_in_the_course(home, root):
     """#101: the professor wins for that course only; the diagram never leaves the course folder."""
-    run_ok(FP, home, "save-base", save(built(home)))
+    run_ok(BF, home, "save", save(home, built(home)))
     store = snapshot(root / ".state")
     other = snapshot(root / TERM / OTHER)
-    out = run_ok(FP, home, "save-course-base", local(professor_diagram(root)))
+    out = run_ok(BF, home, "save-course", local(professor_diagram(root)))
     target = root / TERM / COURSE / ".state" / "base-figures" / f"{SUBJECT}.svg"
     assert out["path"] == str(target) and target.read_text(encoding="utf-8") == PROFESSOR
     assert snapshot(root / ".state") == store and snapshot(root / TERM / OTHER) == other
 
-    mine = run_ok(FP, home, "find-base", find())
+    mine = run_ok(BF, home, "find", find())
     assert mine["status"] == "found" and mine["source"] == "course" and mine["field"] is None
     assert mine["path"] == str(target)
-    theirs = run_ok(FP, home, "find-base", find(course=OTHER))
+    theirs = run_ok(BF, home, "find", find(course=OTHER))
     assert theirs["source"] == "pack" and theirs["path"] == str(pack_base(root))
 
 
 def test_a_professors_diagram_is_used_even_when_the_pack_has_no_base_figure(home, root):
-    run_ok(FP, home, "save-course-base", local(professor_diagram(root)))
-    assert run_ok(FP, home, "find-base", find())["source"] == "course"
-    assert run_ok(FP, home, "find-base", find(course=OTHER))["status"] == "missing"
+    run_ok(BF, home, "save-course", local(professor_diagram(root)))
+    assert run_ok(BF, home, "find", find())["source"] == "course"
+    assert run_ok(BF, home, "find", find(course=OTHER))["status"] == "missing"
 
 
 def test_a_diagram_from_outside_the_course_folder_is_refused(home, root, tmp_path):
@@ -252,20 +269,20 @@ def test_a_diagram_from_outside_the_course_folder_is_refused(home, root, tmp_pat
     outside.write_text(PROFESSOR, encoding="utf-8")
     elsewhere = professor_diagram(root, course=OTHER)
     for path in (outside, elsewhere):
-        run_fails(FP, home, "save-course-base", local(path), "must be inside the course folder")
+        run_fails(BF, home, "save-course", local(path), "must be inside the course folder")
     assert not (root / TERM / COURSE / ".state" / "base-figures").exists()
 
 
 def test_a_professors_diagram_without_stable_part_ids_is_refused(home, root):
     path = professor_diagram(root, PROFESSOR.replace('<g id="peptidoglycan">', "<g>"))
-    run_fails(FP, home, "save-course-base", local(path), "belongs to no part")
+    run_fails(BF, home, "save-course", local(path), "belongs to no part")
     assert not (root / TERM / COURSE / ".state" / "base-figures").exists()
 
 
 def test_a_damaged_stored_base_figure_is_refused_naming_its_file(home, root):
-    run_ok(FP, home, "save-base", save(built(home)))
+    run_ok(BF, home, "save", save(home, built(home)))
     pack_base(root).write_text(BASE.replace('id="inner-membrane"', ""), encoding="utf-8")
-    err = run_fails(FP, home, "find-base", find(), "belongs to no part")
+    err = run_fails(BF, home, "find", find(), "belongs to no part")
     assert str(pack_base(root)) in err and "damaged" in err
 
 
@@ -289,7 +306,7 @@ def figure_in_page(svg: str) -> dict:
 
 @pytest.fixture
 def saved(home, root):
-    run_ok(FP, home, "save-base", save(built(home)))
+    run_ok(BF, home, "save", save(home, built(home)))
     return pack_base(root)
 
 
@@ -299,15 +316,26 @@ def out_file(root: Path, name: str, ext: str = "svg", course: str = COURSE) -> P
 
 def test_inputs_for_a_subject_hand_the_builder_its_base_figure(home, saved):
     out = run_ok(VISUAL, home, "inputs", {"term": TERM, "course": COURSE, "subject": SUBJECT})
-    assert out["base"] == {"subject": SUBJECT, "source": "pack", "field": FIELD, "path": str(saved),
-                           "parts": ["outer-membrane", "peptidoglycan", "inner-membrane"]}
+    assert out["base"] == {"subject": SUBJECT, "status": "found", "source": "pack", "field": FIELD,
+                           "path": str(saved), "parts": ["outer-membrane", "peptidoglycan", "inner-membrane"]}
     assert out["line"].endswith(f"base figure {SUBJECT} from the field pack {FIELD}.")
 
 
 def test_inputs_for_a_subject_with_no_base_figure_say_so(home, root):
     out = run_ok(VISUAL, home, "inputs", {"term": TERM, "course": COURSE, "subject": SUBJECT})
-    assert out["base"] is None
+    assert out["base"] == {"subject": SUBJECT, "status": "missing", "source": None, "field": None, "path": None,
+                           "parts": []}
     assert out["line"].endswith(f"no base figure {SUBJECT} yet.")
+
+
+@pytest.mark.parametrize("professor", [False, True])
+def test_inputs_and_find_base_report_one_lookup(home, saved, professor):
+    """One owner for the lookup: the builder's ``base`` is exactly what basefigure.py find finds."""
+    if professor:
+        run_ok(BF, home, "save-course", local(professor_diagram(saved.parents[4])))
+    found = run_ok(BF, home, "find", find())
+    given = run_ok(VISUAL, home, "inputs", {"term": TERM, "course": COURSE, "subject": SUBJECT})
+    assert given["base"] == {k: v for k, v in found.items() if k not in ("course_dir", "line")}
 
 
 def test_a_reuse_that_keeps_every_part_and_adds_labels_and_leaders_is_built(home, root, saved):
@@ -365,7 +393,7 @@ def test_a_reuse_of_a_subject_with_no_base_figure_is_refused(home, root):
 
 def test_a_course_with_its_professors_diagram_builds_from_that_not_the_packs(home, root, saved):
     """#101: the professor's diagram is the base for that course; other courses keep the pack's."""
-    run_ok(FP, home, "save-course-base", local(professor_diagram(root)))
+    run_ok(BF, home, "save-course", local(professor_diagram(root)))
     run_fails(VISUAL, home, "svg", reuse(), "part 'outer-membrane' changed")
     run_ok(VISUAL, home, "svg", reuse(PROFESSOR.replace("</svg>", LABELS + "</svg>")))
     run_ok(VISUAL, home, "svg", reuse(course=OTHER))
@@ -373,7 +401,7 @@ def test_a_course_with_its_professors_diagram_builds_from_that_not_the_packs(hom
 
 # --- the dispatch and helper text ----------------------------------------------------
 # First need: the student's build returns at once; the base figure grows in the background, is checked
-# in the foreground when it arrives and saved only on a pass. Later needs start from it.
+# in the background too when it arrives, and saved only on a pass. Later needs start from it.
 
 def _read(rel: str) -> str:
     return (ROOT_DIR / rel).read_text(encoding="utf-8")
@@ -411,29 +439,31 @@ def test_the_base_figure_builder_draws_parts_with_stable_ids_through_the_shell_a
     assert "Built <path>." in _section(body, "Reply")
 
 
-def test_core_rules_start_the_base_figure_builder_in_the_background_and_the_figure_checker_in_the_foreground():
+def test_core_rules_run_the_base_figure_builder_and_the_figure_checker_in_the_background():
+    """The student never waits on a base figure: neither its build nor its check holds up the turn."""
     dispatch = _section(_read("reference/core-rules.md"), "Base figure dispatch")
-    background = dispatch.index("`mimir:base-figure-builder`")
-    assert dispatch.index("`run_in_background: true`") > background
-    checker = dispatch.index("`mimir:figure-checker`")
-    assert dispatch.index("`run_in_background: false`") > checker
-    assert "`spawn_agent`" in dispatch and "`define_subagent`" in dispatch and "no independent agent" in dispatch
-    assert "never waits" in dispatch and "foreground" in dispatch
+    builder, checker = dispatch.index("`mimir:base-figure-builder`"), dispatch.index("`mimir:figure-checker`")
+    assert builder < checker
+    assert dispatch.index("`run_in_background: true`") > builder
+    assert dispatch.index("`run_in_background: true`", checker) > checker
+    assert "run_in_background: false" not in dispatch and "foreground" not in dispatch
+    assert dispatch.count("`spawn_agent`") == 2 and dispatch.count("`define_subagent`") == 2
+    assert "no independent agent" in dispatch and "never waits" in dispatch
 
 
 def test_the_first_need_builds_at_once_and_saves_a_base_figure_only_after_the_checker_passes_it():
     text = _section(_read("reference/notation.md"), "Base figures")
-    find, builder = text.index("`fieldpack.py find-base`"), text.index("`mimir:visual-builder`")
+    find, builder = text.index("`basefigure.py find`"), text.index("`mimir:visual-builder`")
     background, brief = text.index("Base figure dispatch"), text.index("`figurecheck.py brief`")
-    checker, save_ = text.index("`mimir:figure-checker`"), text.index("`fieldpack.py save-base`")
+    checker, save_ = text.index("`mimir:figure-checker`"), text.index("`basefigure.py save`")
     assert find < builder < background < brief < checker < save_
-    assert "without waiting" in text and "`subject`" in text
+    assert "without waiting" in text and "`subject`" in text and "foreground" not in text
     assert "not saved" in text and "tries again" in text
 
 
 def test_a_professors_diagram_is_saved_only_for_its_course_and_never_leaves_it():
     text = _section(_read("reference/notation.md"), "Base figures")
-    assert "`fieldpack.py save-course-base`" in text
+    assert "`basefigure.py save-course`" in text
     assert "never leaves the course folder" in text and "never" in text and "commit" in text
 
 
@@ -447,3 +477,118 @@ def test_the_builder_starts_from_the_base_figure_and_never_redraws_its_parts():
     for added in ("labels", "steps", "highlights", "leader lines"):
         assert added in start, added
     assert '"base": "<subject>"' in start
+
+
+# The reuse check fails closed: a part keeps every attribute but its class, data-step and data-highlight,
+# nothing may hide, clip, mask or restyle it, and the only shapes added are open leaders (content arrows
+# count as leaders), their end dots and highlight marks.
+DOT = '<circle class="anchor" cx="150" cy="16" r="2"/>'
+CLIP = '<defs><clipPath id="cut"><rect x="0" y="0" width="200" height="30"/></clipPath></defs>'
+MASK = '<defs><mask id="veil"><rect x="0" y="0" width="200" height="120" fill="white"/></mask></defs>'
+
+
+@pytest.mark.parametrize(("svg", "needle"), [
+    (REUSE.replace('<g id="outer-membrane">', '<g id="outer-membrane" clip-path="url(#cut)">').replace(
+        "</desc>", "</desc>" + CLIP), "the figure's definitions"),
+    (REUSE.replace('<g id="outer-membrane">', '<g id="outer-membrane" clip-path="inset(0 0 50% 0)">'),
+     "part 'outer-membrane' changed"),
+    (REUSE.replace('<g id="peptidoglycan">', '<g id="peptidoglycan" mask="url(#veil)">').replace(
+        "</desc>", "</desc>" + MASK), "the figure's definitions"),
+    (REUSE.replace('<g id="peptidoglycan">', '<g id="peptidoglycan" opacity="0">'), "part 'peptidoglycan' changed"),
+    (REUSE.replace('<path id="inner-membrane"', '<path style="display:none" id="inner-membrane"'),
+     "part 'inner-membrane' changed"),
+    (REUSE.replace('<path id="inner-membrane"', '<path stroke-width="9" id="inner-membrane"'),
+     "part 'inner-membrane' changed"),
+    (REUSE.replace('class="ink"/></g><g id="peptidoglycan">', 'class="ink" fill="red"/></g><g id="peptidoglycan">'),
+     "part 'outer-membrane' changed"),
+    (REUSE.replace("</desc>", "</desc><style>#peptidoglycan { transform: translateY(9px); }</style>"),
+     "can reach the base figure"),
+    (REUSE.replace("</desc>", "</desc>" + CLIP.replace("<rect", '<rect class="ink"')), "the figure's definitions"),
+    (REUSE.replace('<g id="outer-membrane">', '<g opacity="0"><g id="outer-membrane">').replace(
+        '<g id="peptidoglycan">', '</g><g id="peptidoglycan">'), "part 'outer-membrane' changed"),
+    (REUSE.replace('<g id="outer-membrane">', '<g class="caption-phone"><g id="outer-membrane">').replace(
+        '<g id="peptidoglycan">', '</g><g id="peptidoglycan">'), "class 'caption-phone'"),
+    (REUSE.replace('<path id="inner-membrane" d="M 10 56 L 190 56" class="ink"/>',
+                   '<path id="inner-membrane" d="M 10 56 L 190 56" class="mark-loop"/>'),
+     "class 'mark-loop' on base figure part 'inner-membrane'"),
+    (REUSE.replace("</svg>", '<path class="leader" d="M 20 70 L 60 70 L 60 80 Z" fill="black"/></svg>'),
+     "attribute fill"),
+    (REUSE.replace("</svg>", '<path class="leader" d="M 20 70 L 60 70 L 60 80 Z"/></svg>'),
+     "a leader is an open stroke"),
+    (REUSE.replace("</svg>", '<path class="leader" style="fill: black" d="M 20 70 L 60 70"/></svg>'),
+     "attribute style"),
+    (REUSE.replace("</svg>", '<rect class="leader" x="20" y="70" width="40" height="10"/></svg>'),
+     "a leader is an open stroke"),
+    (REUSE.replace("</svg>", '<polygon class="leader" points="20,70 60,70 60,80"/></svg>'),
+     "a leader is an open stroke"),
+    (REUSE.replace(DOT, '<circle class="anchor" cx="100" cy="40" r="60"/>'), "an anchor is a <circle>"),
+    (REUSE.replace("</svg>", '<rect class="mark-loop" data-highlight="1" x="5" y="5" width="9" height="9"/></svg>'),
+     "a highlight mark is a <path>"),
+    (REUSE.replace("</svg>", '<path class="mark-swipe" d="M 6 30 L 194 30"/></svg>'), "data-highlight"),
+    (REUSE.replace("</svg>", '<g opacity="0.2"><text x="100" y="80" text-anchor="middle">Note</text></g></svg>'),
+     "attribute opacity"),
+])
+def test_a_reuse_that_hides_clips_or_restyles_a_part_or_adds_a_shape_is_refused(home, root, saved, svg, needle):
+    """Fail closed: whatever the check does not know is refused, never let through."""
+    run_fails(VISUAL, home, "svg", reuse(svg), needle)
+    assert not out_file(root, "envelope-labelled").exists()
+
+
+ARROW = '<path class="leader" pathLength="1" d="M 30 70 L 30 88 M 26 84 L 30 88 L 34 84"/>'
+
+
+def test_a_content_arrow_drawn_as_a_leader_is_built(home, root, saved):
+    run_ok(VISUAL, home, "svg", reuse(REUSE.replace("</svg>", ARROW + "</svg>")))
+
+
+def page_with_style(css: str) -> dict:
+    payload = figure_in_page(REUSE)
+    return {**payload, "body": f"<style>{css}</style>" + payload["body"]}
+
+
+@pytest.mark.parametrize("css", [
+    "#peptidoglycan { transform: translateY(9px); }",
+    "figure path { stroke-width: 9; }",
+    "svg :is(g) { opacity: 0; }",
+    "* { opacity: .5; }",
+    "figure { --fig-ink: transparent; }",
+    "main { stroke-width: 9; }",
+    "@media (min-width: 1px) { .ink { display: none; } }",
+])
+def test_a_reuse_page_whose_css_reaches_a_part_is_refused(home, root, saved, css):
+    run_fails(VISUAL, home, "page", page_with_style(css), "can reach the base figure")
+    assert not out_file(root, "envelope-steps", "html").exists()
+
+
+def test_a_reuse_page_may_lay_out_the_page_and_size_the_figure(home, root, saved):
+    css = "figure { margin: 0 auto; max-width: 30rem; } figure svg { width: 100%; height: auto; } .head h1 { color: red; }"
+    run_ok(VISUAL, home, "page", page_with_style(css))
+
+
+def test_a_reuse_may_size_its_labels_in_its_own_style(home, root, saved):
+    """The guide sizes SVG labels in a <style>; a rule that reaches only labels is not a change to a part."""
+    css = "<style>text { font-size: 9px; } @media (max-width: 600px) { text { font-size: 12px; } }</style>"
+    run_ok(VISUAL, home, "svg", reuse(REUSE.replace("</desc>", "</desc>" + css)))
+
+
+def figure_wrapped(svg: str, before: str, after: str = "") -> dict:
+    payload = figure_in_page(svg)
+    body = payload["body"].replace("<figure>", before).replace("</figure>", after or "</figure>")
+    return {**payload, "body": body}
+
+
+@pytest.mark.parametrize(("before", "after", "needle"), [
+    ("<figure hidden>", "", "attribute hidden"),
+    ('<figure class="sr-only">', "", "class 'sr-only'"),
+    ('<figure style="opacity: 0">', "", "property opacity"),
+    ('<div style="--fig-ink: transparent"><figure>', "</figure></div>", "property --fig-ink"),
+])
+def test_a_reuse_page_that_hides_or_restyles_the_figure_from_around_it_is_refused(home, root, saved, before, after,
+                                                                                  needle):
+    run_fails(VISUAL, home, "page", figure_wrapped(REUSE, before, after), needle)
+    assert not out_file(root, "envelope-steps", "html").exists()
+
+
+def test_a_reuse_page_may_pin_its_figure_on_a_board(home, root, saved):
+    board = '<div class="board" style="--sticky-fig: 13rem"><figure>'
+    run_ok(VISUAL, home, "page", figure_wrapped(REUSE, board, '</figure><div class="work"><p>Text.</p></div></div>'))

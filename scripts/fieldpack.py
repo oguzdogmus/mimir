@@ -4,7 +4,7 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py`` and ``ingest.py`` (same folder). Run as::
 
-    python3 fieldpack.py <save|list|link|match|report|save-base|save-course-base|find-base>  < input.json
+    python3 fieldpack.py <save|list|link|match|report>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -21,12 +21,8 @@ and one link record per course::
     <root>/.state/field-packs/<field>/pack.json
     <root>/<YYYY-Term>/<course>/.state/field-packs.json   {"packs": [...]}
 
-The pack folder is the pack's home: its base figures sit beside ``pack.json``,
-and a course may hold its own, from the professor's diagrams, that never leave
-the course folder::
-
-    <root>/.state/field-packs/<field>/base-figures/<subject>.svg
-    <root>/<YYYY-Term>/<course>/.state/base-figures/<subject>.svg
+The pack folder is the pack's home: its base figures sit beside ``pack.json``
+(``basefigure.py`` stores and finds them).
 
 ``.state``, the store, a pack folder, ``pack.json``
 and a link record may not be symlinks; neither may the term, course or course
@@ -39,10 +35,11 @@ Pack
 ``field`` is the stable field name: lowercase letters and digits joined by
 single hyphens, at most FIELD_MAX_CHARS characters ("medicine",
 "civil-engineering"). Text values are one line without control characters,
-at most TEXT_MAX_CHARS characters, stored stripped::
+at most TEXT_MAX_CHARS characters (the title and the figures' names at most
+TITLE_MAX_CHARS), stored stripped::
 
     {"field": "medicine", "title": "Medicine",
-     "figure_kinds": [{"name": "anatomical section", "kind": "depiction"}],
+     "figures": [{"name": "anatomical section", "kind": "depiction"}],
      "conventions": [{"rule": "...", "source": "..."}],
      "recipes": [{"figure": "anatomical section", "rule": "...",
                   "source": "..."}],
@@ -50,14 +47,15 @@ at most TEXT_MAX_CHARS characters, stored stripped::
                      "rules": [{"rule": "...", "source": "..."}]}],
      "test_page": {"figure": "anatomical section", "content": "..."}}
 
-* ``figure_kinds``: at least one; names distinct ignoring case; ``kind`` is
-  one of FIGURE_KINDS, the four figure kinds of the house style.
+* ``figures``: the field's own figures, at least one; names distinct
+  ignoring case; ``kind`` is one of FIGURE_KINDS, the four figure kinds of
+  the house style.
 * ``conventions`` and ``recipes`` may be empty; every rule has a ``source``.
-  A recipe's ``figure`` names one of the pack's figure kinds.
-* ``checklists``: exactly one accuracy checklist per figure kind, each with
+  A recipe's ``figure`` names one of the pack's figures.
+* ``checklists``: exactly one accuracy checklist per figure, each with
   at least one sourced rule.
 * ``test_page``: the fixed synthetic content of the pack's blind test page,
-  for one of its figure kinds; ``content`` may span lines, at most
+  for one of its figures; ``content`` may span lines, at most
   CONTENT_MAX_CHARS characters.
 * The stored file (indented JSON) is at most MAX_PACK_CHARS characters, so
   every builder can read the pack in full beside the core guide.
@@ -75,7 +73,7 @@ save -- check one field pack and write it once.
 list -- the packs already in the workspace, sorted by field.
     in : {}
     out: {"packs": [{"field": "medicine", "title": "Medicine", "path":
-          "...", "figure_kinds": ["anatomical section", "ECG trace"]}],
+          "...", "figures": ["anatomical section", "ECG trace"]}],
           "line": "1 field pack: medicine."}
     Names starting with ``.`` and ``__MACOSX`` are skipped; any other store entry that is not
     a folder named as a field exits 2.
@@ -118,62 +116,6 @@ report -- the field packs one course uses.
     "none", ``packs`` [] and the line "<course> has no field pack yet.". A
     linked pack that is missing or damaged exits 2.
 
-Base figures
-------------
-A base figure is one recurring subject of a field (a heart, a truss, a
-neuron) drawn once, checked and saved as an SVG with stable part ids, so later
-visuals of that subject start from it (``visual.py`` ``base``). ``subject``
-is named like a field, at most SUBJECT_MAX_CHARS characters ("human-heart").
-A base figure passes every check of ``visual.py svg`` and the part check: every
-id is a stable part id (lowercase letters and digits joined by single hyphens,
-starting with a letter, used once, not ``mimir-``/``sk-``), every drawn shape
-(path, rect, circle, ellipse, line, polyline, polygon; not inside defs,
-markers, clips or text) has one or sits in a group that has one, there is at
-least one part, and there is no ``<use>``, so a reuse cannot change a part by
-changing what it points at. A stored base figure is checked again every time it is
-read; a damaged one exits 2 naming its file. A subject is saved once per
-place: saving it again exits 2.
-
-save-base -- save a base figure the figure checker passed to its field pack.
-    in : {"field": "medicine", "subject": "human-heart", "figure":
-          "anatomical section", "path": "/home/u/learning/2026-Fall/MED101
-          Physiology/.state/out/base-human-heart.svg", "reply": "1 | pass |
-          ...\noverall | pass | ..."}
-    out: {"field": "medicine", "subject": "human-heart", "path": "/home/u/
-          learning/.state/field-packs/medicine/base-figures/human-heart.svg",
-          "parts": ["aorta", "right-atrium", ...], "line": "Base figure saved:
-          human-heart in the field pack medicine, 14 parts."}
-    ``path`` is the candidate as ``visual.py svg`` built it (with today's
-    Skald tokens, which are taken off again, so the stored file is the figure
-    itself). ``reply`` is the figure checker's reply on that file, read as
-    ``figurecheck.py read`` reads it for ``figure``; anything but an overall
-    pass exits 2 and saves nothing, so the next need of the subject tries
-    again.
-
-save-course-base -- save a professor's diagram as one course's own base figure.
-    in : {"term": "2026-Fall", "course": "MED101 Physiology", "subject":
-          "human-heart", "path": "/home/u/learning/2026-Fall/MED101
-          Physiology/slides/heart.svg"}
-    out: {"course_dir": "...", "subject": "human-heart", "path": "/home/u/
-          learning/2026-Fall/MED101 Physiology/.state/base-figures/human-heart.
-          svg", "parts": [...], "line": "Base figure saved: human-heart for
-          MED101 Physiology only, from the professor's diagram, 14 parts."}
-    ``path`` is an ``.svg`` file inside the course folder; anything outside
-    it exits 2. No checklist applies: the professor wins. The diagram is
-    copied only within the course folder, never into the pack store.
-
-find-base -- the base figure a course builds a subject from.
-    in : {"term": "2026-Fall", "course": "MED101 Physiology", "subject":
-          "human-heart"}
-    out: {"course_dir": "...", "subject": "human-heart", "status": "found",
-          "source": "pack", "field": "medicine", "path": "...", "parts":
-          [...], "line": "Base figure human-heart for MED101 Physiology: the
-          field pack medicine, 14 parts."}
-    The course's own base figure comes first (``source`` "course", ``field``
-    null), then the course's field packs in link order. With none, ``status``
-    is "missing", ``source``, ``field`` and ``path`` are null and ``parts``
-    is [].
-
 Exit codes: invalid input, a refused operation, a usage error or a filesystem
 error exits 2 with one line on stderr (``fieldpack.py: <message>``) and
 nothing on stdout. An unexpected internal error exits 1 with ``fieldpack.py:
@@ -187,10 +129,11 @@ import re
 import sys
 from pathlib import Path
 
+from typing import NamedTuple
+
 import ingest
-import visual_render
 import workspace
-from workspace import InputError, check_keys, has_control, parse_segment, parse_term, short
+from workspace import InputError, check_keys, has_control, parse_segment, parse_term, refuse_symlinks, short
 
 PACK_FILE = "pack.json"
 LINK_FILE = "field-packs.json"
@@ -198,11 +141,10 @@ MAX_LINKS = 2
 FIGURE_KINDS = ("depiction", "formal notation", "plot", "own sketch")
 MAX_PACK_CHARS = 16000
 FIELD_MAX_CHARS = 40
+TITLE_MAX_CHARS = 80  # a pack's title and each of its figures' names
 TEXT_MAX_CHARS = 300
 CONTENT_MAX_CHARS = 2000
 MAX_TOPICS = 20
-BASE_DIR = "base-figures"
-SUBJECT_MAX_CHARS = 40
 
 _FIELD = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
@@ -210,9 +152,7 @@ _FIELD = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 def store_dir(root: Path) -> Path:
     """``<root>/.state/field-packs``; refuses a symlinked ``.state`` or store folder."""
     store = root / ".state" / "field-packs"
-    for folder in (root / ".state", store):
-        if folder.is_symlink():
-            raise InputError(f"{folder} is a symlink; refusing to work through it")
+    refuse_symlinks(root / ".state", store)
     return store
 
 
@@ -220,9 +160,7 @@ def pack_path(root: Path, field: str) -> Path:
     """``<store>/<field>/pack.json``; refuses a symlinked pack folder or file."""
     folder = store_dir(root) / field
     path = folder / PACK_FILE
-    for item in (folder, path):
-        if item.is_symlink():
-            raise InputError(f"{item} is a symlink; refusing to work through it")
+    refuse_symlinks(folder, path)
     return path
 
 
@@ -230,16 +168,40 @@ def _dump(pack: dict) -> str:
     return json.dumps(pack, ensure_ascii=False, indent=1) + "\n"
 
 
+def write_creating(target: Path, text: str, folders: tuple[Path, ...]) -> None:
+    """Write ``target`` atomically, first creating the missing ones of ``folders`` (outermost first).
+
+    On a failure the folders it created are removed again, so nothing is left behind.
+    """
+    created = [d for d in folders if not d.exists()]
+    for folder in created:
+        folder.mkdir()
+    try:
+        ingest._write_atomic(target, text)
+    except BaseException:
+        for folder in reversed(created):
+            try:
+                folder.rmdir()
+            except OSError:
+                pass  # the original failure is what gets reported
+        raise
+
+
 # --- checks ---------------------------------------------------------------------------
 
-def parse_field(data: dict, key: str = "field") -> str:
+def parse_name(data: dict, key: str, limit: int, what: str, example: str) -> str:
+    """A stable name such as a field or a subject: lowercase letters and digits joined by single hyphens."""
     value = data.get(key)
     if not isinstance(value, str) or not value:
-        raise InputError(f"{key} is required (a field name such as civil-engineering)")
-    if len(value) > FIELD_MAX_CHARS or not _FIELD.fullmatch(value):
+        raise InputError(f"{key} is required ({what} such as {example})")
+    if len(value) > limit or not _FIELD.fullmatch(value):
         raise InputError(f"{key} must be lowercase letters and digits joined by single hyphens, at most "
-                         f"{FIELD_MAX_CHARS} characters, e.g. civil-engineering: {short(value)}")
+                         f"{limit} characters, e.g. {example}: {short(value)}")
     return value
+
+
+def parse_field(data: dict, key: str = "field") -> str:
+    return parse_name(data, key, FIELD_MAX_CHARS, "a field name", "civil-engineering")
 
 
 def _text(value, where: str, limit: int = TEXT_MAX_CHARS, lines: bool = False) -> str:
@@ -278,27 +240,27 @@ def _sourced(value, where: str, keys: set[str] = frozenset()) -> dict:
 def _figure(entry: dict, where: str, names: dict[str, str]) -> str:
     name = _text(entry.get("figure"), f"{where}.figure")
     if name.casefold() not in names:
-        raise InputError(f"{where}.figure {short(name)} is not one of the pack's figure_kinds")
+        raise InputError(f"{where}.figure {short(name)} is not one of the pack's figures")
     return names[name.casefold()]
 
 
 def check_pack(data: dict) -> dict:
     """The pack as it is stored; refuses anything the store does not know."""
-    check_keys(data, {"field", "title", "figure_kinds", "conventions", "recipes", "checklists", "test_page"})
+    check_keys(data, {"field", "title", "figures", "conventions", "recipes", "checklists", "test_page"})
     field = parse_field(data)
-    title = _text(data.get("title"), "title", FIELD_MAX_CHARS * 2)
-    kinds, names = [], {}
-    for n, value in enumerate(_list(data, "figure_kinds", True), 1):
-        where = f"figure_kinds[{n}]"
+    title = _text(data.get("title"), "title", TITLE_MAX_CHARS)
+    figures, names = [], {}
+    for n, value in enumerate(_list(data, "figures", True), 1):
+        where = f"figures[{n}]"
         entry = _object(value, where, {"name", "kind"})
-        name = _text(entry.get("name"), f"{where}.name", FIELD_MAX_CHARS * 2)
+        name = _text(entry.get("name"), f"{where}.name", TITLE_MAX_CHARS)
         if entry.get("kind") not in FIGURE_KINDS:
             raise InputError(f"{where}.kind must be one of {', '.join(FIGURE_KINDS)}: {short(entry.get('kind'))}")
         if name.casefold() in names:
-            raise InputError(f"{where}.name {short(name)} repeats an earlier figure kind (names are distinct "
+            raise InputError(f"{where}.name {short(name)} repeats an earlier figure (names are distinct "
                              "ignoring case)")
         names[name.casefold()] = name
-        kinds.append({"name": name, "kind": entry["kind"]})
+        figures.append({"name": name, "kind": entry["kind"]})
     conventions = [_sourced(v, f"conventions[{n}]") for n, v in enumerate(_list(data, "conventions", False), 1)]
     recipes = []
     for n, value in enumerate(_list(data, "recipes", False), 1):
@@ -318,13 +280,13 @@ def check_pack(data: dict) -> dict:
             raise InputError(f"{where}.rules is required (a list of at least one rule)")
         checklists.append({"figure": figure,
                            "rules": [_sourced(v, f"{where}.rules[{m}]") for m, v in enumerate(rules, 1)]})
-    for n, kind in enumerate(kinds, 1):
-        if kind["name"] not in checked:
-            raise InputError(f"figure_kinds[{n}] {short(kind['name'])} has no accuracy checklist")
+    for n, figure in enumerate(figures, 1):
+        if figure["name"] not in checked:
+            raise InputError(f"figures[{n}] {short(figure['name'])} has no accuracy checklist")
     page = _object(data.get("test_page"), "test_page", {"figure", "content"})
     test_page = {"figure": _figure(page, "test_page", names),
                  "content": _text(page.get("content"), "test_page.content", CONTENT_MAX_CHARS, lines=True)}
-    pack = {"field": field, "title": title, "figure_kinds": kinds, "conventions": conventions, "recipes": recipes,
+    pack = {"field": field, "title": title, "figures": figures, "conventions": conventions, "recipes": recipes,
             "checklists": checklists, "test_page": test_page}
     size = len(_dump(pack))
     if size > MAX_PACK_CHARS:
@@ -378,18 +340,7 @@ def cmd_save(data: dict) -> dict:
     if path.parent.exists():
         raise InputError(f"field pack {short(field)} already exists at {path}; a pack is written once per field, "
                          "reuse it")
-    created = [d for d in (path.parent.parent, path.parent) if not d.exists()]
-    for folder in created:
-        folder.mkdir()
-    try:
-        ingest._write_atomic(path, _dump(data))
-    except BaseException:
-        for folder in reversed(created):
-            try:
-                folder.rmdir()
-            except OSError:
-                pass  # the original failure is what gets reported
-        raise
+    write_creating(path, _dump(data), (path.parent.parent, path.parent))
     return {"field": field, "title": title, "path": str(path), "line": f"Field pack saved: {title} ({field})."}
 
 
@@ -400,7 +351,7 @@ def cmd_list(data: dict) -> dict:
     for field in stored_fields(root):
         path, p = load_pack(root, field)
         packs.append({"field": p["field"], "title": p["title"], "path": str(path),
-                      "figure_kinds": [k["name"] for k in p["figure_kinds"]]})
+                      "figures": [f["name"] for f in p["figures"]]})
     names = ", ".join(p["field"] for p in packs)
     line = f"{len(packs)} field pack{'' if len(packs) == 1 else 's'}: {names}." if packs else "No field packs yet."
     return {"packs": packs, "line": line}
@@ -408,20 +359,28 @@ def cmd_list(data: dict) -> dict:
 
 # --- link -----------------------------------------------------------------------------
 
-def _course(data: dict) -> tuple[Path, Path, Path, str, str]:
+class Course(NamedTuple):
+    """An existing course folder found from the input's ``term`` and ``course``."""
+    root: Path
+    course_dir: Path
+    record: Path  # its link record
+    term: str
+    name: str
+
+
+def course_from(data: dict) -> Course:
     term, course = parse_term(data), parse_segment(data, "course")
     root = ingest._workspace_root()
     course_dir = workspace.course_folder(root, term, course)
     if not course_dir.is_dir():
         raise InputError(f"no course folder at {course_dir}")
-    return root, course_dir, link_record(course_dir), term, course
+    return Course(root, course_dir, link_record(course_dir), term, course)
 
 
 def link_record(course_dir: Path) -> Path:
     """``<course>/.state/field-packs.json``; refuses a symlinked record."""
     record = course_dir / ".state" / LINK_FILE
-    if record.is_symlink():
-        raise InputError(f"{record} is a symlink; refusing to work through it")
+    refuse_symlinks(record)
     return record
 
 
@@ -452,19 +411,18 @@ def _check_room(course: str, fields: list[str]) -> None:
 def cmd_link(data: dict) -> dict:
     check_keys(data, {"term", "course", "field"})
     field = parse_field(data)
-    root, course_dir, record, term, course = _course(data)
-    load_pack(root, field)
-    fields = linked_fields(record)
+    c = course_from(data)
+    load_pack(c.root, field)
+    fields = linked_fields(c.record)
     added = field not in fields
     if added:
-        _check_room(course, fields)
-    if added:
+        _check_room(c.name, fields)
         fields.append(field)
-        workspace.build_course(root, term, course, [])  # after every check: restores a missing .state/
-        ingest._write_atomic(record, json.dumps({"packs": fields}, ensure_ascii=False) + "\n")
-    line = (f"{course} now uses the field pack {field}." if added
-            else f"{course} already uses the field pack {field}.")
-    return {"course_dir": str(course_dir), "path": str(record), "field": field, "packs": fields, "added": added,
+        workspace.build_course(c.root, c.term, c.name, [])  # after every check: restores a missing .state/
+        ingest._write_atomic(c.record, json.dumps({"packs": fields}, ensure_ascii=False) + "\n")
+    line = (f"{c.name} now uses the field pack {field}." if added
+            else f"{c.name} already uses the field pack {field}.")
+    return {"course_dir": str(c.course_dir), "path": str(c.record), "field": field, "packs": fields, "added": added,
             "line": line}
 
 
@@ -480,172 +438,15 @@ def _topics(data: dict) -> list[str]:
 def cmd_match(data: dict) -> dict:
     check_keys(data, {"term", "course", "field", "topics"})
     field, topics = parse_field(data), _topics(data)
-    root, course_dir, record, _, course = _course(data)
-    if pack_path(root, field).parent.exists():
+    c = course_from(data)
+    if pack_path(c.root, field).parent.exists():
         out = cmd_link({k: data[k] for k in ("term", "course", "field")})
         return {**out, "status": "linked"}
-    fields = linked_fields(record)
-    _check_room(course, fields)
-    return {"course_dir": str(course_dir), "path": str(record), "field": field, "packs": fields,
+    fields = linked_fields(c.record)
+    _check_room(c.name, fields)
+    return {"course_dir": str(c.course_dir), "path": str(c.record), "field": field, "packs": fields,
             "added": False, "status": "research", "brief": {"field": field, "topics": topics},
             "line": f"No field pack {field} yet; researching it in the background."}
-
-
-# --- base figures ---------------------------------------------------------------------
-
-def parse_subject(data: dict, key: str = "subject") -> str:
-    value = data.get(key)
-    if not isinstance(value, str) or not value:
-        raise InputError(f"{key} is required (a recurring subject such as human-heart)")
-    if len(value) > SUBJECT_MAX_CHARS or not _FIELD.fullmatch(value):
-        raise InputError(f"{key} must be lowercase letters and digits joined by single hyphens, at most "
-                         f"{SUBJECT_MAX_CHARS} characters, e.g. human-heart: {short(value)}")
-    return value
-
-
-def _base_file(folder: Path, subject: str) -> Path:
-    """``<folder>/<subject>.svg``; refuses a symlinked folder or file."""
-    path = folder / f"{subject}.svg"
-    for item in (folder, path):
-        if item.is_symlink():
-            raise InputError(f"{item} is a symlink; refusing to work through it")
-    return path
-
-
-def pack_base_path(root: Path, field: str, subject: str) -> Path:
-    """``<store>/<field>/base-figures/<subject>.svg``, beside the pack's ``pack.json``."""
-    return _base_file(pack_path(root, field).parent / BASE_DIR, subject)
-
-
-def _svg_file(data: dict) -> tuple[Path, str]:
-    """The absolute ``path`` of an existing ``.svg`` file, not a symlink, and its text."""
-    value = data.get("path")
-    if not isinstance(value, str) or not value:
-        raise InputError("path is required (the absolute path of an .svg file)")
-    path = Path(value)
-    if not path.is_absolute() or path.suffix.lower() != ".svg":
-        raise InputError(f"path must be the absolute path of an .svg file: {short(value)}")
-    if path.is_symlink():
-        raise InputError(f"path {path} is a symlink; refusing to work through it")
-    text = ingest.read_text(path)
-    if text is None:
-        raise InputError(f"path {path} is not a file")
-    return path, text
-
-
-def _base_parts(svg: str, where: str) -> list[str]:
-    """The part ids of a base figure after every shell check (``visual.base_parts``)."""
-    import visual  # here, not at the top: visual.py imports this module
-    try:
-        return list(visual.base_parts(svg))
-    except InputError as exc:
-        raise InputError(f"{where}: {exc}") from None
-
-
-def _write_base(target: Path, svg: str) -> None:
-    created = not target.parent.exists()
-    if created:
-        target.parent.mkdir()
-    try:
-        ingest._write_atomic(target, svg)
-    except BaseException:
-        if created:
-            try:
-                target.parent.rmdir()
-            except OSError:
-                pass  # the original failure is what gets reported
-        raise
-
-
-def cmd_save_base(data: dict) -> dict:
-    import figurecheck  # here, not at the top: figurecheck.py imports this module
-    check_keys(data, {"field", "subject", "figure", "path", "reply"})
-    field, subject = parse_field(data), parse_subject(data)
-    root = ingest._workspace_root()
-    load_pack(root, field)
-    path, text = _svg_file(data)
-    svg = visual_render.svg_without_tokens(text)
-    if svg is None:
-        raise InputError(f"path {path} is not an SVG built by visual.py svg; build the base figure through the "
-                         "shell first")
-    ids = _base_parts(svg, f"base figure {path}")
-    verdict = figurecheck.cmd_read({k: data.get(k) for k in ("field", "figure", "reply")})
-    if verdict["overall"] != "pass":
-        raise InputError(f"reply: {verdict['line'][:-1]}; the base figure {subject} is not saved")
-    target = pack_base_path(root, field, subject)
-    if target.exists():
-        raise InputError(f"field pack {field} already has a base figure {subject} at {target}; reuse it")
-    _write_base(target, svg)
-    return {"field": field, "subject": subject, "path": str(target), "parts": ids,
-            "line": f"Base figure saved: {subject} in the field pack {field}, {len(ids)} parts."}
-
-
-def course_base_path(course_dir: Path, subject: str) -> Path:
-    """``<course>/.state/base-figures/<subject>.svg``: a professor's diagram, local to that course."""
-    return _base_file(course_dir / ".state" / BASE_DIR, subject)
-
-
-def _stored_base(path: Path) -> tuple[str, list[str]]:
-    """A stored base figure and its part ids, checked again as on save; a damaged one is refused."""
-    svg = ingest.read_text(path)
-    try:
-        if svg is None:
-            raise InputError("it cannot be read")
-        ids = _base_parts(svg, "it")
-    except InputError as exc:
-        raise InputError(f"base figure {path} is damaged ({exc}); fix or remove it") from None
-    return svg, ids
-
-
-def find_base(root: Path, course_dir: Path, subject: str) -> dict | None:
-    """The base figure a course builds ``subject`` from, or None.
-
-    The course's own (a professor's diagram) comes first, then the course's field packs in link order.
-    ``{"source": "course" | "pack", "field": <pack field or None>, "path", "svg", "parts"}``.
-    """
-    places = [("course", None, course_base_path(course_dir, subject))]
-    places += [("pack", p["field"], pack_base_path(root, p["field"], subject)) for p in course_packs(root, course_dir)]
-    for source, field, path in places:
-        if path.exists():
-            svg, ids = _stored_base(path)
-            return {"source": source, "field": field, "path": str(path), "svg": svg, "parts": ids}
-    return None
-
-
-def cmd_find_base(data: dict) -> dict:
-    check_keys(data, {"term", "course", "subject"})
-    subject = parse_subject(data)
-    root, course_dir, _, _, course = _course(data)
-    base = find_base(root, course_dir, subject)
-    if base is None:
-        return {"course_dir": str(course_dir), "subject": subject, "status": "missing", "source": None,
-                "field": None, "path": None, "parts": [],
-                "line": f"No base figure {subject} for {course} yet; it grows on first use."}
-    origin = "the course's own diagram" if base["source"] == "course" else f"the field pack {base['field']}"
-    return {"course_dir": str(course_dir), "subject": subject, "status": "found",
-            **{k: base[k] for k in ("source", "field", "path", "parts")},
-            "line": f"Base figure {subject} for {course}: {origin}, {len(base['parts'])} parts."}
-
-
-def cmd_save_course_base(data: dict) -> dict:
-    check_keys(data, {"term", "course", "subject", "path"})
-    subject = parse_subject(data)
-    _, course_dir, _, term, course = _course(data)
-    path, text = _svg_file(data)
-    if not path.resolve().is_relative_to(course_dir.resolve()):
-        raise InputError(f"path {path} must be inside the course folder {course_dir}: a professor's diagram "
-                         "stays in its course")
-    svg = visual_render.svg_without_tokens(text) or text
-    ids = _base_parts(svg, f"diagram {path}")
-    target = course_base_path(course_dir, subject)
-    if target.exists():
-        raise InputError(f"{course} already has its own base figure {subject} at {target}; remove it first to "
-                         "replace it")
-    workspace.build_course(ingest._workspace_root(), term, course, [])  # restores a missing .state/
-    _write_base(target, svg)
-    return {"course_dir": str(course_dir), "subject": subject, "path": str(target), "parts": ids,
-            "line": f"Base figure saved: {subject} for {course} only, from the professor's diagram, "
-                    f"{len(ids)} parts."}
 
 
 # --- report ---------------------------------------------------------------------------
@@ -664,13 +465,13 @@ def course_packs(root: Path, course_dir: Path) -> list[dict]:
 
 def cmd_report(data: dict) -> dict:
     check_keys(data, {"term", "course"})
-    root, course_dir, _, _, course = _course(data)
-    packs = course_packs(root, course_dir)
+    c = course_from(data)
+    packs = course_packs(c.root, c.course_dir)
     if packs:
-        line = f"{course} uses the field pack{'s' if len(packs) > 1 else ''} {', '.join(p['field'] for p in packs)}."
+        line = f"{c.name} uses the field pack{'s' if len(packs) > 1 else ''} {', '.join(p['field'] for p in packs)}."
     else:
-        line = f"{course} has no field pack yet."
-    return {"course_dir": str(course_dir), "status": "linked" if packs else "none", "packs": packs, "line": line}
+        line = f"{c.name} has no field pack yet."
+    return {"course_dir": str(c.course_dir), "status": "linked" if packs else "none", "packs": packs, "line": line}
 
 
 COMMANDS = {
@@ -679,17 +480,13 @@ COMMANDS = {
     "link": (cmd_link, "record that a course uses a field pack (at most two)"),
     "match": (cmd_match, "link a course to the pack of its field, or name the research it needs"),
     "report": (cmd_report, "the field packs one course uses"),
-    "save-base": (cmd_save_base, "save a base figure the figure checker passed to its field pack"),
-    "save-course-base": (cmd_save_course_base, "save a professor's diagram as one course's own base figure"),
-    "find-base": (cmd_find_base, "the base figure a course builds a subject from: its own first, then its packs'"),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("fieldpack.py",
-                             ("Mimir field pack store. Subcommands: save, list, link, match, report, save-base, "
-                              "save-course-base, find-base. Reads one JSON object on stdin and prints one JSON object "
-                              "on stdout."),
+                             ("Mimir field pack store. Subcommands: save, list, link, match, report. Reads one JSON "
+                              "object on stdin and prints one JSON object on stdout."),
                              COMMANDS, argv)
 
 

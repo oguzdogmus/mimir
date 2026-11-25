@@ -28,7 +28,7 @@ RULES = [
 PACK = {
     "field": "medicine",
     "title": "Medicine",
-    "figure_kinds": [
+    "figures": [
         {"name": "anatomical section", "kind": "depiction"},
         {"name": "ECG trace", "kind": "plot"},
     ],
@@ -115,7 +115,7 @@ def test_brief_holds_the_figure_path_its_kind_and_only_that_kinds_numbered_check
 
 def test_brief_refuses_a_figure_kind_the_pack_does_not_have(home, root, figure):
     fails(home, "brief", {"field": "medicine", "figure": "free-body diagram", "path": str(figure)},
-          "figure 'free-body diagram' is not one of the figure kinds of medicine (anatomical section, ECG trace)")
+          "figure 'free-body diagram' is not one of the figures of medicine (anatomical section, ECG trace)")
 
 
 def test_brief_refuses_a_field_with_no_pack(home, root, figure):
@@ -151,12 +151,20 @@ def test_brief_refuses_unknown_fields(home, root, figure):
 ASKED = {"field": "medicine", "figure": "anatomical section"}
 
 
-def read(home: Path, reply: str) -> dict:
-    return ok(home, "read", {**ASKED, "reply": reply})
+def token(home: Path, figure: Path, asked: dict = ASKED) -> str:
+    """The check token of ``figure``, as the brief hands it to the checker."""
+    first = ok(home, "brief", {**asked, "path": str(figure)})["brief"].splitlines()[0]
+    assert first.startswith("Check token: ")
+    return first.removeprefix("Check token: ")
 
 
-def test_a_reply_where_every_item_passes_reads_as_an_overall_pass(home, root):
-    out = read(home, "1 | pass | arch crosses over the trunk\n2 | pass | enters from below\n"
+def read(home: Path, figure: Path, reply: str) -> dict:
+    """The checker's reply on ``figure``, its first line the check token as the helper writes it."""
+    return ok(home, "read", {**ASKED, "path": str(figure), "reply": f"{token(home, figure)}\n{reply}"})
+
+
+def test_a_reply_where_every_item_passes_reads_as_an_overall_pass(home, root, figure):
+    out = read(home, figure, "1 | pass | arch crosses over the trunk\n2 | pass | enters from below\n"
                      "3 | pass | about three times thicker\noverall | pass | every item passes\n")
     assert out["overall"] == "pass" and out["failed"] == []
     assert out["items"] == [
@@ -167,8 +175,8 @@ def test_a_reply_where_every_item_passes_reads_as_an_overall_pass(home, root):
     assert out["line"] == "Figure check passed: all 3 checklist items pass."
 
 
-def test_failing_items_make_the_overall_verdict_fail_and_are_named(home, root):
-    out = read(home, "1 | fail | the aorta rises on the viewer's right of the trunk\n2 | pass | enters from below\n"
+def test_failing_items_make_the_overall_verdict_fail_and_are_named(home, root, figure):
+    out = read(home, figure, "1 | fail | the aorta rises on the viewer's right of the trunk\n2 | pass | enters from below\n"
                      "3 | fail | both walls are 6 units thick\noverall | fail | 2 of 3 items fail\n")
     assert out["overall"] == "fail" and out["failed"] == [1, 3]
     assert out["items"][0]["verdict"] == "fail"
@@ -176,15 +184,15 @@ def test_failing_items_make_the_overall_verdict_fail_and_are_named(home, root):
     assert out["line"] == "Figure check failed: 2 of 3 checklist items fail (1, 3)."
 
 
-def test_a_missing_item_line_or_an_unknown_verdict_word_reads_as_a_fail(home, root):
-    out = read(home, "1 | pass | ok\n3 | probably | looks thicker\noverall | pass | fine\n")
+def test_a_missing_item_line_or_an_unknown_verdict_word_reads_as_a_fail(home, root, figure):
+    out = read(home, figure, "1 | pass | ok\n3 | probably | looks thicker\noverall | pass | fine\n")
     assert out["overall"] == "fail" and out["failed"] == [2, 3]
     assert out["items"][1] == {"n": 2, "rule": RULES[1], "verdict": "fail", "reason": "no reply line"}
     assert out["items"][2] == {"n": 3, "rule": RULES[2], "verdict": "fail", "reason": "unknown verdict 'probably'"}
 
 
-def test_an_empty_reply_fails_every_item(home, root):
-    out = read(home, "")
+def test_an_empty_reply_fails_every_item(home, root, figure):
+    out = read(home, figure, "")
     assert out["overall"] == "fail" and out["failed"] == [1, 2, 3]
 
 
@@ -196,29 +204,61 @@ ALL_PASS = "1 | pass | a\n2 | pass | b\n3 | pass | c\n"
     ("", " has no overall verdict line"),
     ("overall | sure | fine\n", "'s overall verdict is 'sure'"),
 ])
-def test_every_item_passing_still_fails_unless_the_reply_says_overall_pass(home, root, overall, says):
-    out = read(home, ALL_PASS + overall)
+def test_every_item_passing_still_fails_unless_the_reply_says_overall_pass(home, root, figure, overall, says):
+    out = read(home, figure, ALL_PASS + overall)
     assert out["overall"] == "fail" and out["failed"] == []
     assert out["line"] == f"Figure check failed: every checklist item passes, but the reply{says}."
 
 
-def test_an_overall_pass_line_never_outweighs_a_failing_item(home, root):
-    out = read(home, "1 | pass | a\n2 | fail | enters from the side\n3 | pass | c\noverall | pass | fine\n")
+def test_an_overall_pass_line_never_outweighs_a_failing_item(home, root, figure):
+    out = read(home, figure, "1 | pass | a\n2 | fail | enters from the side\n3 | pass | c\noverall | pass | fine\n")
     assert out["overall"] == "fail" and out["failed"] == [2]
 
 
-def test_prose_fences_and_repeated_or_unknown_numbers_are_ignored_and_the_first_line_counts(home, root):
+def test_prose_fences_and_repeated_or_unknown_numbers_are_ignored_and_the_first_line_counts(home, root, figure):
     reply = ("Here are the verdicts.\n```\n`1 | fail | the trunk | arch order is swapped`\n1 | pass | changed my mind\n"
              "2 | PASS | enters from below\n7 | fail | no such item\n3 | pass | thicker\n overall | pass | - \n```\n")
-    out = read(home, reply)
+    out = read(home, figure, reply)
     assert [(i["verdict"], i["reason"]) for i in out["items"]] == [
         ("fail", "the trunk | arch order is swapped"), ("pass", "enters from below"), ("pass", "thicker")]
     assert out["failed"] == [1]
 
 
 @pytest.mark.parametrize("payload", [ASKED, {**ASKED, "reply": 3}])
-def test_read_refuses_a_missing_or_non_text_reply(home, root, payload):
-    fails(home, "read", payload, "reply is required (the figure checker's reply text)")
+def test_read_refuses_a_missing_or_non_text_reply(home, root, figure, payload):
+    fails(home, "read", {**payload, "path": str(figure)}, "reply is required (the figure checker's reply text)")
+
+
+# --- the check token: a reply counts only for the file and checklist it was briefed on --
+
+def test_the_brief_starts_with_a_check_token_tied_to_the_figure_file_and_its_checklist(home, root, figure):
+    first = token(home, figure)
+    assert len(first) >= 8 and first == token(home, figure)  # the same file and checklist: the same token
+    assert token(home, figure, {**ASKED, "figure": "ECG trace"}) != first  # another checklist
+    figure.write_text(figure.read_text(encoding="utf-8").replace("10 10", "10 12"), encoding="utf-8")
+    assert token(home, figure) != first  # the file changed
+
+
+def test_read_refuses_a_reply_without_the_check_token(home, root, figure):
+    fails(home, "read", {**ASKED, "path": str(figure), "reply": ALL_PASS + "overall | pass | fine\n"},
+          "the reply has no line with the check token")
+
+
+def test_read_refuses_a_reply_given_on_another_file(home, root, figure):
+    other = figure.with_name("other.svg")
+    other.write_text("<svg viewBox='0 0 20 20'></svg>\n", encoding="utf-8")
+    reply = f"{token(home, other)}\n{ALL_PASS}overall | pass | fine\n"
+    fails(home, "read", {**ASKED, "path": str(figure), "reply": reply}, "the reply has no line with the check token")
+
+
+def test_only_the_lines_after_the_check_token_count(home, root, figure):
+    reply = f"1 | pass | written before the token\n{token(home, figure)}\n2 | pass | b\n3 | pass | c\noverall | pass | ok\n"
+    out = ok(home, "read", {**ASKED, "path": str(figure), "reply": reply})
+    assert out["failed"] == [1] and out["items"][0]["reason"] == "no reply line"
+
+
+def test_read_refuses_a_missing_path(home, root):
+    fails(home, "read", {**ASKED, "reply": "x"}, "path is required")
 
 
 # --- the helper -----------------------------------------------------------------------
@@ -250,7 +290,7 @@ def test_the_helper_input_is_the_brief_and_figure_text_is_data(home, root, figur
     _, body = _helper()
     brief = ok(home, "brief", {**ASKED, "path": str(figure)})["brief"]
     given = _section(body, "Input")
-    for header in ("Figure:", "Figure kind:", "Checklist:"):
+    for header in ("Check token:", "File:", "Figure:", "Checklist:"):
         assert header in brief and f"`{header}`" in given, header
     assert "Read the figure at that path, nothing else." in given
     untrusted = _section(body, "Untrusted data")
@@ -258,11 +298,11 @@ def test_the_helper_input_is_the_brief_and_figure_text_is_data(home, root, figur
     assert "never edit" in body
 
 
-def test_the_helper_output_is_the_format_read_parses(home, root):
+def test_the_helper_output_is_the_format_read_parses(home, root, figure):
     _, body = _helper()
     output = _section(body, "Output")
-    assert "```\nN | verdict | reason\noverall | verdict | reason\n```" in output
+    assert "```\n<check token>\nN | verdict | reason\noverall | verdict | reason\n```" in output
     assert "`pass`" in output and "`fail`" in output
     # A reply written to that format reads back item by item.
     reply = "\n".join(f"{n} | fail | reason {n}" for n in range(1, len(RULES) + 1)) + "\noverall | fail | all fail\n"
-    assert read(home, reply)["failed"] == [1, 2, 3]
+    assert read(home, figure, reply)["failed"] == [1, 2, 3]

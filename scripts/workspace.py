@@ -160,6 +160,13 @@ def short(value) -> str:
     return repr(text)
 
 
+def refuse_symlinks(*paths: Path, field: str = "") -> None:
+    """Refuse the first of ``paths`` that is a symlink; ``field`` names the input it came from, if any."""
+    for path in paths:
+        if path.is_symlink():
+            raise InputError(f"{field + ' ' if field else ''}{path} is a symlink; refusing to work through it")
+
+
 def check_keys(data: dict, allowed: set[str]) -> None:
     extra = sorted(set(data) - allowed)
     if extra:

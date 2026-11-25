@@ -185,7 +185,7 @@ def csp(page: str) -> str:
 # --- constants and the shared page parts ---------------------------------------------------------------------------
 
 def test_constants_are_the_spec_values():
-    assert visual_render.ORIGINAL_EMBED_MAX_BYTES == 10 * 1024 * 1024 and visual.SVG_MAX_BYTES == 1024 * 1024
+    assert visual_render.ORIGINAL_EMBED_MAX_BYTES == 10 * 1024 * 1024 and visual_check.SVG_MAX_BYTES == 1024 * 1024
     assert visual.TITLE_MAX_CHARS == 120 and visual_machine.EXAMPLE_MAX_CHARS == 4000
     assert visual.NAME_MAX_CHARS == 60 and visual_open.OPEN_WAIT_SECONDS == 5
     version = (KATEX / "VERSION").read_text().splitlines()
@@ -637,7 +637,7 @@ def test_old_template_kinds_are_unknown(home, cdir, kind):
 
 def test_stdlib_plus_own_scripts_only():
     parts = sorted(SCRIPTS.glob("visual_*.py"))
-    ours = {"workspace", "ingest", "verify", "fieldpack"} | {p.stem for p in parts}
+    ours = {"workspace", "ingest", "verify", "fieldpack", "figurecheck", "basefigure"} | {p.stem for p in parts}
     for path in [VIS, *parts]:
         tops = set()
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):

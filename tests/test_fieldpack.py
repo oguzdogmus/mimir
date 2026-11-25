@@ -16,12 +16,15 @@ SCRIPTS = ROOT_DIR / "scripts"
 FP = SCRIPTS / "fieldpack.py"
 WS = SCRIPTS / "workspace.py"
 
+sys.path.insert(0, str(SCRIPTS))
+import fieldpack  # noqa: E402 -- read for its limits only; behaviour is driven through the CLI
+
 TERM, COURSE = "2026-Fall", "MED101 Physiology"
 
 PACK = {
     "field": "medicine",
     "title": "Medicine",
-    "figure_kinds": [
+    "figures": [
         {"name": "anatomical section", "kind": "depiction"},
         {"name": "ECG trace", "kind": "plot"},
     ],
@@ -129,7 +132,7 @@ def test_a_valid_pack_is_saved_in_the_workspace_store_and_listed(home, root):
 
     listed = ok(home, "list", {})
     assert listed["packs"] == [{"field": "medicine", "title": "Medicine", "path": str(path),
-                                "figure_kinds": ["anatomical section", "ECG trace"]}]
+                                "figures": ["anatomical section", "ECG trace"]}]
 
 
 def _without_source(section: str):
@@ -142,11 +145,11 @@ def _without_source(section: str):
 
 
 def _unmapped_kind(p):
-    p["figure_kinds"][1]["kind"] = "chart"
+    p["figures"][1]["kind"] = "chart"
 
 
 def _no_checklist(p):
-    p["figure_kinds"].append({"name": "histology slide", "kind": "depiction"})
+    p["figures"].append({"name": "histology slide", "kind": "depiction"})
 
 
 def _over_cap(p):
@@ -154,12 +157,12 @@ def _over_cap(p):
 
 
 @pytest.mark.parametrize("change, needle", [
-    (_unmapped_kind, "figure_kinds[2].kind must be one of depiction, formal notation, plot, own sketch"),
+    (_unmapped_kind, "figures[2].kind must be one of depiction, formal notation, plot, own sketch"),
     (_without_source("conventions"), "conventions[1].source is required"),
     (_without_source("recipes"), "recipes[1].source is required"),
     (_without_source("checklists"), "checklists[1].rules[2].source is required"),
-    (_no_checklist, "figure_kinds[3] 'histology slide' has no accuracy checklist"),
-    (_over_cap, "over the 16000-character cap"),
+    (_no_checklist, "figures[3] 'histology slide' has no accuracy checklist"),
+    (_over_cap, f"over the {fieldpack.MAX_PACK_CHARS}-character cap"),
 ])
 def test_a_bad_pack_is_refused_with_a_field_named_error_and_nothing_is_written(home, root, change, needle):
     bad = pack()
@@ -194,12 +197,32 @@ def test_every_command_needs_a_workspace(home):
     fails(home, "list", {}, "no workspace at")
 
 
+@pytest.mark.parametrize("payload, where", [
+    (pack(title="T" * (fieldpack.TITLE_MAX_CHARS + 1)), "title"),
+    (pack(figures=[{"name": "n" * (fieldpack.TITLE_MAX_CHARS + 1), "kind": "plot"}]), "figures[1].name"),
+])
+def test_a_title_or_figure_name_over_the_limit_is_refused(home, root, payload, where):
+    fails(home, "save", payload, f"{where} has {fieldpack.TITLE_MAX_CHARS + 1} characters, over the "
+                                 f"{fieldpack.TITLE_MAX_CHARS}-character limit")
+
+
+def test_the_researcher_is_told_the_stores_own_limits():
+    """The field researcher's limits follow from the store's constants, so the two never drift apart."""
+    text = (ROOT_DIR / "helpers" / "field-researcher.md").read_text(encoding="utf-8")
+    assert f"one line of at most {fieldpack.TEXT_MAX_CHARS} characters" in text
+    assert f"the title and each figure name at most {fieldpack.TITLE_MAX_CHARS} characters" in text
+    assert f"`test_page.content` at most {fieldpack.CONTENT_MAX_CHARS} characters" in text
+    assert f"the stored pack at most {fieldpack.MAX_PACK_CHARS} characters" in text
+
+
 @pytest.mark.parametrize("payload, needle", [
     (pack(field="Civil Engineering"), "field must be lowercase letters and digits joined by single hyphens"),
     (pack(colour="red"), "unknown field 'colour'"),
     (pack(test_page={"figure": "brain scan", "content": "x"}), "test_page.figure 'brain scan' is not one of"),
     (pack(test_page={"figure": "ECG trace"}), "test_page.content is required"),
-    (pack(figure_kinds=[]), "figure_kinds is required"),
+    (pack(figures=[]), "figures is required"),
+    ({**{k: v for k, v in PACK.items() if k != "figures"}, "figure_kinds": PACK["figures"]},
+     "unknown field 'figure_kinds'"),  # the old name, kept by no alias
 ])
 def test_save_refuses_a_malformed_pack(home, root, payload, needle):
     before = snapshot(root)
@@ -208,7 +231,7 @@ def test_save_refuses_a_malformed_pack(home, root, payload, needle):
 
 
 ENGINEERING = pack(field="civil-engineering", title="Civil engineering",
-                   figure_kinds=[{"name": "free-body diagram", "kind": "formal notation"}], recipes=[],
+                   figures=[{"name": "free-body diagram", "kind": "formal notation"}], recipes=[],
                    checklists=[{"figure": "free-body diagram", "rules": [
                        {"rule": "Every support is replaced by its reaction forces.",
                         "source": "Hibbeler, Engineering Mechanics: Statics, 14th ed., ch. 5"}]}],
@@ -221,7 +244,7 @@ def test_list_reports_every_pack_sorted_by_field(home, root):
     ok(home, "save", ENGINEERING)
     out = ok(home, "list", {})
     assert [p["field"] for p in out["packs"]] == ["civil-engineering", "medicine"]
-    assert out["packs"][0]["figure_kinds"] == ["free-body diagram"]
+    assert out["packs"][0]["figures"] == ["free-body diagram"]
     assert out["line"] == "2 field packs: civil-engineering, medicine."
 
 

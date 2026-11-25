@@ -1,7 +1,7 @@
 {
  "field": "microbiology",
  "title": "Microbiology",
- "figure_kinds": [
+ "figures": [
   {"name": "cell envelope section", "kind": "depiction"}
  ],
  "conventions": [

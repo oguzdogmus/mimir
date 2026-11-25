@@ -86,6 +86,8 @@ class _BodyTree(HTMLParser):
         html_node = _Node("html", {}, None)
         body = _Node("body", {}, html_node)
         self.root = _Node("main", {}, body)
+        html_node.kids.append(body)
+        body.kids.append(self.root)
         self.cur = self.root
 
     def _in_svg(self) -> bool:
@@ -811,6 +813,15 @@ def check_labels(svgs: list[_Node], styles: list[str], field: str, root_font: fl
 
 def _style_texts(root: _Node) -> list[str]:
     return [_text_of(node) for node in _walk(root) if node.tag == "style"]
+
+
+def checked_svg(svg) -> ET.Element:
+    """The root of ``svg`` (the string a builder wrote) after every check of ``visual.py svg``: the field, the
+    allowlist (``visual_check``) and the labels."""
+    root = visual_check.check_svg(visual_check.markup_field(svg, "svg", "the SVG document as a string",
+                                                            visual_check.SVG_MAX_BYTES))
+    check_svg_labels(root)
+    return root
 
 
 def check_svg_labels(root: ET.Element) -> None:

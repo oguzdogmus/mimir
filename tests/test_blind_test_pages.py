@@ -16,7 +16,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 
 MEDICINE = {
     "field": "medicine", "title": "Medicine",
-    "figure_kinds": [{"name": "anatomical section", "kind": "depiction"}],
+    "figures": [{"name": "anatomical section", "kind": "depiction"}],
     "conventions": [], "recipes": [],
     "checklists": [{"figure": "anatomical section", "rules": [
         {"rule": "The aorta arches over the pulmonary trunk.", "source": "Gray's Anatomy, 42nd ed., ch. 57"},
@@ -27,7 +27,7 @@ MEDICINE = {
 }
 TRANSLATION = {
     "field": "translation-studies", "title": "Translation studies",
-    "figure_kinds": [{"name": "aligned table", "kind": "formal notation"}],
+    "figures": [{"name": "aligned table", "kind": "formal notation"}],
     "conventions": [], "recipes": [],
     "checklists": [{"figure": "aligned table", "rules": [
         {"rule": "The source text column is left of the target text column.", "source": "Munday, 4th ed."},
@@ -66,12 +66,13 @@ def page_builder(job: dict) -> dict:
 
 
 def failing_checker(fails: dict) -> callable:
-    """A stand-in checker failing the given item numbers per figure kind."""
+    """A stand-in checker failing the given item numbers per figure."""
     def check(brief: str, job: dict) -> dict:
-        figure = brief.split("Figure kind: ", 1)[1].split(" (", 1)[0]
-        count = brief.count("\n") - 3
+        figure = brief.split("Figure: ", 1)[1].split(" (", 1)[0]
+        count = brief.count("\n") - 4  # the token, file, figure and checklist lines
         bad = fails.get(figure, ())
-        lines = [f"{n} | {'fail' if n in bad else 'pass'} | stand-in" for n in range(1, count + 1)]
+        lines = [brief.splitlines()[0].removeprefix("Check token: ")]
+        lines += [f"{n} | {'fail' if n in bad else 'pass'} | stand-in" for n in range(1, count + 1)]
         lines.append(f"overall | {'fail' if bad else 'pass'} | stand-in")
         return {"reply": "\n".join(lines), "seconds": 30.0, "cost_usd": 0.1, "models": ["opus"]}
     return check
@@ -130,7 +131,7 @@ def test_the_builder_is_the_plugin_agent_given_the_helpers_inputs_and_the_test_c
     assert cmd[cmd.index("--model") + 1] == "opus"
     prompt = cmd[-1]
     for line in ("script: /p/mimir/scripts/visual.py", "term: 2026-Fall", "course: Test page medicine",
-                 "name: test-page", "kind: page", "Figure kind: anatomical section (depiction)",
+                 "name: test-page", "kind: page", "Figure: anatomical section (depiction)",
                  "How the heart pumps blood:\na frontal section."):
         assert line in prompt
     assert "--model" not in btp.builder_cmd(Path("/p/mimir"), JOB)  # the agent's own model
