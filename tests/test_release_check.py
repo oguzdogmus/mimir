@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ast
+import html
 import json
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -48,10 +50,26 @@ def test_build_only(tmp_path):
     assert root.tag == f"{SVG_NS}svg"
     assert root.find(f"{SVG_NS}title").text == "Mimir release check"
     assert out["platform"] in root.find(f"{SVG_NS}desc").text
-    text = page.read_text(encoding="utf-8")
-    assert "Mimir release check" in text and "<script" not in text
-    assert "http://" not in text and "https://" not in text  # self-contained
     assert out["line"] == f"Built `{page}` and `{image}` (not opened)."
+
+
+def test_files_come_from_the_page_and_svg_shells(tmp_path):
+    """#94: the release check builds a real ``page`` (math and two steps, so the browser runs the
+    shell's scripts under its CSP) and a real ``svg``, each with the Skald tokens."""
+    out = json.loads(_run(["--no-open"], tmp_path).stdout)
+    text = Path(out["html"]).read_text(encoding="utf-8")
+    assert "<title>Mimir release check</title>" in text and "<h1>Mimir release check</h1>" in text
+    assert visual.skald_tokens() in text and '<svg class="sk-defs"' in text
+    bodies = re.findall(r"<script>(.*?)</script>", text, re.S)
+    assert any("renderMathInElement(" in b for b in bodies)
+    assert (ROOT_DIR / "assets" / "page" / "steps.js").read_text(encoding="utf-8") in bodies
+    policy = html.unescape(re.search(r'http-equiv="Content-Security-Policy" content="([^"]*)"', text).group(1))
+    assert all(visual._csp_hash(b) in policy for b in bodies) and "default-src 'none'" in policy
+    assert 'data-step="2"' in text and "\\(" in text
+    assert not re.search(r"""(?:src|href)\s*=\s*["']?\s*(?:https?:)?//""", text, re.I)  # self-contained
+    image = Path(out["svg"]).read_text(encoding="utf-8")
+    assert visual.skald_tokens() in image
+    visual.check_svg(image.split("<style><![CDATA[", 1)[0].encode("utf-8") + b"</svg>\n")  # what was checked
 
 
 def test_opened(monkeypatch, capsys):

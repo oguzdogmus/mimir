@@ -1,8 +1,8 @@
 # Release check
 
-Mimir opens the pages it builds (math sheets, step pages and step-through pages) through `open_in_browser` in `scripts/visual.py`. The tests cover it with fake openers only, so before a release run the same live check by hand on each OS: Linux, macOS, Windows and WSL.
+Mimir opens the pages and SVG files it builds through `open_in_browser` in `scripts/visual.py`. The tests cover it with fake openers only, so before a release run the same live check by hand on each OS: Linux, macOS, Windows and WSL.
 
-`scripts/release_check.py` is a dev-only script (standard library, Python 3.11+); no skill uses it. It writes `mimir-release-check.html` and `mimir-release-check.svg` into a new temp folder whose name contains a space, opens each one through the shipped `visual.open_in_browser`, and prints one JSON object: `platform`, `html`, `svg`, `opened_html`, `opened_svg`, `line`. It exits 0 when both files opened, else 1. `--no-open` only builds the files.
+`scripts/release_check.py` is a dev-only script (standard library, Python 3.11+); no skill uses it. It builds `mimir-release-check.html` through the shell of `visual.py page` (the Skald tokens, a KaTeX formula and two steps, so the page's own scripts run under its Content-Security-Policy) and `mimir-release-check.svg` through the checks of `visual.py svg` (with the Skald tokens), into a new temp folder whose name contains a space, opens each one through the shipped `visual.open_in_browser`, and prints one JSON object: `platform`, `html`, `svg`, `opened_html`, `opened_svg`, `line`. It exits 0 when both files opened, else 1. `--no-open` only builds the files.
 
 An Antigravity install (`agy plugin install`) is a snapshot of the repository: after every change, reinstall it (`agy plugin uninstall mimir`, then install again) before any live check on Antigravity.
 
@@ -20,7 +20,7 @@ From a clone of this repository, in a graphical session:
 ## Confirm by eye
 
 1. The command exits 0 and `opened_html` and `opened_svg` are both `true`.
-2. The HTML page shows in a graphical browser (never a console browser such as `w3m` or `lynx`), with the heading "Mimir release check".
+2. The HTML page shows in a graphical browser (never a console browser such as `w3m` or `lynx`), in the Skald house style, with the heading "Mimir release check". Its formula shows as a fraction, not as `\(` code, and the step button (Start, then Next) shows step one, then step two.
 3. The SVG shows as a picture with "Mimir release check" in it. Mimir uses each OS's own default opener on purpose (the most portable choice), so the SVG opens in the system's default app for SVG: a browser or an image viewer both pass. Note which one.
 4. Both show the right platform text: `linux`, `macos`, `windows` or `wsl`.
 5. The folder path with a space in it did not break the open.

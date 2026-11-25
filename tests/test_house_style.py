@@ -121,3 +121,14 @@ def test_builder_builds_with_page_and_svg_only():
         assert not re.search(rf"`{old}`|[<|]{old}[|>]", front["description"] + body), old
     assert re.search(r"<page\|svg>", body)
     assert "figure kind" in body.lower()
+
+
+def test_builder_offers_the_machine_of_a_page():
+    """#94 (follow-up from #93): the page kind takes a machine (#90); the helper passes it on and the
+    guide says how the diagram names its states."""
+    body = _helper()[1]
+    assert '`"machine"`' in body and '`"example"`' in body and 'id="state-<i>"' in body
+    for field in ("kind", "states", "start", "accept", "transitions", "stack_start", "pop", "push"):
+        assert f'"{field}"' in body, field
+    guide = GUIDE.read_text(encoding="utf-8")
+    assert "## A machine page" in guide and 'id="state-<i>"' in guide

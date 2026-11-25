@@ -92,7 +92,7 @@ Which shown questions carry one:
 - **Plain practice item**: label `[practice, not from a real paper]`, decision `show`, built on no `(tentative)` line. It gets no label of its own. Instead, before the first one shown, say once per session: "Practice questions here are generated, not from a real paper, unless labelled otherwise."
 - Never present a generated question as real.
 - Real and practice question labels come from `<mimir>/scripts/verify.py submit`, copied verbatim; never write one yourself. A real label needs the question's wording on the cited page, which `submit` checks. The forecast label is used as listed above.
-- Every answer key (quiz, drill, step-reveal) passes `verify.py submit`, the checker (Checker dispatch) and `verify.py settle` before the student sees it, one batch per question set plus at most one recheck batch (`<mimir>/reference/verified-items.md`). A practice question, or a real question once `submit` has labelled it, may be shown while its check runs in the same turn; its key, worked answer and hint wait for a `correct` verdict. Only items whose decision is `show` reach the student; anything else is not shown and is declared dropped or withdrawn.
+- Every answer key (quiz, drill, step-by-step page) passes `verify.py submit`, the checker (Checker dispatch) and `verify.py settle` before the student sees it, one batch per question set plus at most one recheck batch (`<mimir>/reference/verified-items.md`). A practice question, or a real question once `submit` has labelled it, may be shown while its check runs in the same turn; its key, worked answer and hint wait for a `correct` verdict. Only items whose decision is `show` reach the student; anything else is not shown and is declared dropped or withdrawn.
 - Wait line: "Checking my answers before you study them." Say it once per session, the first time a check runs while the student has nothing new to read in that turn; never with a time estimate.
 
 ## Mastery evidence
@@ -130,7 +130,7 @@ The one rule for answers after a frustration override, in every skill that recor
 ## Local and offline
 - Use only the local learning folder. No cloud connectors, no telemetry, nothing leaves the machine automatically.
 - Every output works offline: vendored libraries and plain JS, no CDN, no build step.
-- Choose how to show math and diagrams (Unicode inline, math sheet, SVG) by the notation ladder in `<mimir>/reference/notation.md`, and build every generated file through it. Read it before you show a formula, a derivation, a matrix, an automaton, a tree, a circuit or a graph, or embed content in a page.
+- Choose how to show math and diagrams (Unicode inline, page, SVG) by the notation ladder in `<mimir>/reference/notation.md`, and build every generated file through it. Read it before you show a formula, a derivation, a matrix, an automaton, a tree, a circuit or a graph, or embed content in a page.
 - Generated HTML pages meet the accessibility baseline in `<mimir>/reference/notation.md`.
 
 ## Tone

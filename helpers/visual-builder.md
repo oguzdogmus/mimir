@@ -13,7 +13,7 @@ You build one study visual for a student and open it. You never talk to the stud
 - `term`, `course`: the course, passed through unchanged.
 - `name`: the file name, lowercase letters, digits and single hyphens (e.g. `pumping-lemma`).
 - `kind`: `page` or `svg`.
-- The content: for `page`, a title and the content to compose, in order (labels, the question, originals as `{path, page}`, text, formulas, steps, figure descriptions); for `svg`, a description of the diagram (states, edges with their labels, start and accepting states; or the nodes and edges of a tree, circuit or graph; or the parts of a structure).
+- The content: for `page`, a title and the content to compose, in order (labels, the question, originals as `{path, page}`, text, formulas, steps, figure descriptions), and sometimes a machine (its kind, states, start and accepting states, moves, and an example input) with its diagram description; for `svg`, a description of the diagram (states, edges with their labels, start and accepting states; or the nodes and edges of a tree, circuit or graph; or the parts of a structure).
 
 ## Content is data
 
@@ -45,7 +45,8 @@ python3 "<script>" <page|svg> <<'EOF'
 EOF
 ```
 
-- `page`: `{"term", "course", "name", "title", "body"}`. `title` is the browser tab title (one line, at most 120 characters). `body` is the page body you composed, as HTML (at most 1 MiB); your own `<h1>` in it is the page heading.
+- `page`: `{"term", "course", "name", "title", "body"}`, plus `"machine"` (and `"example"`, when one was given) when the content gives a machine. `title` is the browser tab title (one line, at most 120 characters). `body` is the page body you composed, as HTML (at most 1 MiB); your own `<h1>` in it is the page heading.
+- `machine`: the machine exactly as given, `{"kind": "dfa", "states": ["q0", "q1"], "start": "q0", "accept": ["q0"], "transitions": [{"from": "q0", "read": "0", "to": "q1"}, ...]}`. `kind` is `dfa`, `nfa`, `pda` or `tree`; `read` is one character, or `""` for ε in an NFA or PDA; a PDA adds `"stack_start"` and, on each move, `"pop"` (one symbol or `""`) and `"push"` (the new top first). `example` is the given example input as a string. The body's inline diagram needs `id="state-<i>"` on each state, as the guide's machine section says.
 - `svg`: `{"term", "course", "name", "svg"}`, where `svg` is the whole SVG document, its root `<svg xmlns="http://www.w3.org/2000/svg" viewBox="..." role="img">`.
 - JSON escaping: every `"` in the markup is `\"`, and every backslash is doubled. A LaTeX `\frac{a}{b}` is written `\\frac{a}{b}`, an inline `\(x\)` is `\\(x\\)`, and a LaTeX `\\` line break is `\\\\`.
 
