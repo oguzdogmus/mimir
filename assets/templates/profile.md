@@ -4,6 +4,7 @@
 level: <e.g. 2nd-year undergraduate>
 course_language: <language the courses and exams are in>
 teaching_language: <language the student prefers explanations in>
+motion: <none, gentle or full: how much visuals animate>
 setup_done: <YYYY-MM-DD when full setup finished>
 
 ## Exam dates

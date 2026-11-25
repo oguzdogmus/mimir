@@ -1241,6 +1241,65 @@ def test_page_built_with_tokens_and_csp(home, cdir):
     assert_no_katex(built)
 
 
+def set_motion(root: Path, line: str | None) -> None:
+    """Replace the profile's motion line (None removes it)."""
+    profile = root / ".state" / "profile.md"
+    lines = [x for x in profile.read_text(encoding="utf-8").splitlines() if not x.startswith("motion:")]
+    if line is not None:
+        lines.insert(lines.index("# Profile") + 2, line)
+    profile.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize("line, motion", [
+    ("motion: none", "none"), ("motion: gentle", "gentle"), ("motion: full", "full"),
+    ("motion:  full  ", "full"),  # stray spaces
+    (None, "none"), ("motion:", "none"),  # missing: the template's empty line, or no line at all
+    ("motion: Full", "none"), ("motion: lots", "none"), ("motion: gentle, full", "none"),  # malformed
+    ("motion: \"><script>alert(1)</script>", "none"),
+])
+def test_page_root_carries_the_profile_motion_level(home, root, cdir, line, motion):
+    set_motion(root, line)
+    _, built = build_page(home, free_page())
+    assert f'<html lang="en" data-motion="{motion}">' in built
+    assert_safe_page(built, 0)
+
+
+def test_motion_level_applies_to_pages_built_afterwards_only(home, root, cdir):
+    set_motion(root, "motion: full")
+    first = build_page(home, free_page(name="first"))[1]
+    set_motion(root, "motion: none")
+    second = build_page(home, free_page(name="second"))[1]
+    assert 'data-motion="full"' in first and 'data-motion="none"' in second
+    assert 'data-motion="full"' in (cdir / ".state" / "out" / "first.html").read_text(encoding="utf-8")
+
+
+def test_only_gentle_and_full_animate_reveals_and_the_highlight(home, root, cdir):
+    """The page's Skald rules: every animation is keyed to gentle or full, both animate the newest
+    revealed step and the teaching highlight, and none stops all movement."""
+    built = build_page(home, free_page())[1]
+    css = built[built.index("<style>"):built.index("</style>", built.index("--board:"))]
+    assert (':root[data-motion="none"] *, :root[data-motion="none"] *::before, '
+            ':root[data-motion="none"] *::after {\n  animation: none !important; transition: none !important; '
+            'scroll-behavior: auto !important;\n}') in css
+    moving = {"gentle": set(), "full": set()}
+    for selectors, decls in re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", css, flags=re.S)):
+        anim = re.search(r"animation:\s*([^;]+)", decls)
+        if not anim or anim.group(1).startswith("none"):
+            continue
+        for sel in (s.strip() for s in re.split(r",(?![^()]*\))", selectors) if s.strip()):
+            level = re.match(r':root\[data-motion="(gentle|full)"\] ', sel)
+            assert level, f"animation not keyed to a motion level: {sel}"
+            moving[level.group(1)] |= {a for a in ("[data-latest]", "[data-highlight-on]") if a in sel}
+    assert moving == {"gentle": {"[data-latest]", "[data-highlight-on]"},
+                      "full": {"[data-latest]", "[data-highlight-on]"}}
+    assert "prefers-reduced-motion" not in built
+
+
+def test_unreadable_profile_gives_motion_none(home, root, cdir):
+    (root / ".state" / "profile.md").write_bytes(b"motion: full\xff\xfe\n")  # not UTF-8 on the motion line
+    assert 'data-motion="none"' in build_page(home, free_page())[1]
+
+
 def assert_no_katex(built: str) -> None:
     assert "renderMathInElement" not in built and "font-family:KaTeX_" not in built
 

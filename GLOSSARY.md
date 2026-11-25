@@ -102,3 +102,7 @@ A check verdict other than correct that led to a fixed answer key or a dropped q
 
 **Escape**:
 A wrong answer key that reached the student, counted when the student challenges it and the tutor concedes.
+
+**Motion level**:
+How much the visuals Mimir builds animate: none, gentle or full. Saved in the profile and shared across courses; chosen only by the student, never learned. Missing means none.
+_Avoid_: Animation preference, reduced motion

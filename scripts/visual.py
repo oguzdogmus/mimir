@@ -72,8 +72,10 @@ page -- an offline page in the Skald house style from a body the builder wrote.
     ``body.original[k]`` (markers numbered from 1). The page carries the Skald
     tokens (``assets/skald/tokens.css`` with its fonts as data URIs), the
     shell's chalk and marker filters (``#sk-chalk``, ``#sk-marker``) and
-    ``data-motion="none"`` on its root. When the body's text (outside SVG and
-    ``<style>``) holds ``\\(`` or ``\\[``, KaTeX is inlined as in ``sheet`` and
+    ``data-motion`` on its root: the profile's ``motion:`` line (none, gentle
+    or full) read at build time, none when it is missing or malformed; the
+    system's reduced-motion setting is not consulted. When the body's text
+    (outside SVG and ``<style>``) holds ``\\(`` or ``\\[``, KaTeX is inlined as in ``sheet`` and
     renders ``\\(...\\)`` and ``\\[...\\]`` in ``<main>``, skipping SVG.
     A page with no math, no steps and no machine has no script at all
     (``script-src 'none'``).
@@ -938,7 +940,7 @@ def _simulator_html(machine: dict, example: str) -> str:
 
 
 def render_free_page(title: str, body: str, math: bool, steps: bool = False,
-                     machine: dict | None = None, example: str = "") -> str:
+                     machine: dict | None = None, example: str = "", motion: str = "none") -> str:
     katex = _katex() if math else None
     scripts = [katex["KATEX_JS"], katex["AUTO_RENDER_JS"],
                _check_raw(_PAGE_MATH_JS.read_text(encoding="utf-8"), "</script", "page math")] if katex else []
@@ -953,7 +955,7 @@ def render_free_page(title: str, body: str, math: bool, steps: bool = False,
     template = _PAGE_TEMPLATE.read_text(encoding="utf-8")
     return _fill(template, {
         "CSP": _csp([_csp_hash(s) for s in scripts]),
-        "MOTION": "none",
+        "MOTION": motion if motion in workspace.MOTION_LEVELS else "none",
         "TITLE": html.escape(title),
         "KATEX_STYLE": f"<style>{katex['KATEX_CSS']}</style>\n" if katex else "",
         "TOKENS": _check_raw(skald_tokens(), "</style", "Skald tokens"),
@@ -985,7 +987,8 @@ def cmd_page(data: dict) -> dict:
     body_html, math, steps = check_page_body(
         body, lambda marker, k: _original(marker, f"body.original[{k}]", rows, course_dir, index),
         machine["states"] if machine else ())
-    page = render_free_page(title, body_html, math, steps, machine, example)
+    motion = workspace.read_motion(course_dir.parents[1]) or "none"  # course_dir is <root>/<term>/<course>
+    page = render_free_page(title, body_html, math, steps, machine, example, motion)
     return _write_out(course_dir, name, "html", page.encode("utf-8"))
 
 
