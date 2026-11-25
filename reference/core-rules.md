@@ -35,7 +35,11 @@ A base figure grows in two steps (Base figures in `<mimir>/reference/notation.md
 - Antigravity: `define_subagent` from the body of `<mimir>/helpers/base-figure-builder.md`, then `invoke_subagent` with the input after the skill's final line.
 - Only when the host has no independent agent: skip the base figure; the next need of the subject tries again.
 
-When its `Built <path>.` reply arrives, the figure checker (`<mimir>/helpers/figure-checker.md`) checks that file in the foreground, like the checker: the turn waits for its reply. Its input is only the `brief` from `figurecheck.py brief`. Claude Code: `Agent` with `subagent_type` `mimir:figure-checker` and `run_in_background: false`. Codex: `spawn_agent` with `fork_turns` none and the helper body plus the brief, then `wait_agent`. Antigravity: `define_subagent` from the helper body, then `invoke_subagent` with the brief. With no independent agent, the figure is not saved.
+When its `Built <path>.` reply arrives, the figure checker (`<mimir>/helpers/figure-checker.md`) checks that file, in the background too: the skill never waits for it either, since nothing reaches the student before the check and only the save depends on it. The answer checker differs: the turn waits for it because the student must not see a key before it is checked, while a base figure is never shown before its check. Its input is only the `brief` from `figurecheck.py brief`. Use the first recipe the host has:
+- Claude Code: `Agent` with `subagent_type` `mimir:figure-checker` and `run_in_background: true`; its reply arrives when it finishes.
+- Codex: `spawn_agent` with `fork_turns` none and a message holding the body of `<mimir>/helpers/figure-checker.md` plus the brief; call `wait_agent` only after the skill's final line.
+- Antigravity: `define_subagent` from the body of `<mimir>/helpers/figure-checker.md`, then `invoke_subagent` with the brief after the skill's final line.
+- Only when the host has no independent agent: the figure is not saved; the next need of the subject tries again.
 
 ## Resolve the course
 Use this block wherever a skill resolves a course; keep the caller's action word and declaration timing.

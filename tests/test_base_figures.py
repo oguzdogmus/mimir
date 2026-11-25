@@ -401,7 +401,7 @@ def test_a_course_with_its_professors_diagram_builds_from_that_not_the_packs(hom
 
 # --- the dispatch and helper text ----------------------------------------------------
 # First need: the student's build returns at once; the base figure grows in the background, is checked
-# in the foreground when it arrives and saved only on a pass. Later needs start from it.
+# in the background too when it arrives, and saved only on a pass. Later needs start from it.
 
 def _read(rel: str) -> str:
     return (ROOT_DIR / rel).read_text(encoding="utf-8")
@@ -439,14 +439,16 @@ def test_the_base_figure_builder_draws_parts_with_stable_ids_through_the_shell_a
     assert "Built <path>." in _section(body, "Reply")
 
 
-def test_core_rules_start_the_base_figure_builder_in_the_background_and_the_figure_checker_in_the_foreground():
+def test_core_rules_run_the_base_figure_builder_and_the_figure_checker_in_the_background():
+    """The student never waits on a base figure: neither its build nor its check holds up the turn."""
     dispatch = _section(_read("reference/core-rules.md"), "Base figure dispatch")
-    background = dispatch.index("`mimir:base-figure-builder`")
-    assert dispatch.index("`run_in_background: true`") > background
-    checker = dispatch.index("`mimir:figure-checker`")
-    assert dispatch.index("`run_in_background: false`") > checker
-    assert "`spawn_agent`" in dispatch and "`define_subagent`" in dispatch and "no independent agent" in dispatch
-    assert "never waits" in dispatch and "foreground" in dispatch
+    builder, checker = dispatch.index("`mimir:base-figure-builder`"), dispatch.index("`mimir:figure-checker`")
+    assert builder < checker
+    assert dispatch.index("`run_in_background: true`") > builder
+    assert dispatch.index("`run_in_background: true`", checker) > checker
+    assert "run_in_background: false" not in dispatch and "foreground" not in dispatch
+    assert dispatch.count("`spawn_agent`") == 2 and dispatch.count("`define_subagent`") == 2
+    assert "no independent agent" in dispatch and "never waits" in dispatch
 
 
 def test_the_first_need_builds_at_once_and_saves_a_base_figure_only_after_the_checker_passes_it():
@@ -455,7 +457,7 @@ def test_the_first_need_builds_at_once_and_saves_a_base_figure_only_after_the_ch
     background, brief = text.index("Base figure dispatch"), text.index("`figurecheck.py brief`")
     checker, save_ = text.index("`mimir:figure-checker`"), text.index("`basefigure.py save`")
     assert find < builder < background < brief < checker < save_
-    assert "without waiting" in text and "`subject`" in text
+    assert "without waiting" in text and "`subject`" in text and "foreground" not in text
     assert "not saved" in text and "tries again" in text
 
 
