@@ -438,6 +438,29 @@ main > :nth-last-child(2) { margin-bottom: var(--sp-7); }
 }
 #mimir-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
 
+/* ---------- Machine simulator (a page with a machine): input, buttons, read-out ----------
+   The current states in the diagram carry data-highlight-on: the teaching highlight above. */
+#mimir-sim { margin-top: var(--sp-6); }
+#mimir-sim label { font: 400 1.1rem/1 var(--font-hand); color: var(--ink-soft); margin-right: var(--sp-2); }
+#mimir-sim-input {
+  font: 400 1.25rem/1.2 var(--font-tex); color: var(--ink); background: var(--board-deep);
+  border: 2px solid var(--ink-soft); border-radius: 2px 3px 1px 2px;
+  padding: var(--sp-1) var(--sp-2); width: 16rem; max-width: 100%;
+}
+#mimir-sim .sim-hint { color: var(--ink-faint); font-size: .95rem; }
+#mimir-sim .sim-buttons { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+#mimir-sim button {
+  font: 600 .98rem/1 var(--font-text); min-height: 2.85rem; padding: 0 1.15rem; border-radius: 4px; cursor: pointer;
+  background: transparent; color: var(--ink-soft); border: 1.5px solid var(--rule);
+}
+#mimir-sim #mimir-sim-start { background: var(--ink); color: var(--board); border-color: var(--ink); }
+#mimir-sim button:hover { color: var(--ink); border-color: var(--ink-faint); }
+#mimir-sim #mimir-sim-start:hover { background: var(--mark); border-color: var(--mark); color: var(--board); }
+#mimir-sim button:focus-visible, #mimir-sim-input:focus-visible { outline: 2.5px solid var(--mark); outline-offset: 3px; }
+#mimir-sim-status { font-weight: 600; min-height: 1.6em; }
+#mimir-sim-history { color: var(--ink-soft); }
+#mimir-sim .sim-machine summary { font: 400 1.1rem/1.3 var(--font-hand); color: var(--ink-soft); cursor: pointer; }
+
 /* ---------- Narrow screens: one column, the figure pinned above the work ---------- */
 @media (max-width: 900px) {
   .board, .board.work-first { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
