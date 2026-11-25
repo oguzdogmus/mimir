@@ -386,14 +386,12 @@ svg [data-highlight-on]:not(.mark-loop, .mark-swipe) {
 }
 
 /* ---------- Step controls: the board's ledge ---------- */
-:root[data-step-current="1"]{--cur:1} :root[data-step-current="2"]{--cur:2} :root[data-step-current="3"]{--cur:3}
-:root[data-step-current="4"]{--cur:4} :root[data-step-current="5"]{--cur:5} :root[data-step-current="6"]{--cur:6}
-:root[data-step-current="7"]{--cur:7} :root[data-step-current="8"]{--cur:8} :root[data-step-current="9"]{--cur:9}
-:root[data-step-current="10"]{--cur:10} :root[data-step-current="11"]{--cur:11} :root[data-step-current="12"]{--cur:12}
-:root[data-step-total="1"]{--tot:1} :root[data-step-total="2"]{--tot:2} :root[data-step-total="3"]{--tot:3}
-:root[data-step-total="4"]{--tot:4} :root[data-step-total="5"]{--tot:5} :root[data-step-total="6"]{--tot:6}
-:root[data-step-total="7"]{--tot:7} :root[data-step-total="8"]{--tot:8} :root[data-step-total="9"]{--tot:9}
-:root[data-step-total="10"]{--tot:10} :root[data-step-total="11"]{--tot:11} :root[data-step-total="12"]{--tot:12}
+/* The shell's step script sets mimir-js, data-revealed and data-latest, and --cur and
+   --tot on the root. Unrevealed steps hide on screen only: with JavaScript off, and on
+   paper, every step shows. */
+@media screen {
+  .mimir-js [data-step]:not([data-revealed]) { display: none !important; }
+}
 
 #mimir-controls {
   position: sticky; bottom: 0; z-index: 5; margin-top: auto;
@@ -420,11 +418,11 @@ main > :nth-last-child(2) { margin-bottom: var(--sp-7); }
 }
 #mimir-back { background: transparent; color: var(--ink-soft); border: 1.5px solid var(--rule); }
 #mimir-back::before { content: "←"; font-weight: 500; }
-#mimir-back:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-faint); }
+#mimir-back:hover:not([aria-disabled="true"]) { color: var(--ink); border-color: var(--ink-faint); }
 #mimir-next { order: 3; margin-left: auto; background: var(--ink); color: var(--board); border: 1.5px solid var(--ink); }
 #mimir-next::after { content: "→"; font-weight: 500; }
-#mimir-next:hover:not(:disabled) { background: var(--mark); border-color: var(--mark); }
-#mimir-controls button:disabled { opacity: .35; cursor: default; }
+#mimir-next:hover:not([aria-disabled="true"]) { background: var(--mark); border-color: var(--mark); }
+#mimir-controls button[aria-disabled="true"] { opacity: .35; cursor: default; }
 #mimir-controls button:focus-visible { outline: 2.5px solid var(--mark); outline-offset: 3px; }
 #mimir-progress { order: 2; font: 700 1.15rem/1 var(--font-hand); color: var(--ink-soft); white-space: nowrap; }
 /* phone and narrow desktop: the mascot sits on the ledge, right of Next, 56 px wide */
@@ -473,6 +471,8 @@ main > :nth-last-child(2) { margin-bottom: var(--sp-7); }
 :root[data-motion="none"] *, :root[data-motion="none"] *::before, :root[data-motion="none"] *::after {
   animation: none !important; transition: none !important; scroll-behavior: auto !important;
 }
+/* a step back shows the step before again, as it was: nothing replays */
+:root[data-step-back] *, :root[data-step-back] *::before, :root[data-step-back] *::after { animation: none !important; }
 /* gentle: the newest step fades up; figure parts and the mark fade in */
 :root[data-motion="gentle"] [data-latest]:not(svg, svg *) { animation: sk-settle var(--t-settle) var(--ease-chalk) both; }
 :root[data-motion="gentle"] svg [data-latest],
@@ -513,8 +513,6 @@ main > :nth-last-child(2) { margin-bottom: var(--sp-7); }
   html, body { background: #fff !important; color: #000; }
   body { font-size: 10.5pt; }
   body::before { display: none; }
-  html.mimir-js [data-step]:not([data-revealed]) { display: revert !important; }
-  html.mimir-js .step[data-step]:not([data-revealed]) { display: grid !important; }
   html.mimir-js svg .mark-loop, html.mimir-js svg .mark-swipe { display: none !important; }
   [data-highlight-on]::before, [data-highlight-on]::after { display: none !important; }
   svg [data-highlight-on] { filter: none !important; }
