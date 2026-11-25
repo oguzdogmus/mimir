@@ -51,6 +51,8 @@ from drive import lean_claude_home
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
+sys.path.insert(0, str(REPO / "scripts"))
+import visual  # noqa: E402 -- the module that owns the out folder
 TERM = "2026-Fall"
 NAME = "test-page"
 KIND = "page"
@@ -95,7 +97,7 @@ def run_pack(out: Path, scripts: Path, pack: dict, builder: Callable[[dict], dic
            "figure": page["figure"], "figure_kind": kind, "content": page["content"], "env": env,
            "cwd": fx["root"]}
     built = builder(job)
-    path = fx["course_dir"] / ".state" / "out" / f"{NAME}.html"
+    path = visual.out_folder(fx["course_dir"]) / f"{NAME}.html"
     row = {"field": pack["field"], "figure": page["figure"], "build_seconds": built["seconds"],
            "build_reply": built["reply"], "build_exit": built.get("exit"), "build_stderr": built.get("stderr"),
            "built": str(path) if path.is_file() else None,

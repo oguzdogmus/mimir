@@ -47,10 +47,10 @@ inputs -- what the builder reads beside the core house style guide.
     ``fieldpack.py`` checks it on save. ``notation`` is the ``## Notation``
     section of the course's ``.state/fingerprint.md``, or "" when there is
     none ("no notation section." in ``line``). Writes nothing.
-    With ``subject`` (optional, a base figure subject as ``fieldpack.py``
+    With ``subject`` (optional, a base figure subject as ``basefigure.py``
     names it), ``base`` is the base figure the course builds that subject
     from, ``{"subject", "status", "source", "field", "path", "parts"}``
-    exactly as ``fieldpack.py find-base`` reports it (the course's own
+    exactly as ``basefigure.py find`` reports it (the course's own
     first; ``status`` "missing" when it has none yet); ``line`` ends "; base
     figure <subject> from the field pack <field>." (or "the course's own
     diagram", or "; no base figure <subject> yet.").
@@ -269,10 +269,9 @@ import os
 import re
 import sys
 import tempfile
-import unicodedata
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import basefigure
 import fieldpack
 import ingest
 import verify
@@ -287,12 +286,9 @@ from workspace import InputError, check_keys, has_control, parse_segment, parse_
 
 NAME_MAX_CHARS = 60
 TITLE_MAX_CHARS = 120
-SVG_MAX_BYTES = 1024 * 1024
-PAGE_BODY_MAX_BYTES = 1024 * 1024
 
 _NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 _FILE = re.compile(r"([a-z0-9]+(?:-[a-z0-9]+)*)\.(html|svg)")
-_ALLOWED_CONTROL = {"\t", "\n", "\r"}
 
 
 # --- Shared ------------------------------------------------------------------------
@@ -307,8 +303,13 @@ def _name(data: dict) -> str:
     return value
 
 
+def out_folder(course_dir: Path) -> Path:
+    """``<course>/.state/out``: where every built file of a course goes."""
+    return course_dir / ".state" / "out"
+
+
 def _out_dir(course_dir: Path, create: bool) -> Path:
-    out = course_dir / ".state" / "out"
+    out = out_folder(course_dir)
     if out.is_symlink():
         raise InputError(f"output folder {out} is a symlink; refusing to write through it")
     if out.exists() and not out.is_dir():
@@ -349,18 +350,6 @@ def _write_out(course_dir: Path, name: str, ext: str, content: bytes) -> dict:
     return {"course_dir": str(course_dir), "path": str(target), "line": f"Built {target}."}
 
 
-def _markup_field(value, field: str, what: str, max_bytes: int) -> bytes:
-    """A builder-written markup field (``svg``, ``body``) as UTF-8: non-empty, no control characters, not too big."""
-    if not isinstance(value, str) or not value.strip():
-        raise InputError(f"{field} is required ({what})")
-    if any(c not in _ALLOWED_CONTROL and unicodedata.category(c) in ("Cc", "Cs") for c in value):
-        raise InputError(f"{field} contains control characters or lone surrogates")
-    raw = value.encode("utf-8")
-    if len(raw) > max_bytes:
-        raise InputError(f"{field} is {len(raw)} bytes; at most {max_bytes}")
-    return raw
-
-
 def _course_with_pack(term: str, course: str) -> tuple[Path, list[dict]]:
     """The course folder and the field packs it uses; a course with no linked pack is refused."""
     course_dir = verify._course_dir(term, course)
@@ -376,7 +365,7 @@ def _course_with_pack(term: str, course: str) -> tuple[Path, list[dict]]:
 def cmd_inputs(data: dict) -> dict:
     check_keys(data, {"term", "course", "subject"})
     term, course = parse_term(data), parse_segment(data, "course")
-    subject = fieldpack.parse_subject(data) if "subject" in data else None
+    subject = basefigure.parse_subject(data) if "subject" in data else None
     course_dir, packs = _course_with_pack(term, course)
     notation = verify._notation(course_dir)
     fields = ", ".join(p["field"] for p in packs)
@@ -384,9 +373,9 @@ def cmd_inputs(data: dict) -> dict:
             f"{'notation section included' if notation else 'no notation section'}")
     out = {"course_dir": str(course_dir), "packs": packs, "notation": notation}
     if subject is not None:
-        out["base"] = fieldpack.lookup_base(ingest._workspace_root(), course_dir, subject)
+        out["base"] = basefigure.lookup(ingest._workspace_root(), course_dir, subject)
         line += (f"; no base figure {subject} yet" if out["base"]["status"] == "missing"
-                 else f"; base figure {subject} from {fieldpack.base_origin(out['base'])}")
+                 else f"; base figure {subject} from {basefigure.origin(out['base'])}")
     return {**out, "line": line + "."}
 
 
@@ -394,32 +383,20 @@ def _check_base(data: dict, course_dir: Path, course: str, figures) -> None:
     """With ``base``: refuse a build that does not keep the subject's base figure exactly (``visual_base``)."""
     if "base" not in data:
         return
-    subject = fieldpack.parse_subject(data, "base")
-    found = fieldpack.find_base(ingest._workspace_root(), course_dir, subject)
+    subject = basefigure.parse_subject(data, "base")
+    found = basefigure.find(ingest._workspace_root(), course_dir, subject)
     if found is None:
         raise InputError(f"base: no base figure {subject} for {course}; build without base")
-    base = visual_labels._tree_from_svg(_checked_svg(found["svg"]))
+    base = visual_labels._tree_from_svg(visual_labels.checked_svg(found["svg"]))
     visual_base.check_reuse(base, figures(), "base")
 
 
 # --- svg ---------------------------------------------------------------------------
 
-def _checked_svg(svg) -> ET.Element:
-    """The root of ``svg`` after every check of ``visual.py svg``."""
-    root = visual_check.check_svg(_markup_field(svg, "svg", "the SVG document as a string", SVG_MAX_BYTES))
-    visual_labels.check_svg_labels(root)
-    return root
-
-
 def build_svg(svg) -> str:
     """The standalone SVG file for ``svg``: every check of ``visual.py svg``, then the Skald tokens added."""
-    _checked_svg(svg)
+    visual_labels.checked_svg(svg)
     return visual_render.svg_with_tokens(svg)
-
-
-def base_parts(svg) -> dict[str, tuple]:
-    """A base figure's parts: every check of ``visual.py svg``, then the stable part ids (``visual_base``)."""
-    return visual_base.parts(visual_labels._tree_from_svg(_checked_svg(svg)), "svg")
 
 
 def cmd_svg(data: dict) -> dict:
@@ -427,7 +404,7 @@ def cmd_svg(data: dict) -> dict:
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
     course_dir, _ = _course_with_pack(term, course)
     svg = data.get("svg")
-    root = _checked_svg(svg)
+    root = visual_labels.checked_svg(svg)
     _check_base(data, course_dir, course, lambda: [visual_labels._tree_from_svg(root)])
     return _write_out(course_dir, name, "svg", visual_render.svg_with_tokens(svg).encode("utf-8"))
 
@@ -445,7 +422,7 @@ def cmd_page(data: dict) -> dict:
         raise InputError("example is only for a page with a machine")
     example = visual_machine.parse_example(data)
     body = data.get("body")
-    _markup_field(body, "body", "the page body as an HTML string", PAGE_BODY_MAX_BYTES)
+    visual_check.markup_field(body, "body", "the page body as an HTML string", visual_check.PAGE_BODY_MAX_BYTES)
     course_dir, _ = _course_with_pack(term, course)
     index = course_dir / "INDEX.md"
     rows = {p: r for p, r in ingest.registry(index).items() if verify._inside(course_dir, p)}

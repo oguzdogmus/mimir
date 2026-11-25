@@ -103,6 +103,12 @@ def parts(figure, field: str) -> dict[str, tuple]:
     return found
 
 
+def base_parts(svg) -> dict[str, tuple]:
+    """A base figure's parts: every check of ``visual.py svg`` (``visual_labels.checked_svg``), then the stable
+    part ids."""
+    return parts(visual_labels._tree_from_svg(visual_labels.checked_svg(svg)), "svg")
+
+
 def _below(figure, node):
     """The ancestors of ``node`` up to, not including, the figure's root."""
     for a in visual_labels._ancestors(node):

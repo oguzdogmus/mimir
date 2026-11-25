@@ -59,7 +59,7 @@ import fieldpack
 import ingest
 import verify
 import workspace
-from workspace import InputError, check_keys, short
+from workspace import InputError, check_keys, refuse_symlinks, short
 
 FIGURE_SUFFIXES = (".svg", ".html")
 VERDICTS = ("pass", "fail")
@@ -89,8 +89,7 @@ def _figure_path(data: dict) -> Path:
         raise InputError(f"path must be absolute: {short(value)}")
     if path.suffix.lower() not in FIGURE_SUFFIXES:
         raise InputError(f"path must be an {' or '.join(FIGURE_SUFFIXES)} file: {short(value)}")
-    if path.is_symlink():
-        raise InputError(f"path {path} is a symlink; refusing to work through it")
+    refuse_symlinks(path, field="path")
     if not path.is_file():
         raise InputError(f"path {path} is not a file")
     return path

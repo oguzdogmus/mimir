@@ -1,6 +1,6 @@
 """#101: base figures, grown on first use (run: uv run --with pytest pytest tests -q).
 
-Driven from outside: JSON into fieldpack.py and visual.py, JSON and files out. Every figure here is
+Driven from outside: JSON into fieldpack.py, basefigure.py and visual.py, JSON and files out. Every figure here is
 synthetic; a professor's real diagrams never enter the repo.
 """
 
@@ -17,6 +17,7 @@ import pytest
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT_DIR / "scripts"
 FP = SCRIPTS / "fieldpack.py"
+BF = SCRIPTS / "basefigure.py"
 VISUAL = SCRIPTS / "visual.py"
 WS = SCRIPTS / "workspace.py"
 PACK = json.loads((ROOT_DIR / "tests" / "fixtures" / "field-pack-microbiology.json").read_text(encoding="utf-8"))
@@ -103,11 +104,11 @@ def snapshot(root: Path) -> dict:
     return out
 
 
-# --- save-base ----------------------------------------------------------------------
+# --- save ---------------------------------------------------------------------------
 
 def test_a_built_figure_the_checker_passed_is_saved_in_its_pack_without_the_shell_tokens(home, root):
     """#101: saved only after the checker passes it; stored as the figure itself, without the 300 KB of tokens."""
-    out = run_ok(FP, home, "save-base", save(built(home)))
+    out = run_ok(BF, home, "save", save(built(home)))
     target = pack_base(root)
     assert out["path"] == str(target) and out["subject"] == SUBJECT and out["field"] == FIELD
     assert target.read_text(encoding="utf-8") == BASE
@@ -129,7 +130,7 @@ def test_a_figure_without_stable_part_ids_is_refused_and_not_saved(home, root, s
     """#101: every drawn shape belongs to a part with a stable id, or the figure is not saved."""
     path = built(home, svg)
     before = snapshot(root)
-    err = run_fails(FP, home, "save-base", save(path), needle)
+    err = run_fails(BF, home, "save", save(path), needle)
     assert str(path) in err
     assert snapshot(root) == before
 
@@ -140,14 +141,14 @@ def test_a_figure_that_fails_the_shell_svg_checks_is_refused_and_not_saved(home,
     path.write_text(path.read_text(encoding="utf-8").replace("</desc>", '</desc><image href="https://x.test/a.png"/>'),
                     encoding="utf-8")
     before = snapshot(root)
-    run_fails(FP, home, "save-base", save(path), "element <image> is not allowed")
+    run_fails(BF, home, "save", save(path), "element <image> is not allowed")
     assert snapshot(root) == before
 
 
 def test_a_figure_the_shell_did_not_build_is_refused(home, root, tmp_path):
     raw = tmp_path / "raw.svg"
     raw.write_text(BASE, encoding="utf-8")
-    run_fails(FP, home, "save-base", save(raw), "is not an SVG built by visual.py svg")
+    run_fails(BF, home, "save", save(raw), "is not an SVG built by visual.py svg")
     assert not pack_base(root).parent.exists()
 
 
@@ -160,17 +161,17 @@ def test_a_figure_that_fails_its_checklist_is_refused_and_not_saved(home, root, 
     """#101: saved only when every checklist item passes; the next need of the subject tries again."""
     path = built(home)
     before = snapshot(root)
-    err = run_fails(FP, home, "save-base", save(path, reply), needle)
+    err = run_fails(BF, home, "save", save(path, reply), needle)
     assert f"the base figure {SUBJECT} is not saved" in err
     assert snapshot(root) == before
-    run_ok(FP, home, "save-base", save(path))  # a later passing check saves it
+    run_ok(BF, home, "save", save(path))  # a later passing check saves it
 
 
 def test_a_subject_with_a_base_figure_is_not_saved_again(home, root):
     path = built(home)
-    run_ok(FP, home, "save-base", save(path))
+    run_ok(BF, home, "save", save(path))
     before = snapshot(root)
-    run_fails(FP, home, "save-base", save(path), f"already has a base figure {SUBJECT}")
+    run_fails(BF, home, "save", save(path), f"already has a base figure {SUBJECT}")
     assert snapshot(root) == before
 
 
@@ -183,11 +184,11 @@ def test_a_subject_with_a_base_figure_is_not_saved_again(home, root):
     ({"extra": 1}, "unknown field 'extra'"),
 ])
 def test_save_base_refuses_bad_input_naming_the_field(home, root, change, needle):
-    run_fails(FP, home, "save-base", {**save(built(home)), **change}, needle)
+    run_fails(BF, home, "save", {**save(built(home)), **change}, needle)
     assert not pack_base(root).parent.exists()
 
 
-# --- find-base and the professor's diagrams ------------------------------------------
+# --- find and the professor's diagrams ------------------------------------------
 
 PROFESSOR = BASE.replace("Gram-negative envelope</title>", "Gram-negative envelope, as in lecture 3</title>").replace(
     'width="180" height="12"', 'width="180" height="16"')
@@ -210,15 +211,15 @@ def local(path: Path, subject: str = SUBJECT) -> dict:
 
 
 def test_a_subject_with_no_base_figure_is_missing(home, root):
-    out = run_ok(FP, home, "find-base", find())
+    out = run_ok(BF, home, "find", find())
     assert out["status"] == "missing" and out["subject"] == SUBJECT and out["path"] is None
     assert SUBJECT in out["line"]
 
 
 def test_a_saved_base_figure_is_found_for_every_course_of_its_field(home, root):
-    run_ok(FP, home, "save-base", save(built(home)))
+    run_ok(BF, home, "save", save(built(home)))
     for course in (COURSE, OTHER):
-        out = run_ok(FP, home, "find-base", find(course=course))
+        out = run_ok(BF, home, "find", find(course=course))
         assert out["status"] == "found" and out["source"] == "pack" and out["field"] == FIELD
         assert out["path"] == str(pack_base(root))
         assert out["parts"] == ["outer-membrane", "peptidoglycan", "inner-membrane"]
@@ -226,25 +227,25 @@ def test_a_saved_base_figure_is_found_for_every_course_of_its_field(home, root):
 
 def test_a_professors_diagram_is_the_courses_base_figure_before_the_packs_and_stays_in_the_course(home, root):
     """#101: the professor wins for that course only; the diagram never leaves the course folder."""
-    run_ok(FP, home, "save-base", save(built(home)))
+    run_ok(BF, home, "save", save(built(home)))
     store = snapshot(root / ".state")
     other = snapshot(root / TERM / OTHER)
-    out = run_ok(FP, home, "save-course-base", local(professor_diagram(root)))
+    out = run_ok(BF, home, "save-course", local(professor_diagram(root)))
     target = root / TERM / COURSE / ".state" / "base-figures" / f"{SUBJECT}.svg"
     assert out["path"] == str(target) and target.read_text(encoding="utf-8") == PROFESSOR
     assert snapshot(root / ".state") == store and snapshot(root / TERM / OTHER) == other
 
-    mine = run_ok(FP, home, "find-base", find())
+    mine = run_ok(BF, home, "find", find())
     assert mine["status"] == "found" and mine["source"] == "course" and mine["field"] is None
     assert mine["path"] == str(target)
-    theirs = run_ok(FP, home, "find-base", find(course=OTHER))
+    theirs = run_ok(BF, home, "find", find(course=OTHER))
     assert theirs["source"] == "pack" and theirs["path"] == str(pack_base(root))
 
 
 def test_a_professors_diagram_is_used_even_when_the_pack_has_no_base_figure(home, root):
-    run_ok(FP, home, "save-course-base", local(professor_diagram(root)))
-    assert run_ok(FP, home, "find-base", find())["source"] == "course"
-    assert run_ok(FP, home, "find-base", find(course=OTHER))["status"] == "missing"
+    run_ok(BF, home, "save-course", local(professor_diagram(root)))
+    assert run_ok(BF, home, "find", find())["source"] == "course"
+    assert run_ok(BF, home, "find", find(course=OTHER))["status"] == "missing"
 
 
 def test_a_diagram_from_outside_the_course_folder_is_refused(home, root, tmp_path):
@@ -252,20 +253,20 @@ def test_a_diagram_from_outside_the_course_folder_is_refused(home, root, tmp_pat
     outside.write_text(PROFESSOR, encoding="utf-8")
     elsewhere = professor_diagram(root, course=OTHER)
     for path in (outside, elsewhere):
-        run_fails(FP, home, "save-course-base", local(path), "must be inside the course folder")
+        run_fails(BF, home, "save-course", local(path), "must be inside the course folder")
     assert not (root / TERM / COURSE / ".state" / "base-figures").exists()
 
 
 def test_a_professors_diagram_without_stable_part_ids_is_refused(home, root):
     path = professor_diagram(root, PROFESSOR.replace('<g id="peptidoglycan">', "<g>"))
-    run_fails(FP, home, "save-course-base", local(path), "belongs to no part")
+    run_fails(BF, home, "save-course", local(path), "belongs to no part")
     assert not (root / TERM / COURSE / ".state" / "base-figures").exists()
 
 
 def test_a_damaged_stored_base_figure_is_refused_naming_its_file(home, root):
-    run_ok(FP, home, "save-base", save(built(home)))
+    run_ok(BF, home, "save", save(built(home)))
     pack_base(root).write_text(BASE.replace('id="inner-membrane"', ""), encoding="utf-8")
-    err = run_fails(FP, home, "find-base", find(), "belongs to no part")
+    err = run_fails(BF, home, "find", find(), "belongs to no part")
     assert str(pack_base(root)) in err and "damaged" in err
 
 
@@ -289,7 +290,7 @@ def figure_in_page(svg: str) -> dict:
 
 @pytest.fixture
 def saved(home, root):
-    run_ok(FP, home, "save-base", save(built(home)))
+    run_ok(BF, home, "save", save(built(home)))
     return pack_base(root)
 
 
@@ -313,10 +314,10 @@ def test_inputs_for_a_subject_with_no_base_figure_say_so(home, root):
 
 @pytest.mark.parametrize("professor", [False, True])
 def test_inputs_and_find_base_report_one_lookup(home, saved, professor):
-    """One owner for the lookup: the builder's ``base`` is exactly what find-base finds."""
+    """One owner for the lookup: the builder's ``base`` is exactly what basefigure.py find finds."""
     if professor:
-        run_ok(FP, home, "save-course-base", local(professor_diagram(saved.parents[4])))
-    found = run_ok(FP, home, "find-base", find())
+        run_ok(BF, home, "save-course", local(professor_diagram(saved.parents[4])))
+    found = run_ok(BF, home, "find", find())
     given = run_ok(VISUAL, home, "inputs", {"term": TERM, "course": COURSE, "subject": SUBJECT})
     assert given["base"] == {k: v for k, v in found.items() if k not in ("course_dir", "line")}
 
@@ -376,7 +377,7 @@ def test_a_reuse_of_a_subject_with_no_base_figure_is_refused(home, root):
 
 def test_a_course_with_its_professors_diagram_builds_from_that_not_the_packs(home, root, saved):
     """#101: the professor's diagram is the base for that course; other courses keep the pack's."""
-    run_ok(FP, home, "save-course-base", local(professor_diagram(root)))
+    run_ok(BF, home, "save-course", local(professor_diagram(root)))
     run_fails(VISUAL, home, "svg", reuse(), "part 'outer-membrane' changed")
     run_ok(VISUAL, home, "svg", reuse(PROFESSOR.replace("</svg>", LABELS + "</svg>")))
     run_ok(VISUAL, home, "svg", reuse(course=OTHER))
@@ -434,9 +435,9 @@ def test_core_rules_start_the_base_figure_builder_in_the_background_and_the_figu
 
 def test_the_first_need_builds_at_once_and_saves_a_base_figure_only_after_the_checker_passes_it():
     text = _section(_read("reference/notation.md"), "Base figures")
-    find, builder = text.index("`fieldpack.py find-base`"), text.index("`mimir:visual-builder`")
+    find, builder = text.index("`basefigure.py find`"), text.index("`mimir:visual-builder`")
     background, brief = text.index("Base figure dispatch"), text.index("`figurecheck.py brief`")
-    checker, save_ = text.index("`mimir:figure-checker`"), text.index("`fieldpack.py save-base`")
+    checker, save_ = text.index("`mimir:figure-checker`"), text.index("`basefigure.py save`")
     assert find < builder < background < brief < checker < save_
     assert "without waiting" in text and "`subject`" in text
     assert "not saved" in text and "tries again" in text
@@ -444,7 +445,7 @@ def test_the_first_need_builds_at_once_and_saves_a_base_figure_only_after_the_ch
 
 def test_a_professors_diagram_is_saved_only_for_its_course_and_never_leaves_it():
     text = _section(_read("reference/notation.md"), "Base figures")
-    assert "`fieldpack.py save-course-base`" in text
+    assert "`basefigure.py save-course`" in text
     assert "never leaves the course folder" in text and "never" in text and "commit" in text
 
 
