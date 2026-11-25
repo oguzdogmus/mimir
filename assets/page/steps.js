@@ -6,7 +6,9 @@
   // Sets on the elements: data-revealed, data-latest, data-highlight-on. On the root:
   // class mimir-js (the tokens hide unrevealed steps on screen only), data-step-total,
   // data-step-current, --cur and --tot, and data-step-back after a step back (the tokens
-  // then replay no animation).
+  // then replay no animation). Shows the shell's mascot (#mimir-mascot) and sets its
+  // data-mood: curious before the first step, proud on the last, and explaining,
+  // thinking, surprised and pleased in turn between them.
   var root = document.documentElement;
   var steps = document.querySelectorAll("[data-step]");
   var marks = document.querySelectorAll("[data-highlight]");
@@ -43,6 +45,15 @@
   box.appendChild(status);
   (document.querySelector("main") || document.body).appendChild(box);
 
+  var mascot = document.getElementById("mimir-mascot");
+  if (mascot) mascot.hidden = false;
+  var MIDDLE_MOODS = ["explaining", "thinking", "surprised", "pleased"];
+  function mood(n) {
+    if (n === 0) return "curious";
+    if (n === total) return "proud";
+    return MIDDLE_MOODS[(n - 1) % MIDDLE_MOODS.length];
+  }
+
   var shown = 0;
   function flag(el, name, on) {
     if (on) el.setAttribute(name, "");
@@ -75,6 +86,7 @@
     }
     root.setAttribute("data-step-current", String(shown));
     root.style.setProperty("--cur", String(shown));
+    if (mascot) mascot.setAttribute("data-mood", mood(shown));
     progress.textContent = shown + " / " + total;
     back.setAttribute("aria-disabled", String(shown === 0));
     next.setAttribute("aria-disabled", String(shown === total));

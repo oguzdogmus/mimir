@@ -71,7 +71,12 @@ page -- an offline page in the Skald house style from a body the builder wrote.
     outside fields and focusable areas, and a polite live region saying
     "Step k of n." Unrevealed steps are hidden on screen only, so with
     JavaScript off or on paper every step shows; a step back replays no
-    animation. Without step markup the page carries no step script.
+    animation. It also shows the shell's mascot (``assets/skald/mascot.svg``,
+    inlined after ``<main>``, decorative and hidden in print and with
+    JavaScript off) at the bottom right, his mood following the steps:
+    curious before step 1, proud on the last, explaining, thinking,
+    surprised and pleased in turn between. Without step markup the page
+    carries no step script and no mascot.
     An original is placed with ``<mimir-original path="..." page="N">`` (empty,
     closed by ``</mimir-original>`` or ``/>``, not inside an SVG); ``path`` and
     ``page`` name the original of an ``ocr`` transcription, and errors name
@@ -230,6 +235,7 @@ _PAGE_MATH_JS = _ASSETS / "page" / "math.js"
 _MACHINE_JS = _ASSETS / "page" / "machine.js"       # the simulator engine (MimirSim)
 _PAGE_SIM_JS = _ASSETS / "page" / "simulator.js"
 _PAGE_STEPS_JS = _ASSETS / "page" / "steps.js"
+_MASCOT_SVG = _ASSETS / "skald" / "mascot.svg"   # decorative art, no ids: inlined as it is
 _SKALD = _ASSETS / "skald"
 
 _NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
@@ -1601,14 +1607,24 @@ def _simulator_html(machine: dict, example: str) -> str:
         "</section>")
 
 
+def _mascot_html() -> str:
+    """The shell's mascot, hidden until the step script shows him (so never with JavaScript off)."""
+    art = _MASCOT_SVG.read_text(encoding="utf-8")
+    if re.search(r"<script|<style|<!--|\son\w+\s*=|\sid\s*=|href|url\(", art, re.I):
+        raise RuntimeError("the mascot art must be plain decorative SVG (no script, style, ids or links)")
+    return f'<div id="mimir-mascot" class="mimir-mascot" aria-hidden="true" hidden>\n{art}</div>\n'
+
+
 def render_page(title: str, body: str, math: bool, steps: bool = False,
                 machine: dict | None = None, example: str = "", motion: str | None = None) -> str:
     """The page file around a checked body. ``motion`` is ``workspace.read_motion``'s level; None builds as none."""
     katex = _katex() if math else None
     scripts = [katex["KATEX_JS"], katex["AUTO_RENDER_JS"],
                _check_raw(_PAGE_MATH_JS.read_text(encoding="utf-8"), "</script", "page math")] if katex else []
-    if steps:
+    mascot = ""
+    if steps:  # the mascot's moods follow the steps; the step script shows him
         scripts.append(_check_raw(_PAGE_STEPS_JS.read_text(encoding="utf-8"), "</script", "page steps"))
+        mascot = _mascot_html()
     data = ""
     if machine is not None:
         body += _simulator_html(machine, example)
@@ -1623,6 +1639,7 @@ def render_page(title: str, body: str, math: bool, steps: bool = False,
         "KATEX_STYLE": f"<style>{katex['KATEX_CSS']}</style>\n" if katex else "",
         "TOKENS": _check_raw(skald_tokens(), "</style", "Skald tokens"),
         "BODY": body,
+        "MASCOT": mascot,
         "SCRIPTS": data + "".join(f"<script>{s}</script>\n" for s in scripts)})
 
 

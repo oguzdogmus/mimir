@@ -89,8 +89,8 @@ On phone (under 900 px) the board becomes one column: the figure pins to the top
 end of `.work`), the work scrolls under it. In `.work-first` the figure simply follows
 the work. Check 390 px: nothing may overflow sideways.
 
-**The bottom-right corner belongs to the shell** (the step controls and the mascot).
-The tokens reserve it. Never put content, or anything positioned or fixed, in that
+**The bottom-right corner belongs to the shell** (the step controls and, on a page
+with steps, the mascot, whose mood follows the steps). The tokens reserve it. Never put content, or anything positioned or fixed, in that
 corner, and never override `main`'s right padding. Your `<style>` must not name the
 shell's own ids and classes (`mimir-...`, `sk-...`, e.g. `#mimir-controls`): the shell
 refuses it. `url(#sk-chalk)` and `url(#sk-marker)` are fine.

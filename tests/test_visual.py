@@ -1421,6 +1421,47 @@ def test_page_without_step_markup_has_no_step_script(home, cdir):
     assert STEPS_JS not in scripts(built)
 
 
+MASCOT_ART = (ROOT_DIR / "assets" / "skald" / "mascot.svg").read_text(encoding="utf-8")
+
+
+def test_a_page_with_steps_carries_the_mascot(home, cdir):
+    """Inlined (offline), decorative, outside <main>, hidden until the step script shows him."""
+    _, built = build_page(home, free_page(STEP_BODY))
+    assert_safe_page(built, 1)
+    wrapper = '<div id="mimir-mascot" class="mimir-mascot" aria-hidden="true" hidden>\n'
+    assert built.count(wrapper) == 1 and built.index("</main>") < built.index(wrapper) < built.index("<script>")
+    assert wrapper + MASCOT_ART + "</div>" in built
+    assert MASCOT_ART.startswith("<svg ") and 'aria-hidden="true"' in MASCOT_ART.split(">", 1)[0]
+    for needle in (" id=", "href", "url(", "<style", "<script", "<!--", "<text"):
+        assert needle not in MASCOT_ART, needle
+    for mood in ("curious", "explaining", "thinking", "surprised", "pleased", "proud"):
+        assert f'class="mm-face mm-{mood}"' in MASCOT_ART, mood
+    assert "mimir-mascot" in STEPS_JS
+
+
+def test_a_page_without_steps_has_no_mascot(home, cdir):
+    """His moods follow the steps, and without the step ledge he would have no place on a phone."""
+    _, built = build_page(home, free_page())
+    assert "mimir-mascot" not in main_part(built) and 'id="mimir-mascot"' not in built
+
+
+def test_mascot_tokens_place_him_hide_him_in_print_and_keep_still_at_motion_none():
+    tokens = visual.skald_tokens()
+    rule = tokens[tokens.index("#mimir-mascot {"):]
+    rule = rule[:rule.index("}")]
+    for decl in ("position: fixed", "pointer-events: none", "right: var(--mimir-mascot-right)",
+                 "width: var(--mimir-mascot-size, var(--mimir-mascot-size-wide))"):
+        assert decl in rule, decl
+    print_block = tokens[tokens.index("@media print {"):]
+    assert "#mimir-controls, #mimir-mascot { display: none !important; }" in print_block
+    for line in tokens.splitlines():
+        if (".mimir-mascot" in line and ("animation:" in line or "transition:" in line)
+                and not line.startswith(':root[data-motion="')):
+            raise AssertionError(f"mascot motion outside a motion-level rule: {line}")
+    assert ':root[data-motion="full"] .mimir-mascot .mm-bob { animation: mm-bob' in tokens
+    assert ':root[data-motion="gentle"] .mimir-mascot .mm-face' in tokens
+
+
 STEP_DOM = r"""
 function Node(tag, attrs, parent, svg) {
   this.tagName = tag; this.attrs = attrs || {}; this.parent = parent || null; this.children = [];
@@ -1494,6 +1535,27 @@ function snap(tag) {
 
 def step_ui(tmp_path: Path, actions: str) -> dict:
     return run_ui(tmp_path, STEPS_JS, STEP_DOM, actions)
+
+
+MASCOT_DOM = STEP_DOM + r"""
+Object.defineProperty(Node.prototype, "hidden", {get: function () { return "hidden" in this.attrs; },
+  set: function (v) { if (v) this.attrs.hidden = ""; else delete this.attrs.hidden; }});
+var mascot = new Node("div", {"id": "mimir-mascot", "class": "mimir-mascot", "aria-hidden": "true", "hidden": ""}, root);
+for (var s = 4; s <= 7; s++) new Node("p", {"data-step": String(s)}, main);
+"""
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_mascot_mood_follows_the_steps_ui(home, cdir, tmp_path):
+    out = run_ui(tmp_path, STEPS_JS, MASCOT_DOM, r"""
+out.shown = !mascot.hidden;
+out.moods = [mascot.getAttribute("data-mood")];
+for (var i = 0; i < 8; i++) { key("ArrowRight"); out.moods.push(mascot.getAttribute("data-mood")); }
+key("ArrowLeft"); out.moods.push(mascot.getAttribute("data-mood"));
+""")
+    assert out["shown"] is True
+    assert out["moods"] == ["curious", "explaining", "thinking", "surprised", "pleased", "explaining", "thinking",
+                            "proud", "proud", "thinking"]
 
 
 @pytest.mark.skipif(NODE is None, reason="node not installed")
