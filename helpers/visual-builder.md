@@ -13,6 +13,7 @@ You build one study visual for a student and open it. You never talk to the stud
 - `term`, `course`: the course, passed through unchanged.
 - `name`: the file name, lowercase letters, digits and single hyphens (e.g. `pumping-lemma`).
 - `kind`: `page` or `svg`.
+- `subject` (sometimes): a recurring subject that has a base figure (e.g. `human-heart`); Start from a base figure below says what to do with it.
 - The content: for `page`, a title and the content to compose, in order (labels, the question, originals as `{path, page}`, text, formulas, steps, figure descriptions), and sometimes a machine (its kind, states, start and accepting states, moves, and an example input) with its diagram description; for `svg`, a description of the diagram (states, edges with their labels, start and accepting states; or the nodes and edges of a tree, circuit or graph; or the parts of a structure).
 
 Beside these, you always read three inputs yourself, as the next two sections say: the core house style guide, the course's field pack or packs, and the notation section of the course's fingerprint when it has one. Where they disagree, Precedence below decides.
@@ -54,6 +55,22 @@ Where your inputs disagree, the higher one wins, highest first:
 3. The core guide.
 
 The professor always wins: a symbol, sign convention or view in the course's own materials beats the pack's, and the pack beats the core guide on what a figure shows (positions, proportions, symbols, conventions). The core guide's tokens and markup still hold, because the shell refuses anything else.
+
+## Start from a base figure
+
+Only when you were given a `subject`. Ask for its base figure with `"subject"` added to the `inputs` call:
+
+```
+python3 "<script>" inputs <<'EOF'
+{"term": "...", "course": "...", "subject": "<subject>"}
+EOF
+```
+
+Read the base figure in full with `cat "<path>"` for the `path` in `base` (the course's own diagram comes first, then the pack's). If `base` is null, build as if you had no `subject`.
+
+1. Start from its markup: keep its `viewBox` and every part (each element with an id) exactly, with the same id, the same geometry and the same shapes inside it. Copy it; never redraw, move, resize or reshape a part. In a page, it is the inline `<svg>`.
+2. Add only labels, steps, highlights and leader lines: `<text>` labels, leader lines (`class="leader"`, with `class="anchor"` end dots), highlight marks (`mark-loop`, `mark-swipe`), `data-step` and `data-highlight` attributes, and step groups `<g data-step="N">` round parts, without a `transform`. Every part stays, even one the content does not name: leave it unlabelled.
+3. Build with `"base": "<subject>"` added to the `page` or `svg` object. `visual.py` refuses a build that changes a part (`base: ...`): put the part back as the base figure has it, then rerun once.
 
 ## Compose
 

@@ -4,7 +4,7 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py`` and ``ingest.py`` (same folder). Run as::
 
-    python3 fieldpack.py <save|list|link|match|report>  < input.json
+    python3 fieldpack.py <save|list|link|match|report|save-base|save-course-base|find-base>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -21,8 +21,14 @@ and one link record per course::
     <root>/.state/field-packs/<field>/pack.json
     <root>/<YYYY-Term>/<course>/.state/field-packs.json   {"packs": [...]}
 
-The pack folder is the pack's home: later files of the pack (base figures)
-sit beside ``pack.json``. ``.state``, the store, a pack folder, ``pack.json``
+The pack folder is the pack's home: its base figures sit beside ``pack.json``,
+and a course may hold its own, from the professor's diagrams, that never leave
+the course folder::
+
+    <root>/.state/field-packs/<field>/base-figures/<subject>.svg
+    <root>/<YYYY-Term>/<course>/.state/base-figures/<subject>.svg
+
+``.state``, the store, a pack folder, ``pack.json``
 and a link record may not be symlinks; neither may the term, course or course
 ``.state`` folder (``workspace.course_folder``). A stored pack is checked
 again, exactly as on save, every time it is read; a damaged pack or link
@@ -112,6 +118,62 @@ report -- the field packs one course uses.
     "none", ``packs`` [] and the line "<course> has no field pack yet.". A
     linked pack that is missing or damaged exits 2.
 
+Base figures
+------------
+A base figure is one recurring subject of a field (a heart, a truss, a
+neuron) drawn once, checked and saved as an SVG with stable part ids, so later
+visuals of that subject start from it (``visual.py`` ``base``). ``subject``
+is named like a field, at most SUBJECT_MAX_CHARS characters ("human-heart").
+A base figure passes every check of ``visual.py svg`` and the part check: every
+id is a stable part id (lowercase letters and digits joined by single hyphens,
+starting with a letter, used once, not ``mimir-``/``sk-``), every drawn shape
+(path, rect, circle, ellipse, line, polyline, polygon; not inside defs,
+markers, clips or text) has one or sits in a group that has one, there is at
+least one part, and there is no ``<use>``, so a reuse cannot change a part by
+changing what it points at. A stored base figure is checked again every time it is
+read; a damaged one exits 2 naming its file. A subject is saved once per
+place: saving it again exits 2.
+
+save-base -- save a base figure the figure checker passed to its field pack.
+    in : {"field": "medicine", "subject": "human-heart", "figure":
+          "anatomical section", "path": "/home/u/learning/2026-Fall/MED101
+          Physiology/.state/out/base-human-heart.svg", "reply": "1 | pass |
+          ...\noverall | pass | ..."}
+    out: {"field": "medicine", "subject": "human-heart", "path": "/home/u/
+          learning/.state/field-packs/medicine/base-figures/human-heart.svg",
+          "parts": ["aorta", "right-atrium", ...], "line": "Base figure saved:
+          human-heart in the field pack medicine, 14 parts."}
+    ``path`` is the candidate as ``visual.py svg`` built it (with today's
+    Skald tokens, which are taken off again, so the stored file is the figure
+    itself). ``reply`` is the figure checker's reply on that file, read as
+    ``figurecheck.py read`` reads it for ``figure``; anything but an overall
+    pass exits 2 and saves nothing, so the next need of the subject tries
+    again.
+
+save-course-base -- save a professor's diagram as one course's own base figure.
+    in : {"term": "2026-Fall", "course": "MED101 Physiology", "subject":
+          "human-heart", "path": "/home/u/learning/2026-Fall/MED101
+          Physiology/slides/heart.svg"}
+    out: {"course_dir": "...", "subject": "human-heart", "path": "/home/u/
+          learning/2026-Fall/MED101 Physiology/.state/base-figures/human-heart.
+          svg", "parts": [...], "line": "Base figure saved: human-heart for
+          MED101 Physiology only, from the professor's diagram, 14 parts."}
+    ``path`` is an ``.svg`` file inside the course folder; anything outside
+    it exits 2. No checklist applies: the professor wins. The diagram is
+    copied only within the course folder, never into the pack store.
+
+find-base -- the base figure a course builds a subject from.
+    in : {"term": "2026-Fall", "course": "MED101 Physiology", "subject":
+          "human-heart"}
+    out: {"course_dir": "...", "subject": "human-heart", "status": "found",
+          "source": "pack", "field": "medicine", "path": "...", "parts":
+          [...], "line": "Base figure human-heart for MED101 Physiology: the
+          field pack medicine, 14 parts."}
+    The course's own base figure comes first (``source`` "course", ``field``
+    null), then the course's field packs in link order. With none, ``status``
+    is "missing", ``source``, ``field`` and ``path`` are null and ``parts``
+    is [].
+
 Exit codes: invalid input, a refused operation, a usage error or a filesystem
 error exits 2 with one line on stderr (``fieldpack.py: <message>``) and
 nothing on stdout. An unexpected internal error exits 1 with ``fieldpack.py:
@@ -126,6 +188,7 @@ import sys
 from pathlib import Path
 
 import ingest
+import visual_render
 import workspace
 from workspace import InputError, check_keys, has_control, parse_segment, parse_term, short
 
@@ -138,6 +201,8 @@ FIELD_MAX_CHARS = 40
 TEXT_MAX_CHARS = 300
 CONTENT_MAX_CHARS = 2000
 MAX_TOPICS = 20
+BASE_DIR = "base-figures"
+SUBJECT_MAX_CHARS = 40
 
 _FIELD = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
@@ -426,6 +491,163 @@ def cmd_match(data: dict) -> dict:
             "line": f"No field pack {field} yet; researching it in the background."}
 
 
+# --- base figures ---------------------------------------------------------------------
+
+def parse_subject(data: dict, key: str = "subject") -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise InputError(f"{key} is required (a recurring subject such as human-heart)")
+    if len(value) > SUBJECT_MAX_CHARS or not _FIELD.fullmatch(value):
+        raise InputError(f"{key} must be lowercase letters and digits joined by single hyphens, at most "
+                         f"{SUBJECT_MAX_CHARS} characters, e.g. human-heart: {short(value)}")
+    return value
+
+
+def _base_file(folder: Path, subject: str) -> Path:
+    """``<folder>/<subject>.svg``; refuses a symlinked folder or file."""
+    path = folder / f"{subject}.svg"
+    for item in (folder, path):
+        if item.is_symlink():
+            raise InputError(f"{item} is a symlink; refusing to work through it")
+    return path
+
+
+def pack_base_path(root: Path, field: str, subject: str) -> Path:
+    """``<store>/<field>/base-figures/<subject>.svg``, beside the pack's ``pack.json``."""
+    return _base_file(pack_path(root, field).parent / BASE_DIR, subject)
+
+
+def _svg_file(data: dict) -> tuple[Path, str]:
+    """The absolute ``path`` of an existing ``.svg`` file, not a symlink, and its text."""
+    value = data.get("path")
+    if not isinstance(value, str) or not value:
+        raise InputError("path is required (the absolute path of an .svg file)")
+    path = Path(value)
+    if not path.is_absolute() or path.suffix.lower() != ".svg":
+        raise InputError(f"path must be the absolute path of an .svg file: {short(value)}")
+    if path.is_symlink():
+        raise InputError(f"path {path} is a symlink; refusing to work through it")
+    text = ingest.read_text(path)
+    if text is None:
+        raise InputError(f"path {path} is not a file")
+    return path, text
+
+
+def _base_parts(svg: str, where: str) -> list[str]:
+    """The part ids of a base figure after every shell check (``visual.base_parts``)."""
+    import visual  # here, not at the top: visual.py imports this module
+    try:
+        return list(visual.base_parts(svg))
+    except InputError as exc:
+        raise InputError(f"{where}: {exc}") from None
+
+
+def _write_base(target: Path, svg: str) -> None:
+    created = not target.parent.exists()
+    if created:
+        target.parent.mkdir()
+    try:
+        ingest._write_atomic(target, svg)
+    except BaseException:
+        if created:
+            try:
+                target.parent.rmdir()
+            except OSError:
+                pass  # the original failure is what gets reported
+        raise
+
+
+def cmd_save_base(data: dict) -> dict:
+    import figurecheck  # here, not at the top: figurecheck.py imports this module
+    check_keys(data, {"field", "subject", "figure", "path", "reply"})
+    field, subject = parse_field(data), parse_subject(data)
+    root = ingest._workspace_root()
+    load_pack(root, field)
+    path, text = _svg_file(data)
+    svg = visual_render.svg_without_tokens(text)
+    if svg is None:
+        raise InputError(f"path {path} is not an SVG built by visual.py svg; build the base figure through the "
+                         "shell first")
+    ids = _base_parts(svg, f"base figure {path}")
+    verdict = figurecheck.cmd_read({k: data.get(k) for k in ("field", "figure", "reply")})
+    if verdict["overall"] != "pass":
+        raise InputError(f"reply: {verdict['line'][:-1]}; the base figure {subject} is not saved")
+    target = pack_base_path(root, field, subject)
+    if target.exists():
+        raise InputError(f"field pack {field} already has a base figure {subject} at {target}; reuse it")
+    _write_base(target, svg)
+    return {"field": field, "subject": subject, "path": str(target), "parts": ids,
+            "line": f"Base figure saved: {subject} in the field pack {field}, {len(ids)} parts."}
+
+
+def course_base_path(course_dir: Path, subject: str) -> Path:
+    """``<course>/.state/base-figures/<subject>.svg``: a professor's diagram, local to that course."""
+    return _base_file(course_dir / ".state" / BASE_DIR, subject)
+
+
+def _stored_base(path: Path) -> tuple[str, list[str]]:
+    """A stored base figure and its part ids, checked again as on save; a damaged one is refused."""
+    svg = ingest.read_text(path)
+    try:
+        if svg is None:
+            raise InputError("it cannot be read")
+        ids = _base_parts(svg, "it")
+    except InputError as exc:
+        raise InputError(f"base figure {path} is damaged ({exc}); fix or remove it") from None
+    return svg, ids
+
+
+def find_base(root: Path, course_dir: Path, subject: str) -> dict | None:
+    """The base figure a course builds ``subject`` from, or None.
+
+    The course's own (a professor's diagram) comes first, then the course's field packs in link order.
+    ``{"source": "course" | "pack", "field": <pack field or None>, "path", "svg", "parts"}``.
+    """
+    places = [("course", None, course_base_path(course_dir, subject))]
+    places += [("pack", p["field"], pack_base_path(root, p["field"], subject)) for p in course_packs(root, course_dir)]
+    for source, field, path in places:
+        if path.exists():
+            svg, ids = _stored_base(path)
+            return {"source": source, "field": field, "path": str(path), "svg": svg, "parts": ids}
+    return None
+
+
+def cmd_find_base(data: dict) -> dict:
+    check_keys(data, {"term", "course", "subject"})
+    subject = parse_subject(data)
+    root, course_dir, _, _, course = _course(data)
+    base = find_base(root, course_dir, subject)
+    if base is None:
+        return {"course_dir": str(course_dir), "subject": subject, "status": "missing", "source": None,
+                "field": None, "path": None, "parts": [],
+                "line": f"No base figure {subject} for {course} yet; it grows on first use."}
+    origin = "the course's own diagram" if base["source"] == "course" else f"the field pack {base['field']}"
+    return {"course_dir": str(course_dir), "subject": subject, "status": "found",
+            **{k: base[k] for k in ("source", "field", "path", "parts")},
+            "line": f"Base figure {subject} for {course}: {origin}, {len(base['parts'])} parts."}
+
+
+def cmd_save_course_base(data: dict) -> dict:
+    check_keys(data, {"term", "course", "subject", "path"})
+    subject = parse_subject(data)
+    _, course_dir, _, term, course = _course(data)
+    path, text = _svg_file(data)
+    if not path.resolve().is_relative_to(course_dir.resolve()):
+        raise InputError(f"path {path} must be inside the course folder {course_dir}: a professor's diagram "
+                         "stays in its course")
+    svg = visual_render.svg_without_tokens(text) or text
+    ids = _base_parts(svg, f"diagram {path}")
+    target = course_base_path(course_dir, subject)
+    if target.exists():
+        raise InputError(f"{course} already has its own base figure {subject} at {target}; remove it first to "
+                         "replace it")
+    workspace.build_course(ingest._workspace_root(), term, course, [])  # restores a missing .state/
+    _write_base(target, svg)
+    return {"course_dir": str(course_dir), "subject": subject, "path": str(target), "parts": ids,
+            "line": f"Base figure saved: {subject} for {course} only, from the professor's diagram, "
+                    f"{len(ids)} parts."}
+
+
 # --- report ---------------------------------------------------------------------------
 
 def course_packs(root: Path, course_dir: Path) -> list[dict]:
@@ -457,13 +679,17 @@ COMMANDS = {
     "link": (cmd_link, "record that a course uses a field pack (at most two)"),
     "match": (cmd_match, "link a course to the pack of its field, or name the research it needs"),
     "report": (cmd_report, "the field packs one course uses"),
+    "save-base": (cmd_save_base, "save a base figure the figure checker passed to its field pack"),
+    "save-course-base": (cmd_save_course_base, "save a professor's diagram as one course's own base figure"),
+    "find-base": (cmd_find_base, "the base figure a course builds a subject from: its own first, then its packs'"),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("fieldpack.py",
-                             ("Mimir field pack store. Subcommands: save, list, link, match, report. Reads one JSON object on stdin "
-                              "and prints one JSON object on stdout."),
+                             ("Mimir field pack store. Subcommands: save, list, link, match, report, save-base, "
+                              "save-course-base, find-base. Reads one JSON object on stdin and prints one JSON object "
+                              "on stdout."),
                              COMMANDS, argv)
 
 

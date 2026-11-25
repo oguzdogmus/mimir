@@ -28,6 +28,17 @@ Besides showing content, a page has two behaviours, switched on by its content:
 - SVG content: a plain description of every state or node and every edge with its label, the start state and the accepting states (or the tree, circuit or graph structure). The agent writes the markup.
 - Print the agent's reply line verbatim. It names the file and says whether it opened in the browser; the path is the fallback. A reply `visual.py: field pack missing ...` means the course has no pack: run field research as Field pack first says, then dispatch the builder again. If the reply is any other `visual.py:` or `visual-builder:` error line, print it and continue in terminal text (rung 1). If the reply is neither a `Built`, `Opened` or `Open` line nor an error line, say the file was not built and continue in terminal text (rung 1).
 
+## Base figures
+
+A base figure is a recurring subject of the course's field (a heart, a truss, a neuron) drawn once, checked and kept, so later visuals of that subject come back fast with the same structure.
+
+- Name the subject when a figure depicts a real thing that later visuals will show again: lowercase words joined by single hyphens (`human-heart`, `pratt-truss`). Other figures need no subject.
+- The professor's diagram first: when the course folder holds the professor's own diagram of the subject as an `.svg` file, run `fieldpack.py save-course-base` (`<mimir>/scripts/fieldpack.py`) with `{"term", "course", "subject", "path"}` once. It becomes that course's base figure, ahead of the pack's, for that course only. It never leaves the course folder: never copy it into a field pack, pass it to research or a query, publish it or commit it.
+- Run `fieldpack.py find-base` with `{"term", "course", "subject"}`.
+- On `found`: dispatch the builder (`mimir:visual-builder`, as Building a file says) with `subject` added to its input. It starts from the base figure and adds only labels, steps, highlights and leader lines; `visual.py` refuses a build that redraws a part.
+- On `missing`: dispatch the builder as usual, without `subject`, and print its reply, so the student gets the visual without waiting. Then start the base figure builder as core rules' Base figure dispatch says, with `script`, `term`, `course`, `subject`, `figure` (the pack's figure kind for it) and the subject's description: its parts and view from the content, without labels or steps. At most one base figure build per subject at a time.
+- When its `Built <path>.` reply arrives, run `figurecheck.py brief` (`<mimir>/scripts/figurecheck.py`) with `{"field", "figure", "path"}` (`field` the pack whose figure kind it is), dispatch the figure checker (`mimir:figure-checker`) in the foreground with only the `brief`, then run `fieldpack.py save-base` with `{"field", "subject", "figure", "path", "reply"}`, `reply` the checker's reply verbatim. Print its `line`. When `save-base` refuses (a checklist item failed, a part has no stable id, or a shell check failed), print its `fieldpack.py:` line: the figure is not saved, and the next need of the subject tries again. Any other reply from the base figure builder: say nothing; the next need tries again.
+
 ## What goes into a page
 
 - Give the agent finished content only: you write the formulas and steps; the agent never adds, solves or changes math.

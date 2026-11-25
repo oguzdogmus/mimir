@@ -23,6 +23,7 @@
     "./helpers/verifier.md",
     "./helpers/visual-builder.md",
     "./helpers/figure-checker.md",
-    "./helpers/field-researcher.md"
+    "./helpers/field-researcher.md",
+    "./helpers/base-figure-builder.md"
   ]
 }
