@@ -43,7 +43,7 @@ from pathlib import Path
 
 import ingest
 import workspace
-from workspace import InputError, _check_keys, parse_path
+from workspace import InputError, check_keys, parse_path
 
 MAX_PAGES = 20
 MAX_CHARS_PER_PAGE = 100_000
@@ -447,7 +447,7 @@ def _page_number(data: dict, field: str) -> int:
 
 
 def cmd_pages(data: dict) -> dict:
-    _check_keys(data, {"path", "first", "last", "attachment"})
+    check_keys(data, {"path", "first", "last", "attachment"})
     path = parse_path(data, "path")
     first = _page_number(data, "first")
     last = _page_number(data, "last") if "last" in data else first

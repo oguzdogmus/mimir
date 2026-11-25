@@ -538,7 +538,7 @@ def test_internal_error_exits_1(home, monkeypatch, capsys):
         raise KeyError("bug")
 
     monkeypatch.setitem(visual.COMMANDS, "page", (boom, "x"))
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}")))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}"), encoding="utf-8"))
     assert visual.main(["page"]) == 1
     captured = capsys.readouterr()
     assert captured.out == "" and captured.err == "visual.py: internal error (KeyError)\n"

@@ -211,7 +211,7 @@ from pathlib import Path
 import ingest
 import verify
 import workspace
-from workspace import InputError, _check_keys, _has_control, _short, parse_segment, parse_term
+from workspace import InputError, check_keys as _check_keys, has_control as _has_control, short as _short, parse_segment, parse_term
 
 NAME_MAX_CHARS = 60
 TITLE_MAX_CHARS = 120

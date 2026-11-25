@@ -444,7 +444,7 @@ def index_payload(*files, course: str = COURSE) -> dict:
 
 
 def registry(index: Path) -> list[str]:
-    lines = index.read_text().splitlines()
+    lines = index.read_text(encoding="utf-8").splitlines()
     start = lines.index("## Registry") + 3
     end = start
     while end < len(lines) and lines[end].startswith("|"):
@@ -453,7 +453,7 @@ def registry(index: Path) -> list[str]:
 
 
 def topics(index: Path) -> list[str]:
-    lines = index.read_text().splitlines()
+    lines = index.read_text(encoding="utf-8").splitlines()
     start = lines.index("## Topics") + 3
     return [l for l in lines[start:] if l.startswith("|")]
 
@@ -639,7 +639,7 @@ def test_internal_error_exits_1(home, monkeypatch, capsys):
         raise KeyError("bug")
 
     monkeypatch.setitem(ingest.COMMANDS, "scan", (boom, "x"))
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}")))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}"), encoding="utf-8"))
     assert ingest.main(["scan"]) == 1
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -815,7 +815,7 @@ def test_bug_during_extraction_is_internal_error(root, home, monkeypatch, capsys
         raise RecursionError("bug")
 
     monkeypatch.setattr(ingest, "_check_archive", boom)
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}")))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}"), encoding="utf-8"))
     assert ingest.main(["scan"]) == 1
     assert capsys.readouterr().err == "ingest.py: internal error (RecursionError)\n"
 

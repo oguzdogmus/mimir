@@ -545,7 +545,7 @@ import ingest
 import plan
 import verify
 import workspace
-from workspace import InputError, _check_keys, _has_control, _short, parse_segment, parse_term
+from workspace import InputError, check_keys, has_control, short, parse_segment, parse_term
 
 STALE_DAYS = 14
 ATTEMPT_FIRST_ASSISTED = 3
@@ -812,7 +812,7 @@ def _indexed_course(root: Path, term: str, course: str) -> Path:
     """The folder of a named course; exits 2 unless it exists with an ``INDEX.md``."""
     course_dir = workspace.course_folder(root, term, course)
     if not (course_dir / "INDEX.md").is_file():
-        raise InputError(f"course {_short(course)} has no course folder with an INDEX.md in term {term}")
+        raise InputError(f"course {short(course)} has no course folder with an INDEX.md in term {term}")
     return course_dir
 
 
@@ -1168,7 +1168,7 @@ def _course_pick(data: dict) -> tuple[datetime, Path, str, list[dict], dict | No
                                       Path | None]:
     """(now, root, profile text, courses, chosen course or None, inferred, its folder) for
     ``start``'s input; the course pick and its errors are ``start``'s."""
-    _check_keys(data, {"now", "term", "course"})
+    check_keys(data, {"now", "term", "course"})
     now = _moment(data, "now")
     term = parse_term(data) if data.get("term") is not None else None
     given = parse_segment(data, "course") if data.get("course") is not None else None
@@ -1182,12 +1182,12 @@ def _course_pick(data: dict) -> tuple[datetime, Path, str, list[dict], dict | No
         hits = [c for c in pool if c["course"] == given]
         if not hits:
             where = f" in term {term}" if term else ""
-            raise InputError(f"course {_short(given)} has no course folder with an INDEX.md{where}")
+            raise InputError(f"course {short(given)} has no course folder with an INDEX.md{where}")
         if len(hits) > 1:
-            raise InputError(f"course {_short(given)} is in several terms; pass term")
+            raise InputError(f"course {short(given)} is in several terms; pass term")
         chosen, inferred = hits[0], False
     elif term is not None and not pool:
-        raise InputError(f"term {_short(term)} has no course folder with an INDEX.md")
+        raise InputError(f"term {short(term)} has no course folder with an INDEX.md")
     elif not pool:
         return now, root, profile, courses, None, None, None
     else:
@@ -1366,7 +1366,7 @@ def _triage_types(course_dir: Path) -> list[dict]:
     """Validate mechanical triage facts without tightening scope's names-only reader."""
     types, seen = [], {}
     for row in _fingerprint_rows(course_dir):
-        where = f"fingerprint.md row {row['row']} ({_short(row['name'])})"
+        where = f"fingerprint.md row {row['row']} ({short(row['name'])})"
         key = _norm(row["name"])
         if key in seen:
             raise InputError(f"{where}: duplicate question type; first appears on row {seen[key]}")
@@ -1398,22 +1398,22 @@ def _triage_associations(value, types: list[dict], topics: dict[str, dict]) -> d
     for name, topic in value.items():
         key = _norm(name)
         if key not in names:
-            raise InputError(f"associations has unknown question type {_short(name)}; rerun triage without associations")
+            raise InputError(f"associations has unknown question type {short(name)}; rerun triage without associations")
         if key in matches:
-            raise InputError(f"associations repeats question type {_short(name)}")
+            raise InputError(f"associations repeats question type {short(name)}")
         if topic is not None and (not isinstance(topic, str) or _norm(topic) not in topics):
-            raise InputError(f"associations[{_short(name)}] must name a candidate mastery topic or be null; "
+            raise InputError(f"associations[{short(name)}] must name a candidate mastery topic or be null; "
                              "rerun triage without associations")
         matches[key] = topics[_norm(topic)]["name"] if topic is not None else names[key]
     missing = next((name for key, name in names.items() if key not in matches), None)
     if missing is not None:
-        raise InputError(f"associations is missing question type {_short(missing)}; give a mastery topic or null")
+        raise InputError(f"associations is missing question type {short(missing)}; give a mastery topic or null")
     return matches
 
 
 def cmd_triage(data: dict) -> dict:
     """Read course facts, obtain semantic associations when needed, and rank through plan.triage."""
-    _check_keys(data, {"now", "term", "course", "class", "associations"})
+    check_keys(data, {"now", "term", "course", "class", "associations"})
     now = _moment(data, "now")
     term, course = parse_term(data), parse_segment(data, "course")
     klass = data.get("class")
@@ -1482,7 +1482,7 @@ def _scope_names(data: dict, side: str) -> list[str]:
         raise InputError(f"{side} must be a list of names")
     out: list[str] = []
     for n, name in enumerate(names, 1):
-        if not isinstance(name, str) or not name.strip() or _has_control(name) or len(name) > MAX_SCOPE_NAME:
+        if not isinstance(name, str) or not name.strip() or has_control(name) or len(name) > MAX_SCOPE_NAME:
             raise InputError(f"{side}[{n}] must be a one-line name of at most {MAX_SCOPE_NAME} characters")
         name = " ".join(name.split())
         if _norm(name) not in {_norm(o) for o in out}:
@@ -1494,7 +1494,7 @@ def cmd_scope(data: dict) -> dict:
     """Save the confirmed scope of one exam in the course's ``scope.md``, or, given a course
     ``code`` instead of ``term`` and ``course`` (setup, before the course has a folder), note the
     student's words in ``<root>/.state/scope.md`` for the first study session to confirm."""
-    _check_keys(data, {"now", "term", "course", "code", "exam_name", "exam_date", "words", *SCOPE_SIDES})
+    check_keys(data, {"now", "term", "course", "code", "exam_name", "exam_date", "words", *SCOPE_SIDES})
     now = _moment(data, "now")
     noted = "code" in data
     if noted and ("term" in data or "course" in data):
@@ -1509,18 +1509,18 @@ def cmd_scope(data: dict) -> dict:
     if not isinstance(exam_date, str) or _valid_date(exam_date) is None:
         raise InputError("exam_date must be a date YYYY-MM-DD (start's exam_date)")
     exam_name = data.get("exam_name")
-    if exam_name is not None and (not isinstance(exam_name, str) or _has_control(exam_name)):
+    if exam_name is not None and (not isinstance(exam_name, str) or has_control(exam_name)):
         raise InputError("exam_name must be a one-line exam name or null (start's exam_name)")
     exam_name = " ".join((exam_name or "").split())
     words = data.get("words")
-    if not isinstance(words, str) or not words.strip() or _has_control(words) or len(words) > MAX_WORDING:
+    if not isinstance(words, str) or not words.strip() or has_control(words) or len(words) > MAX_WORDING:
         raise InputError(f"words must be the student's words, one line of at most {MAX_WORDING} characters")
     lists = {side: _scope_names(data, side) for side in SCOPE_SIDES}
     for a, b in (("in", "out"), ("in", "unsure"), ("out", "unsure")):
         both = {_norm(n) for n in lists[a]} & {_norm(n) for n in lists[b]}
         if both:
             name = next(n for n in lists[a] if _norm(n) in both)
-            raise InputError(f"{_short(name)} is in both {a} and {b}")
+            raise InputError(f"{short(name)} is in both {a} and {b}")
     if noted and any(lists.values()):
         raise InputError("a scope noted by code holds words only: its lists are confirmed once the course "
                          "has a folder")
@@ -1532,7 +1532,7 @@ def cmd_scope(data: dict) -> dict:
         code = course_code(course)
     exams = _code_exams(_text(root / ".state" / "profile.md"), code, now.tzinfo)
     if not any(day.isoformat() == exam_date and _norm(name) == _norm(exam_name) for day, name in exams):
-        raise InputError(f"no ## Exam dates row of {_short(code)} named {_short(exam_name or '(none)')} "
+        raise InputError(f"no ## Exam dates row of {short(code)} named {short(exam_name or '(none)')} "
                          f"on {exam_date} in profile.md")
     path = folder / ".state" / SCOPE_FILE
     if path.is_symlink():
@@ -1631,14 +1631,14 @@ def cmd_progress(data: dict) -> dict:
 
 
 def cmd_check(data: dict) -> dict:
-    _check_keys(data, {"now", "term", "course", "topics"})
+    check_keys(data, {"now", "term", "course", "topics"})
     now = _moment(data, "now")
     term, course = parse_term(data), parse_segment(data, "course")
     names = data.get("topics")
     if not isinstance(names, list) or not names:
         raise InputError("topics is required (a non-empty list of topic names)")
     for n, name in enumerate(names, 1):
-        if not isinstance(name, str) or not name.strip() or _has_control(name):
+        if not isinstance(name, str) or not name.strip() or has_control(name):
             raise InputError(f"topics[{n}] must be a one-line topic name")
     course_dir = _indexed_course(ingest._workspace_root(), term, course)
     rows = {_norm(r["name"]): r for r in mastery(course_dir)}
@@ -1660,7 +1660,7 @@ def _session_log(data: dict) -> tuple[Path, Path]:
     course_dir = _indexed_course(ingest._workspace_root(), term, course)
     path = course_dir / ".state" / "logs" / f"{name}.md"
     if path.is_symlink() or not path.is_file():
-        raise InputError(f"log {name} not found in {_short(course)}")
+        raise InputError(f"log {name} not found in {short(course)}")
     return course_dir, path
 
 
@@ -1670,7 +1670,7 @@ def _append(path: Path, text: str, line: str) -> None:
 
 def cmd_close(data: dict) -> dict:
     """Stamp a session's end in its log once; a repeated close reuses the stamp and writes nothing."""
-    _check_keys(data, {"now", "term", "course", "log", "started"})
+    check_keys(data, {"now", "term", "course", "log", "started"})
     now, started = _moment(data, "now"), _moment(data, "started")
     _, path = _session_log(data)
     name = data["log"]
@@ -1709,12 +1709,12 @@ def cmd_close(data: dict) -> dict:
 
 def cmd_gauge(data: dict) -> dict:
     """Set the course's gauge-done marker once: a ``gauge_done:`` line in this session's log."""
-    _check_keys(data, {"now", "term", "course", "log"})
+    check_keys(data, {"now", "term", "course", "log"})
     _moment(data, "now")
     course_dir, path = _session_log(data)
     course = course_dir.name
     if not route(course_dir):
-        raise InputError(f"course {_short(course)} has no topics yet: no gauge, and its marker stays unset")
+        raise InputError(f"course {short(course)} has no topics yet: no gauge, and its marker stays unset")
     done = _gauge_done(course_dir)
     if done is None:
         _append(path, _text(path), f"gauge_done: {data['now']}")
@@ -1733,7 +1733,7 @@ def _season(month: int) -> str:
 
 
 def cmd_now(data: dict) -> dict:
-    _check_keys(data, set())
+    check_keys(data, set())
     now = _clock().replace(microsecond=0)
     stamp = now.isoformat()
     return {"now": stamp, "date": now.date().isoformat(), "log_name": now.strftime("%Y-%m-%d-%H%M"),
@@ -1751,7 +1751,7 @@ def _clock_time(text: str, phrase: str) -> time:
     hour, minute, half = _CLOCK_PARTS.fullmatch(text).groups()
     hour, minute = int(hour), int(minute or 0)
     if hour > (12 if half else 23) or minute > 59 or (half and hour == 0):
-        raise InputError(f"phrase {_short(phrase)} is not a real time")
+        raise InputError(f"phrase {short(phrase)} is not a real time")
     if half:
         hour = hour % 12 + (12 if half == "pm" else 0)
     return time(hour, minute)
@@ -1771,14 +1771,14 @@ def _phrase_day(text: str, today: date, phrase: str) -> date:
     if _DATE.fullmatch(text):
         day = _valid_date(text)
         if day is None:
-            raise InputError(f"phrase {_short(phrase)} is not a real date")
+            raise InputError(f"phrase {short(phrase)} is not a real date")
         return day
-    raise InputError(f"phrase {_short(phrase)} is unsupported (use YYYY-MM-DD, today, tomorrow, "
+    raise InputError(f"phrase {short(phrase)} is unsupported (use YYYY-MM-DD, today, tomorrow, "
                      "a weekday name or \"in N days\", optionally with a time such as 12:30 or 2pm)")
 
 
 def cmd_parse_date(data: dict) -> dict:
-    _check_keys(data, {"now", "phrase"})
+    check_keys(data, {"now", "phrase"})
     now = _moment(data, "now")
     today = now.date()
     phrase = data.get("phrase")
@@ -1795,15 +1795,15 @@ def cmd_parse_date(data: dict) -> dict:
     day = _phrase_day(text, today, phrase)
     at = None if clock is None else _clock_time(clock, phrase)
     if day < today:
-        raise InputError(f"phrase {_short(phrase)} is in the past ({day.isoformat()})")
+        raise InputError(f"phrase {short(phrase)} is in the past ({day.isoformat()})")
     if day > today + timedelta(days=plan.MAX_HORIZON_DAYS):
-        raise InputError(f"phrase {_short(phrase)} is more than {plan.MAX_HORIZON_DAYS} days ahead")
+        raise InputError(f"phrase {short(phrase)} is more than {plan.MAX_HORIZON_DAYS} days ahead")
     if at is None:
         return {"date": day.isoformat(), "time": None, "exam": day.isoformat(),
                 "line": f"Exam date: {day.isoformat()}."}
     moment = datetime.combine(day, at, tzinfo=now.tzinfo)
     if moment <= now:
-        raise InputError(f"phrase {_short(phrase)} is in the past ({moment.isoformat()})")
+        raise InputError(f"phrase {short(phrase)} is in the past ({moment.isoformat()})")
     shown = at.strftime("%H:%M")
     return {"date": day.isoformat(), "time": shown, "exam": moment.isoformat(),
             "line": f"Exam: {day.isoformat()} at {shown}."}
@@ -1859,10 +1859,10 @@ def cmd_record(data: dict) -> dict:
     """Record an idempotent attempt and its line in the session log; retain legacy text and atomic
     authoritative state."""
     if data.get("initialize") is True:
-        _check_keys(data, {"term", "course", "topic", "initialize"})
+        check_keys(data, {"term", "course", "topic", "initialize"})
         term, course = parse_term(data), parse_segment(data, "course")
         topic = data.get("topic")
-        if not isinstance(topic, str) or not topic.strip() or _has_control(topic):
+        if not isinstance(topic, str) or not topic.strip() or has_control(topic):
             raise InputError("topic must be a nonempty one-line string")
         folder = workspace.course_folder(ingest._workspace_root(), term, course)
         if not (folder / "INDEX.md").is_file():
@@ -1881,12 +1881,12 @@ def cmd_record(data: dict) -> dict:
         _save_record(path, text, state)
         return {"status": "unseen", "recorded": True, "duplicate": False,
                 "line": "Topic initialized."}
-    _check_keys(data, {"term", "course", "topic", "item", "outcome", "log",
+    check_keys(data, {"term", "course", "topic", "item", "outcome", "log",
                        "session", "date", "override", "explanation_only"})
     term, course = parse_term(data), parse_segment(data, "course")
     for field in ("topic", "item", "session", "date"):
         value = data.get(field)
-        if not isinstance(value, str) or not value.strip() or _has_control(value):
+        if not isinstance(value, str) or not value.strip() or has_control(value):
             raise InputError(f"{field} must be a nonempty one-line string")
     # The check ledger keys sessions and items normalised; every use below sees the same form.
     data = {**data, "session": verify.normalise(data["session"]), "item": verify.normalise(data["item"])}
@@ -2166,7 +2166,7 @@ def _prefs_out(state: dict, saved: bool, root: Path, in_session: bool = False) -
 
 def cmd_prefs(data: dict) -> dict:
     """The global teaching settings, the active trial and the setup sampler's state; read-only."""
-    _check_keys(data, set())
+    check_keys(data, set())
     root = ingest._workspace_root()
     return _prefs_out(*_prefs_state(root), root)
 
@@ -2320,7 +2320,7 @@ def _ev_sampler(state: dict, data: dict, *, root: Path, **_) -> str:
 def _ev_explicit(state: dict, data: dict, **_) -> str:
     axis, level = data["axis"], data["level"]  # checked by cmd_pref_event
     wording = data.get("wording")
-    if not isinstance(wording, str) or not wording.strip() or _has_control(wording) or len(wording) > MAX_WORDING:
+    if not isinstance(wording, str) or not wording.strip() or has_control(wording) or len(wording) > MAX_WORDING:
         raise InputError(f"wording must be the student's request, one line of at most {MAX_WORDING} characters")
     state["axes"][axis] = {"level": level, "provenance": "explicit", "wording": " ".join(wording.split())}
     if state["trial"] is not None and state["trial"]["axis"] == axis:  # never probe against a standing instruction
@@ -2349,7 +2349,7 @@ def cmd_pref_event(data: dict) -> dict:
     event = data.get("event")
     if event not in EVENT_FIELDS:
         raise InputError(f"event must be one of {', '.join(EVENT_FIELDS)}")
-    _check_keys(data, {"event"} | EVENT_FIELDS[event])
+    check_keys(data, {"event"} | EVENT_FIELDS[event])
     if event in ("explicit", "sampler"):  # checked before any file is read
         _axis_level(data, level=True)
     root = ingest._workspace_root()

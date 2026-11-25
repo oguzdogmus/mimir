@@ -1,0 +1,16 @@
+# Lint: `uvx ruff@0.17.6 check` (CI runs the same pinned version).
+# Only the rules named here run; mechanical standards live here, judgement ones in CODING_STANDARDS.md.
+target-version = "py311"
+
+[lint]
+preview = true                  # both rules below are preview rules,
+explicit-preview-rules = true   # so take from preview only the rules named here
+select = [
+    "PLW1514",  # unspecified-encoding: Windows on Python 3.11 decodes text as cp1252 without encoding="utf-8"
+    "PLC2701",  # import-private-name: never import another module's _private names
+]
+
+[lint.per-file-ignores]
+# Tests and the measurement scripts share test helpers between test modules.
+"tests/**" = ["PLC2701"]
+"docs/measurements/**" = ["PLC2701"]

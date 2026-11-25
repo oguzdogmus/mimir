@@ -34,7 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import visual  # noqa: E402
-from workspace import _Parser  # noqa: E402
+from workspace import Parser  # noqa: E402
 
 PROG = "release_check.py"
 HEADING = "Mimir release check"
@@ -107,7 +107,7 @@ def run(open_files: bool) -> tuple[dict, int]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = _Parser(prog=PROG, description="Mimir release check: build two test files and open them in the browser.")
+    parser = Parser(prog=PROG, description="Mimir release check: build two test files and open them in the browser.")
     parser.add_argument("--no-open", action="store_true", help="build the files only, do not open them")
     args = parser.parse_args(argv)
     try:
