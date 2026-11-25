@@ -447,3 +447,118 @@ def test_the_builder_starts_from_the_base_figure_and_never_redraws_its_parts():
     for added in ("labels", "steps", "highlights", "leader lines"):
         assert added in start, added
     assert '"base": "<subject>"' in start
+
+
+# The reuse check fails closed: a part keeps every attribute but its class, data-step and data-highlight,
+# nothing may hide, clip, mask or restyle it, and the only shapes added are open leaders (content arrows
+# count as leaders), their end dots and highlight marks.
+DOT = '<circle class="anchor" cx="150" cy="16" r="2"/>'
+CLIP = '<defs><clipPath id="cut"><rect x="0" y="0" width="200" height="30"/></clipPath></defs>'
+MASK = '<defs><mask id="veil"><rect x="0" y="0" width="200" height="120" fill="white"/></mask></defs>'
+
+
+@pytest.mark.parametrize(("svg", "needle"), [
+    (REUSE.replace('<g id="outer-membrane">', '<g id="outer-membrane" clip-path="url(#cut)">').replace(
+        "</desc>", "</desc>" + CLIP), "the figure's definitions"),
+    (REUSE.replace('<g id="outer-membrane">', '<g id="outer-membrane" clip-path="inset(0 0 50% 0)">'),
+     "part 'outer-membrane' changed"),
+    (REUSE.replace('<g id="peptidoglycan">', '<g id="peptidoglycan" mask="url(#veil)">').replace(
+        "</desc>", "</desc>" + MASK), "the figure's definitions"),
+    (REUSE.replace('<g id="peptidoglycan">', '<g id="peptidoglycan" opacity="0">'), "part 'peptidoglycan' changed"),
+    (REUSE.replace('<path id="inner-membrane"', '<path style="display:none" id="inner-membrane"'),
+     "part 'inner-membrane' changed"),
+    (REUSE.replace('<path id="inner-membrane"', '<path stroke-width="9" id="inner-membrane"'),
+     "part 'inner-membrane' changed"),
+    (REUSE.replace('class="ink"/></g><g id="peptidoglycan">', 'class="ink" fill="red"/></g><g id="peptidoglycan">'),
+     "part 'outer-membrane' changed"),
+    (REUSE.replace("</desc>", "</desc><style>#peptidoglycan { transform: translateY(9px); }</style>"),
+     "can reach the base figure"),
+    (REUSE.replace("</desc>", "</desc>" + CLIP.replace("<rect", '<rect class="ink"')), "the figure's definitions"),
+    (REUSE.replace('<g id="outer-membrane">', '<g opacity="0"><g id="outer-membrane">').replace(
+        '<g id="peptidoglycan">', '</g><g id="peptidoglycan">'), "part 'outer-membrane' changed"),
+    (REUSE.replace('<g id="outer-membrane">', '<g class="caption-phone"><g id="outer-membrane">').replace(
+        '<g id="peptidoglycan">', '</g><g id="peptidoglycan">'), "class 'caption-phone'"),
+    (REUSE.replace('<path id="inner-membrane" d="M 10 56 L 190 56" class="ink"/>',
+                   '<path id="inner-membrane" d="M 10 56 L 190 56" class="mark-loop"/>'),
+     "class 'mark-loop' on base figure part 'inner-membrane'"),
+    (REUSE.replace("</svg>", '<path class="leader" d="M 20 70 L 60 70 L 60 80 Z" fill="black"/></svg>'),
+     "attribute fill"),
+    (REUSE.replace("</svg>", '<path class="leader" d="M 20 70 L 60 70 L 60 80 Z"/></svg>'),
+     "a leader is an open stroke"),
+    (REUSE.replace("</svg>", '<path class="leader" style="fill: black" d="M 20 70 L 60 70"/></svg>'),
+     "attribute style"),
+    (REUSE.replace("</svg>", '<rect class="leader" x="20" y="70" width="40" height="10"/></svg>'),
+     "a leader is an open stroke"),
+    (REUSE.replace("</svg>", '<polygon class="leader" points="20,70 60,70 60,80"/></svg>'),
+     "a leader is an open stroke"),
+    (REUSE.replace(DOT, '<circle class="anchor" cx="100" cy="40" r="60"/>'), "an anchor is a <circle>"),
+    (REUSE.replace("</svg>", '<rect class="mark-loop" data-highlight="1" x="5" y="5" width="9" height="9"/></svg>'),
+     "a highlight mark is a <path>"),
+    (REUSE.replace("</svg>", '<path class="mark-swipe" d="M 6 30 L 194 30"/></svg>'), "data-highlight"),
+    (REUSE.replace("</svg>", '<g opacity="0.2"><text x="100" y="80" text-anchor="middle">Note</text></g></svg>'),
+     "attribute opacity"),
+])
+def test_a_reuse_that_hides_clips_or_restyles_a_part_or_adds_a_shape_is_refused(home, root, saved, svg, needle):
+    """Fail closed: whatever the check does not know is refused, never let through."""
+    run_fails(VISUAL, home, "svg", reuse(svg), needle)
+    assert not out_file(root, "envelope-labelled").exists()
+
+
+ARROW = '<path class="leader" pathLength="1" d="M 30 70 L 30 88 M 26 84 L 30 88 L 34 84"/>'
+
+
+def test_a_content_arrow_drawn_as_a_leader_is_built(home, root, saved):
+    run_ok(VISUAL, home, "svg", reuse(REUSE.replace("</svg>", ARROW + "</svg>")))
+
+
+def page_with_style(css: str) -> dict:
+    payload = figure_in_page(REUSE)
+    return {**payload, "body": f"<style>{css}</style>" + payload["body"]}
+
+
+@pytest.mark.parametrize("css", [
+    "#peptidoglycan { transform: translateY(9px); }",
+    "figure path { stroke-width: 9; }",
+    "svg :is(g) { opacity: 0; }",
+    "* { opacity: .5; }",
+    "figure { --fig-ink: transparent; }",
+    "main { stroke-width: 9; }",
+    "@media (min-width: 1px) { .ink { display: none; } }",
+])
+def test_a_reuse_page_whose_css_reaches_a_part_is_refused(home, root, saved, css):
+    run_fails(VISUAL, home, "page", page_with_style(css), "can reach the base figure")
+    assert not out_file(root, "envelope-steps", "html").exists()
+
+
+def test_a_reuse_page_may_lay_out_the_page_and_size_the_figure(home, root, saved):
+    css = "figure { margin: 0 auto; max-width: 30rem; } figure svg { width: 100%; height: auto; } .head h1 { color: red; }"
+    run_ok(VISUAL, home, "page", page_with_style(css))
+
+
+def test_a_reuse_may_size_its_labels_in_its_own_style(home, root, saved):
+    """The guide sizes SVG labels in a <style>; a rule that reaches only labels is not a change to a part."""
+    css = "<style>text { font-size: 9px; } @media (max-width: 600px) { text { font-size: 12px; } }</style>"
+    run_ok(VISUAL, home, "svg", reuse(REUSE.replace("</desc>", "</desc>" + css)))
+
+
+def figure_wrapped(svg: str, before: str, after: str = "") -> dict:
+    payload = figure_in_page(svg)
+    body = payload["body"].replace("<figure>", before).replace("</figure>", after or "</figure>")
+    return {**payload, "body": body}
+
+
+@pytest.mark.parametrize(("before", "after", "needle"), [
+    ("<figure hidden>", "", "attribute hidden"),
+    ('<figure class="sr-only">', "", "class 'sr-only'"),
+    ('<figure style="opacity: 0">', "", "property opacity"),
+    ('<div style="--fig-ink: transparent"><figure>', "</figure></div>", "property --fig-ink"),
+])
+def test_a_reuse_page_that_hides_or_restyles_the_figure_from_around_it_is_refused(home, root, saved, before, after,
+                                                                                  needle):
+    run_fails(VISUAL, home, "page", figure_wrapped(REUSE, before, after), needle)
+    assert not out_file(root, "envelope-steps", "html").exists()
+
+
+def test_a_reuse_page_may_pin_its_figure_on_a_board(home, root, saved):
+    board = '<div class="board" style="--sticky-fig: 13rem"><figure>'
+    run_ok(VISUAL, home, "page", figure_wrapped(REUSE, board, '</figure><div class="work"><p>Text.</p></div></div>'))

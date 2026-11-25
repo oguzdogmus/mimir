@@ -205,17 +205,41 @@ svg -- check one SVG document and write it with the Skald tokens.
 Base figures (``page`` and ``svg``)
     With ``base`` (optional, a subject), the build starts from the subject's
     base figure, the one ``inputs`` names for the course, and must keep it
-    exactly: the SVG that holds its parts (for ``page``, the first outermost
-    inline ``<svg>`` with one of its part ids) has the base figure's viewBox
-    and every part, by id, with the same tag, the same geometry (d, x, y,
-    width, height, cx, cy, r, rx, ry, x1, y1, x2, y2, points, transform,
-    href, pathLength), the same shapes inside it and the same transforms
-    around it. Classes, styles and ``data-step``/``data-highlight`` may change,
-    and parts may be wrapped in step groups without a transform. Labels
-    (``<text>``) may be added anywhere; a new shape outside the parts must
-    have the class leader, anchor, mark-loop or mark-swipe
-    (``visual_base.ADDED_CLASSES``). Anything else, or a subject with no base
-    figure, exits 2 with ``base: ...`` and nothing is written.
+    exactly. The check fails closed (``visual_base``): it lists what may
+    change and what may be added, and refuses everything else.
+    - The SVG that holds its parts (for ``page``, the first outermost inline
+      ``<svg>`` with one of its part ids) has the base figure's viewBox and
+      ``<svg>`` attributes; it may gain an id, aria-* and a style attribute
+      of FRAME_PROPERTIES only.
+    - Every part, by id, keeps its tag, every attribute and everything inside
+      it; only class, ``data-step`` and ``data-highlight``
+      (``visual_base.PART_MAY_CHANGE``) may change, and a new class is one
+      of ink, ink-fill, soft, soft-fill, curve, ghost or wash
+      (``PART_CLASSES``). A group round a part keeps every attribute but
+      those, so a step group ``<g data-step="N">`` is fine and a transform,
+      opacity, clip or mask round a part is refused.
+    - Definitions outside the parts (defs, markers, clip paths, masks,
+      gradients) stay exactly as the base figure has them, and so does its
+      own ``<style>``: none is added, dropped or changed.
+    - Outside the parts, the build may add labels (``<text>``), groups that
+      carry only class, id, ``data-step``, ``data-highlight`` and aria-*, and
+      shapes of exactly one class (``ADDED_CLASSES``), with only their own
+      geometry and those attributes, never a fill or a style: a leader is an
+      open stroke (a ``<path>`` without Z, a ``<line>`` or a ``<polyline>``;
+      a content arrow is a leader whose head is part of the stroke), an
+      anchor a ``<circle>`` of radius at most ANCHOR_MAX_SHARE (1%) of the
+      viewBox's larger side, a highlight mark (mark-loop, mark-swipe) a
+      ``<path>`` with ``data-highlight``.
+    - CSS: every ``<style>`` rule but the base figure's own selects only by
+      type, class and id with descendant or child combinators (no
+      pseudo-class, attribute or sibling selector, no nested rule), reaches
+      no part or shape of the figure (labels are fine), and sets on the
+      figure's ``<svg>`` and the elements round it only FRAME_PROPERTIES
+      (layout and type). An element round the figure carries no ``hidden``,
+      no Skald class but board, work-first, step and body, and a style
+      attribute of FRAME_PROPERTIES only.
+    Anything else, or a subject with no base figure, exits 2 with ``base:
+    ...`` and nothing is written.
 
 open -- open a built file in the default browser.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "file": "pumping-lemma.html"}

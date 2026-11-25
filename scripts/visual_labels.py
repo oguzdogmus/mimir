@@ -86,6 +86,8 @@ class _BodyTree(HTMLParser):
         html_node = _Node("html", {}, None)
         body = _Node("body", {}, html_node)
         self.root = _Node("main", {}, body)
+        html_node.kids.append(body)
+        body.kids.append(self.root)
         self.cur = self.root
 
     def _in_svg(self) -> bool:
