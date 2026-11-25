@@ -8,3 +8,8 @@ keep this NOTICE file and credit the original project.
 
 Mimir bundles KaTeX (https://katex.org/), copyright Khan Academy and
 other contributors, under the MIT License (assets/vendor/katex/).
+
+Mimir bundles the fonts Familjen Grotesk (copyright 2021 The Familjen Grotesk
+Project Authors), Atkinson Hyperlegible Next (copyright 2020-2024 The Atkinson
+Hyperlegible Next Project Authors) and Kalam (copyright 2014 Indian Type
+Foundry), under the SIL Open Font License 1.1 (assets/skald/fonts/).
