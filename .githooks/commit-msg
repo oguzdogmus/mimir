@@ -1,8 +1,13 @@
 #!/bin/sh
-# Refuse a commit message that still holds git's "# Conflicts:" block, which a merge
-# committed without cleanup (git commit --no-edit, -F, --cleanup=verbatim) keeps.
+# Delete git's "# Conflicts:" block (that line and the indented "#<tab><path>" lines
+# after it) from the commit message. A merge committed without the editor
+# (git commit --no-edit, -F, --cleanup=verbatim) would otherwise keep it; in the
+# editor flow git strips comment lines only after this hook, so the hook must not refuse.
 # Enable once per clone: git config core.hooksPath .githooks
-if grep -q '^# Conflicts:' "$1"; then
-    echo "commit-msg: the message still holds git's '# Conflicts:' block; delete that block and commit again." >&2
-    exit 1
-fi
+grep -q '^# Conflicts:' "$1" || exit 0
+tmp="$1.conflicts.$$"
+awk '
+    /^# Conflicts:/ { skipping = 1; next }
+    skipping && /^#\t/ { next }
+    { skipping = 0; print }
+' "$1" > "$tmp" && mv "$tmp" "$1"

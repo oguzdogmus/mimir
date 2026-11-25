@@ -38,11 +38,35 @@ def conflicted(tmp_path):
     return tmp_path
 
 
-def test_a_merge_committed_with_the_leftover_conflicts_block_is_refused(conflicted):
-    done = git(conflicted, "commit", "--no-edit", check=False)
-    assert done.returncode != 0
-    assert "# Conflicts:" in done.stderr
-    assert git(conflicted, "rev-parse", "-q", "--verify", "MERGE_HEAD", check=False).returncode == 0
+def message(repo: Path) -> str:
+    return git(repo, "log", "-1", "--format=%B").stdout
+
+
+def test_a_merge_committed_without_the_editor_loses_the_conflicts_block(conflicted):
+    git(conflicted, "commit", "-q", "--no-edit")
+    body = message(conflicted)
+    assert body.startswith("Merge branch 'side'")
+    assert "# Conflicts:" not in body
+    assert "#\tnote.txt" not in body
+
+
+def test_a_merge_committed_through_the_editor_is_not_refused(conflicted):
+    git(conflicted, "-c", "core.editor=true", "commit", "-q")
+    body = message(conflicted)
+    assert body.startswith("Merge branch 'side'")
+    assert "Conflicts" not in body
+
+
+def test_only_the_conflicts_block_is_deleted_from_a_message_file(conflicted, tmp_path_factory):
+    msg = tmp_path_factory.mktemp("msg") / "message.txt"
+    msg.write_text("Merge side: keep both lines\n\n# Conflicts:\n#\tnote.txt\n#\tother.txt\n"
+                   "\nCo-Authored-By: Test <test@example.com>\n", encoding="utf-8")
+    git(conflicted, "commit", "-q", "--cleanup=verbatim", "-F", str(msg))
+    body = message(conflicted)
+    assert "Conflicts" not in body
+    assert "#\t" not in body
+    assert body.startswith("Merge side: keep both lines\n")
+    assert "Co-Authored-By: Test <test@example.com>" in body
 
 
 def test_a_merge_with_a_clean_message_is_committed(conflicted):
@@ -54,5 +78,5 @@ def test_an_ordinary_message_that_mentions_the_block_is_committed(tmp_path):
     git(tmp_path, "init", "-q")
     (tmp_path / "a.txt").write_text("a\n", encoding="utf-8")
     git(tmp_path, "add", "a.txt")
-    git(tmp_path, "commit", "-q", "-m", "Refuse messages that keep the # Conflicts: block")
-    assert git(tmp_path, "log", "-1", "--format=%s").stdout.strip().startswith("Refuse messages")
+    git(tmp_path, "commit", "-q", "-m", "Strip the # Conflicts: block from merge messages")
+    assert git(tmp_path, "log", "-1", "--format=%s").stdout.strip() == "Strip the # Conflicts: block from merge messages"
