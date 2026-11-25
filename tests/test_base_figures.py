@@ -424,8 +424,6 @@ def test_the_base_figure_builder_is_a_registered_helper_on_the_stronger_model():
     assert front["name"] == "base-figure-builder"
     assert front["model"] == "opus" and front["tools"] == "Bash"
     assert front["description"].endswith("Dispatched by Mimir skills; not for direct use.")
-    assert f"./{BUILDER}" in json.loads(_read(".claude-plugin/plugin.json"))["agents"]
-    assert "mimir:base-figure-builder" in _read("docs/agents/plugin-from-worktree.md")
 
 
 def test_the_base_figure_builder_draws_parts_with_stable_ids_through_the_shell_and_never_opens_them():

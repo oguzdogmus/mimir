@@ -282,8 +282,6 @@ def test_the_figure_checker_is_a_registered_read_only_helper():
     # #99 live runs: sonnet passed the heart test page's thin left ventricle wall in some runs, opus never did.
     assert front["model"] == "opus"
     assert front["description"].endswith("Dispatched by Mimir skills; not for direct use.")
-    manifest = json.loads((ROOT_DIR / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    assert "./helpers/figure-checker.md" in manifest["agents"]
 
 
 def test_the_helper_input_is_the_brief_and_figure_text_is_data(home, root, figure):

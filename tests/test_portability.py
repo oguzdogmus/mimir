@@ -7,6 +7,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 SKILLS = sorted(d for d in (ROOT_DIR / "skills").iterdir() if (d / "SKILL.md").is_file())
 MARKDOWN = (sorted((ROOT_DIR / "skills").rglob("*.md")) + sorted((ROOT_DIR / "reference").glob("*.md"))
             + sorted((ROOT_DIR / "helpers").glob("*.md")))
+HELPERS = sorted((ROOT_DIR / "helpers").glob("*.md"))
+HELPER_NAMES = "|".join(re.escape(p.stem) for p in HELPERS)  # the only `mimir:` agent names
 NAME = re.compile(r"^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
 
 
@@ -28,7 +30,7 @@ def test_no_claude_only_paths_or_command_names():
         text = path.read_text(encoding="utf-8")
         assert "CLAUDE_PLUGIN_ROOT" not in text, path
         assert not re.search(r"/mimir:(?!mimir-)", text), path
-        assert not re.search(r"`mimir:(?!verifier`|visual-builder`|figure-checker`|field-researcher`|base-figure-builder`)", text), path
+        assert not re.search(rf"`mimir:(?!(?:{HELPER_NAMES})`)", text), path
 
 
 INTERNAL = {"mimir-core-rules", "mimir-notation"}
@@ -76,8 +78,6 @@ def test_manifests_agree():
     allowed = {"$schema", "name", "version", "description", "author", "homepage", "repository", "license",
                "keywords", "extensions"}
     assert set(portable) <= allowed
-    for agent in claude["agents"]:
-        assert (ROOT_DIR / agent).is_file(), agent
 
 
 def test_manifests_match_shipped_plugin():
@@ -87,6 +87,10 @@ def test_manifests_match_shipped_plugin():
     assert listed == [s.name for s in SKILLS]  # every shipped skill listed once, nothing extra
     for skill in claude["skills"]:
         assert (ROOT_DIR / skill / "SKILL.md").is_file(), skill
+    # every helper file is a shipped agent, listed once, and named after its file
+    assert sorted(claude["agents"]) == [f"./helpers/{p.name}" for p in HELPERS]
+    for helper in HELPERS:
+        assert frontmatter(helper)["name"] == helper.stem, helper.name
     assert market["plugins"][0]["version"] == claude["version"]
     readme = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
     assert re.search(r"\*\*Version (\S+)\*\*", readme).group(1) == claude["version"]
@@ -852,9 +856,6 @@ def test_field_researcher_is_a_registered_helper_with_web_tools_and_no_file_read
     assert front["name"] == "field-researcher"
     assert front["description"].endswith("Dispatched by Mimir skills; not for direct use.")
     assert front["tools"] == "WebSearch, WebFetch, Bash"  # no Read, Grep or Glob over the workspace
-    agents = json.loads(_read(".claude-plugin/plugin.json"))["agents"]
-    assert f"./{RESEARCHER}" in agents
-    assert "mimir:field-researcher" in _read("docs/agents/plugin-from-worktree.md")
 
 
 def test_field_researcher_input_is_only_the_field_name_and_public_topic_names():
