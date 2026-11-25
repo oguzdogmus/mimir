@@ -1,7 +1,7 @@
 {
  "field": "theory-of-computation",
  "title": "Theory of computation",
- "figure_kinds": [
+ "figures": [
   {"name": "state diagram", "kind": "formal notation"},
   {"name": "parse tree", "kind": "formal notation"}
  ],

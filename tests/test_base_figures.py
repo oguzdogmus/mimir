@@ -20,7 +20,7 @@ FP = SCRIPTS / "fieldpack.py"
 VISUAL = SCRIPTS / "visual.py"
 WS = SCRIPTS / "workspace.py"
 PACK = json.loads((ROOT_DIR / "tests" / "fixtures" / "field-pack-microbiology.json").read_text(encoding="utf-8"))
-FIELD, FIGURE = PACK["field"], PACK["figure_kinds"][0]["name"]
+FIELD, FIGURE = PACK["field"], PACK["figures"][0]["name"]
 TERM, COURSE, OTHER = "2026-Fall", "MICRO201 Bacteria", "MICRO305 Pathogens"
 SUBJECT = "gram-negative-envelope"
 
@@ -178,7 +178,7 @@ def test_a_subject_with_a_base_figure_is_not_saved_again(home, root):
     ({"subject": "Human Heart"}, "subject must be lowercase letters"),
     ({"subject": "a" * 41}, "at most 40 characters"),
     ({"field": "civil-engineering"}, "no field pack 'civil-engineering'"),
-    ({"figure": "truss"}, "figure 'truss' is not one of the figure kinds"),
+    ({"figure": "truss"}, "figure 'truss' is not one of the figures"),
     ({"path": "relative.svg"}, "path must be the absolute path of an .svg file"),
     ({"extra": 1}, "unknown field 'extra'"),
 ])

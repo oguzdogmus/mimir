@@ -22,10 +22,11 @@ brief -- the figure checker's input for one built figure.
           "depiction", "path": "/abs/heart.html", "items": [{"n": 1,
           "rule": "..."}], "brief": "...", "line": "Figure check brief:
           3 checklist items for anatomical section."}
-    ``figure`` names one of the pack's figure kinds, ignoring case. ``path``
+    ``figure`` names one of the pack's figures, ignoring case. ``path``
     is the absolute path of an existing ``.svg`` or ``.html`` file, not a
-    symlink. ``brief`` is the text to dispatch: the figure's path, its figure
-    kind and that kind's checklist, numbered from 1, without sources. Nothing
+    symlink. ``brief`` is the text to dispatch: the figure's path, the pack's
+    figure with its figure kind and that figure's checklist, numbered from 1,
+    without sources. Nothing
     else from the pack goes in.
 
 read -- the figure checker's reply as one verdict per checklist item.
@@ -65,18 +66,18 @@ VERDICTS = ("pass", "fail")
 
 
 def _checklist(data: dict) -> tuple[str, dict, list[dict]]:
-    """(field, figure kind entry, numbered items) for the input's field and figure."""
+    """(field, the pack's figure entry, numbered items) for the input's field and figure."""
     field = fieldpack.parse_field(data)
     _, pack = fieldpack.load_pack(ingest._workspace_root(), field)
     name = data.get("figure")
     if not isinstance(name, str) or not name.strip():
-        raise InputError("figure is required (one of the pack's figure kinds)")
-    kind = next((k for k in pack["figure_kinds"] if k["name"].casefold() == name.strip().casefold()), None)
-    if kind is None:
-        names = ", ".join(k["name"] for k in pack["figure_kinds"])
-        raise InputError(f"figure {short(name)} is not one of the figure kinds of {field} ({names})")
-    rules = next(c["rules"] for c in pack["checklists"] if c["figure"] == kind["name"])
-    return field, kind, [{"n": n, "rule": r["rule"]} for n, r in enumerate(rules, 1)]
+        raise InputError("figure is required (one of the pack's figures)")
+    figure = next((f for f in pack["figures"] if f["name"].casefold() == name.strip().casefold()), None)
+    if figure is None:
+        names = ", ".join(f["name"] for f in pack["figures"])
+        raise InputError(f"figure {short(name)} is not one of the figures of {field} ({names})")
+    rules = next(c["rules"] for c in pack["checklists"] if c["figure"] == figure["name"])
+    return field, figure, [{"n": n, "rule": r["rule"]} for n, r in enumerate(rules, 1)]
 
 
 def _figure_path(data: dict) -> Path:
@@ -97,13 +98,13 @@ def _figure_path(data: dict) -> Path:
 
 def cmd_brief(data: dict) -> dict:
     check_keys(data, {"field", "figure", "path"})
-    field, kind, items = _checklist(data)
+    field, figure, items = _checklist(data)
     path = _figure_path(data)
-    lines = [f"Figure: {path}", f"Figure kind: {kind['name']} ({kind['kind']})", "Checklist:"]
+    lines = [f"File: {path}", f"Figure: {figure['name']} ({figure['kind']})", "Checklist:"]
     lines += [f"{i['n']}. {i['rule']}" for i in items]
     count = f"{len(items)} checklist item{'' if len(items) == 1 else 's'}"
-    return {"field": field, "figure": kind["name"], "kind": kind["kind"], "path": str(path), "items": items,
-            "brief": "\n".join(lines) + "\n", "line": f"Figure check brief: {count} for {kind['name']}."}
+    return {"field": field, "figure": figure["name"], "kind": figure["kind"], "path": str(path), "items": items,
+            "brief": "\n".join(lines) + "\n", "line": f"Figure check brief: {count} for {figure['name']}."}
 
 
 def _reply_lines(reply: str) -> dict[str, tuple[str, str]]:
@@ -118,7 +119,7 @@ def _reply_lines(reply: str) -> dict[str, tuple[str, str]]:
 
 def cmd_read(data: dict) -> dict:
     check_keys(data, {"field", "figure", "reply"})
-    field, kind, items = _checklist(data)
+    field, figure, items = _checklist(data)
     if not isinstance(data.get("reply"), str):
         raise InputError("reply is required (the figure checker's reply text)")
     found = _reply_lines(data["reply"])
@@ -140,7 +141,7 @@ def cmd_read(data: dict) -> dict:
         line = f"Figure check failed: every checklist item passes, but the reply's overall verdict is {word}."
     else:
         line = f"Figure check passed: all {count} pass."
-    return {"field": field, "figure": kind["name"], "items": results,
+    return {"field": field, "figure": figure["name"], "items": results,
             "overall": "pass" if not failed and said == "pass" else "fail", "failed": failed, "line": line}
 
 

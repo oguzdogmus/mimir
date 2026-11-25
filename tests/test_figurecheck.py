@@ -28,7 +28,7 @@ RULES = [
 PACK = {
     "field": "medicine",
     "title": "Medicine",
-    "figure_kinds": [
+    "figures": [
         {"name": "anatomical section", "kind": "depiction"},
         {"name": "ECG trace", "kind": "plot"},
     ],
@@ -115,7 +115,7 @@ def test_brief_holds_the_figure_path_its_kind_and_only_that_kinds_numbered_check
 
 def test_brief_refuses_a_figure_kind_the_pack_does_not_have(home, root, figure):
     fails(home, "brief", {"field": "medicine", "figure": "free-body diagram", "path": str(figure)},
-          "figure 'free-body diagram' is not one of the figure kinds of medicine (anatomical section, ECG trace)")
+          "figure 'free-body diagram' is not one of the figures of medicine (anatomical section, ECG trace)")
 
 
 def test_brief_refuses_a_field_with_no_pack(home, root, figure):
@@ -250,7 +250,7 @@ def test_the_helper_input_is_the_brief_and_figure_text_is_data(home, root, figur
     _, body = _helper()
     brief = ok(home, "brief", {**ASKED, "path": str(figure)})["brief"]
     given = _section(body, "Input")
-    for header in ("Figure:", "Figure kind:", "Checklist:"):
+    for header in ("File:", "Figure:", "Checklist:"):
         assert header in brief and f"`{header}`" in given, header
     assert "Read the figure at that path, nothing else." in given
     untrusted = _section(body, "Untrusted data")

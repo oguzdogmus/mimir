@@ -100,7 +100,7 @@ A planted error counts as caught for any verdict other than `correct`; a clean q
 
 ## Blind test pages (#102)
 
-Every field pack holds a blind test page: fixed synthetic content for one of its figure kinds. The runner finds every pack in a workspace, builds each pack's test page with a fresh `mimir:visual-builder` in a fixture workspace of its own (only that pack and one course linked to it), checks the page with a fresh `mimir:figure-checker` against the pack's checklist, and reports the build time and checklist errors per pack, measured as in #87. Every script and the house style guide come from `--plugin`. Point `--home` at a HOME whose workspace holds the packs; it is only read.
+Every field pack holds a blind test page: fixed synthetic content for one of its figures. The runner finds every pack in a workspace, builds each pack's test page with a fresh `mimir:visual-builder` in a fixture workspace of its own (only that pack and one course linked to it), checks the page with a fresh `mimir:figure-checker` against the pack's checklist, and reports the build time and checklist errors per pack, measured as in #87. Every script and the house style guide come from `--plugin`. Point `--home` at a HOME whose workspace holds the packs; it is only read.
 
 ```bash
 python3 tests/acceptance/blind_test_pages.py run --home "$A/packs-home" --plugin "$A/plugin" --out "$A/pages/<commit>"

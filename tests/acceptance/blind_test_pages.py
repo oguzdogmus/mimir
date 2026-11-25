@@ -89,7 +89,7 @@ def run_pack(out: Path, scripts: Path, pack: dict, builder: Callable[[dict], dic
     """Build one pack's test page in a fresh fixture with ``builder`` and check it with ``checker``."""
     fx = _fixture(scripts, out / pack["field"], pack)
     page = pack["test_page"]
-    kind = next(k["kind"] for k in pack["figure_kinds"] if k["name"] == page["figure"])
+    kind = next(f["kind"] for f in pack["figures"] if f["name"] == page["figure"])
     env = {**os.environ, "HOME": str(fx["home"]), "USERPROFILE": str(fx["home"])}
     job = {"script": str(scripts / "visual.py"), "term": TERM, "course": fx["course"], "name": NAME, "kind": KIND,
            "figure": page["figure"], "figure_kind": kind, "content": page["content"], "env": env,
@@ -128,7 +128,7 @@ def builder_cmd(plugin: Path, job: dict, model: str | None = None) -> list[str]:
     The one place the builder's dispatch is written; change it here when the helper's inputs change."""
     prompt = "\n".join([f"script: {job['script']}", f"term: {job['term']}", f"course: {job['course']}",
                         f"name: {job['name']}", f"kind: {job['kind']}", "",
-                        f"Figure kind: {job['figure']} ({job['figure_kind']})", "Content:", job["content"]])
+                        f"Figure: {job['figure']} ({job['figure_kind']})", "Content:", job["content"]])
     return _agent_cmd(plugin, "mimir:visual-builder", model) + ["--allowedTools=Bash", prompt]
 
 

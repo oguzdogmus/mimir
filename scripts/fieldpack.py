@@ -42,7 +42,7 @@ single hyphens, at most FIELD_MAX_CHARS characters ("medicine",
 at most TEXT_MAX_CHARS characters, stored stripped::
 
     {"field": "medicine", "title": "Medicine",
-     "figure_kinds": [{"name": "anatomical section", "kind": "depiction"}],
+     "figures": [{"name": "anatomical section", "kind": "depiction"}],
      "conventions": [{"rule": "...", "source": "..."}],
      "recipes": [{"figure": "anatomical section", "rule": "...",
                   "source": "..."}],
@@ -50,14 +50,15 @@ at most TEXT_MAX_CHARS characters, stored stripped::
                      "rules": [{"rule": "...", "source": "..."}]}],
      "test_page": {"figure": "anatomical section", "content": "..."}}
 
-* ``figure_kinds``: at least one; names distinct ignoring case; ``kind`` is
-  one of FIGURE_KINDS, the four figure kinds of the house style.
+* ``figures``: the field's own figures, at least one; names distinct
+  ignoring case; ``kind`` is one of FIGURE_KINDS, the four figure kinds of
+  the house style.
 * ``conventions`` and ``recipes`` may be empty; every rule has a ``source``.
-  A recipe's ``figure`` names one of the pack's figure kinds.
-* ``checklists``: exactly one accuracy checklist per figure kind, each with
+  A recipe's ``figure`` names one of the pack's figures.
+* ``checklists``: exactly one accuracy checklist per figure, each with
   at least one sourced rule.
 * ``test_page``: the fixed synthetic content of the pack's blind test page,
-  for one of its figure kinds; ``content`` may span lines, at most
+  for one of its figures; ``content`` may span lines, at most
   CONTENT_MAX_CHARS characters.
 * The stored file (indented JSON) is at most MAX_PACK_CHARS characters, so
   every builder can read the pack in full beside the core guide.
@@ -75,7 +76,7 @@ save -- check one field pack and write it once.
 list -- the packs already in the workspace, sorted by field.
     in : {}
     out: {"packs": [{"field": "medicine", "title": "Medicine", "path":
-          "...", "figure_kinds": ["anatomical section", "ECG trace"]}],
+          "...", "figures": ["anatomical section", "ECG trace"]}],
           "line": "1 field pack: medicine."}
     Names starting with ``.`` and ``__MACOSX`` are skipped; any other store entry that is not
     a folder named as a field exits 2.
@@ -278,27 +279,27 @@ def _sourced(value, where: str, keys: set[str] = frozenset()) -> dict:
 def _figure(entry: dict, where: str, names: dict[str, str]) -> str:
     name = _text(entry.get("figure"), f"{where}.figure")
     if name.casefold() not in names:
-        raise InputError(f"{where}.figure {short(name)} is not one of the pack's figure_kinds")
+        raise InputError(f"{where}.figure {short(name)} is not one of the pack's figures")
     return names[name.casefold()]
 
 
 def check_pack(data: dict) -> dict:
     """The pack as it is stored; refuses anything the store does not know."""
-    check_keys(data, {"field", "title", "figure_kinds", "conventions", "recipes", "checklists", "test_page"})
+    check_keys(data, {"field", "title", "figures", "conventions", "recipes", "checklists", "test_page"})
     field = parse_field(data)
     title = _text(data.get("title"), "title", FIELD_MAX_CHARS * 2)
-    kinds, names = [], {}
-    for n, value in enumerate(_list(data, "figure_kinds", True), 1):
-        where = f"figure_kinds[{n}]"
+    figures, names = [], {}
+    for n, value in enumerate(_list(data, "figures", True), 1):
+        where = f"figures[{n}]"
         entry = _object(value, where, {"name", "kind"})
         name = _text(entry.get("name"), f"{where}.name", FIELD_MAX_CHARS * 2)
         if entry.get("kind") not in FIGURE_KINDS:
             raise InputError(f"{where}.kind must be one of {', '.join(FIGURE_KINDS)}: {short(entry.get('kind'))}")
         if name.casefold() in names:
-            raise InputError(f"{where}.name {short(name)} repeats an earlier figure kind (names are distinct "
+            raise InputError(f"{where}.name {short(name)} repeats an earlier figure (names are distinct "
                              "ignoring case)")
         names[name.casefold()] = name
-        kinds.append({"name": name, "kind": entry["kind"]})
+        figures.append({"name": name, "kind": entry["kind"]})
     conventions = [_sourced(v, f"conventions[{n}]") for n, v in enumerate(_list(data, "conventions", False), 1)]
     recipes = []
     for n, value in enumerate(_list(data, "recipes", False), 1):
@@ -318,13 +319,13 @@ def check_pack(data: dict) -> dict:
             raise InputError(f"{where}.rules is required (a list of at least one rule)")
         checklists.append({"figure": figure,
                            "rules": [_sourced(v, f"{where}.rules[{m}]") for m, v in enumerate(rules, 1)]})
-    for n, kind in enumerate(kinds, 1):
-        if kind["name"] not in checked:
-            raise InputError(f"figure_kinds[{n}] {short(kind['name'])} has no accuracy checklist")
+    for n, figure in enumerate(figures, 1):
+        if figure["name"] not in checked:
+            raise InputError(f"figures[{n}] {short(figure['name'])} has no accuracy checklist")
     page = _object(data.get("test_page"), "test_page", {"figure", "content"})
     test_page = {"figure": _figure(page, "test_page", names),
                  "content": _text(page.get("content"), "test_page.content", CONTENT_MAX_CHARS, lines=True)}
-    pack = {"field": field, "title": title, "figure_kinds": kinds, "conventions": conventions, "recipes": recipes,
+    pack = {"field": field, "title": title, "figures": figures, "conventions": conventions, "recipes": recipes,
             "checklists": checklists, "test_page": test_page}
     size = len(_dump(pack))
     if size > MAX_PACK_CHARS:
@@ -400,7 +401,7 @@ def cmd_list(data: dict) -> dict:
     for field in stored_fields(root):
         path, p = load_pack(root, field)
         packs.append({"field": p["field"], "title": p["title"], "path": str(path),
-                      "figure_kinds": [k["name"] for k in p["figure_kinds"]]})
+                      "figures": [f["name"] for f in p["figures"]]})
     names = ", ".join(p["field"] for p in packs)
     line = f"{len(packs)} field pack{'' if len(packs) == 1 else 's'}: {names}." if packs else "No field packs yet."
     return {"packs": packs, "line": line}

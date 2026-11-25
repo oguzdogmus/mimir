@@ -119,14 +119,14 @@ _Avoid_: Animation preference, reduced motion
 Every visual property of a figure that carries meaning in its field or for the professor: shapes, symbols, proportions, positions, scales, and colours where the field assigns them. The house style never changes notation. When unsure whether a property is notation, it is.
 
 **Figure kind**:
-One of four kinds of figure, each allowing a different amount of house style: a depiction of a real thing (a heart, a bacterium), a formal notation (an ERD, a DFA, a circuit), a plot of data or a function, or Mimir's own sketch (an analogy, a concept map). When unsure, the stricter kind applies.
+One of four kinds of figure, each allowing a different amount of house style: a depiction of a real thing (a heart, a bacterium), a formal notation (an ERD, a DFA, a circuit), a plot of data or a function, or Mimir's own sketch (an analogy, a concept map). When unsure, the stricter kind applies. A field pack's own figures (an anatomical section, a free-body diagram) are its figures, each mapped to one figure kind, never figure kinds themselves.
 
 **Cross-field recipes**:
 The only figure recipes kept in the core house style guide: the ones several fields share, such as the graph geometry (arrowheads, edges between neighbours, self-loops and their labels) of state diagrams in computer science, electrical engineering and linguistics. The conventions and recipes of one field, such as an automaton's input tape, live in its field pack; a professor's own live in the fingerprint's notation section.
 _Avoid_: Field notes
 
 **Field pack**:
-The builder guidance for one field, saved once in the student's workspace and shared by all of the student's courses in that field: the field's figure kinds mapped to the four figure kinds, its conventions and recipes, an accuracy checklist per figure kind, its base figures and the content of its blind test page. Researched from public sources when a course's field is first known, every rule with its source. A course uses one field pack, or two when it spans two fields. The course's own materials override it. No builder draws without it: the visual shell refuses to build for a course with no field pack.
+The builder guidance for one field, saved once in the student's workspace and shared by all of the student's courses in that field: the field's own figures (an anatomical section, a free-body diagram, an alignment table), each mapped to one of the four figure kinds, its conventions and recipes, an accuracy checklist per figure, its base figures and the content of its blind test page. Researched from public sources when a course's field is first known, every rule with its source. A course uses one field pack, or two when it spans two fields. The course's own materials override it. No builder draws without it: the visual shell refuses to build for a course with no field pack.
 _Avoid_: Field notes, field guide, domain pack
 
 **Field researcher**:
@@ -142,7 +142,7 @@ The helper that draws a base figure the first time its subject is needed, on the
 _Avoid_: Base builder, figure grower
 
 **Figure checker**:
-The independent, read-only helper that checks one built figure against its field pack's accuracy checklist for that figure kind, before a base figure is saved or a blind test page is scored. It returns a pass or a fail with a reason for every checklist item, plus an overall verdict that passes only when every item does. It reads only the figure, its figure kind and that checklist.
+The independent, read-only helper that checks one built figure against its field pack's accuracy checklist for that figure, before a base figure is saved or a blind test page is scored. It returns a pass or a fail with a reason for every checklist item, plus an overall verdict that passes only when every item does. It reads only the figure, the pack's name for it with its figure kind, and that checklist.
 _Avoid_: Figure verifier, figure grader
 
 **Teaching highlight**:
