@@ -893,6 +893,7 @@ def test_field_researcher_asks_for_what_left_the_core_guide():
     find = " ".join(_read(RESEARCHER).split("\n## What to find\n", 1)[1].split("\n## ", 1)[0].split())
     assert "parts drawn with it" in find and "input tape" in find
     assert "which part keeps them" in find and "not to scale" in find
+    assert "length-to-width ratio" in find and "its key proportion as a number" in find
     assert "rival notations" in find and "the course's own" in find
     assert "standard views" in find and "units and their notation" in find
 

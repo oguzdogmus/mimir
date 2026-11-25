@@ -68,6 +68,12 @@ def test_guide_keeps_the_cross_field_graph_geometry():
         assert recipe in section, recipe
 
 
+def test_plots_label_every_curve_with_its_function():
+    """A cross-field plot rule (#103 live run): a curve carries its function or series name."""
+    plots = " ".join(_guide().split("### Plots are computed", 1)[1].split("\n### ", 1)[0].split())
+    assert "Label every curve" in plots and "`.tex-i`" in plots
+
+
 def _blocks(lang: str) -> list[str]:
     return re.findall(rf"^```{lang}\n(.*?)^```", _guide(), re.M | re.S)
 

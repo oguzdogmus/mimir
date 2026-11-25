@@ -336,7 +336,9 @@ style.
 
 Compute a plot's points from the formula or data with code (60 or more samples per
 period), never by eye, and draw the path from those points. Ticks and labels sit at
-the exact values.
+the exact values. Label every curve with its function or series as the content names it
+(e.g. `f(x) = 3 sin(2x)`), beside the curve or in a free corner of the plot, with
+variables in `.tex-i` and function names and numbers in `.tex`.
 
 **Labels** never cross a stroke and never leave the viewBox: edge labels beside the
 edge, self-loop labels beyond the apex, tick labels on the side the curve leaves free.
