@@ -19,7 +19,9 @@ RC = SCRIPTS / "release_check.py"
 
 sys.path.insert(0, str(SCRIPTS))
 import release_check  # noqa: E402
-import visual  # noqa: E402
+import visual_check  # noqa: E402
+import visual_open  # noqa: E402
+import visual_render  # noqa: E402
 
 KEYS = ["platform", "html", "svg", "opened_html", "opened_svg", "line"]
 SVG_NS = "{http://www.w3.org/2000/svg}"
@@ -59,22 +61,22 @@ def test_files_come_from_the_page_and_svg_shells(tmp_path):
     out = json.loads(_run(["--no-open"], tmp_path).stdout)
     text = Path(out["html"]).read_text(encoding="utf-8")
     assert "<title>Mimir release check</title>" in text and "<h1>Mimir release check</h1>" in text
-    assert visual.skald_tokens() in text and '<svg class="sk-defs"' in text
+    assert visual_render.skald_tokens() in text and '<svg class="sk-defs"' in text
     bodies = re.findall(r"<script>(.*?)</script>", text, re.S)
     assert any("renderMathInElement(" in b for b in bodies)
     assert (ROOT_DIR / "assets" / "page" / "steps.js").read_text(encoding="utf-8") in bodies
     policy = html.unescape(re.search(r'http-equiv="Content-Security-Policy" content="([^"]*)"', text).group(1))
-    assert all(visual._csp_hash(b) in policy for b in bodies) and "default-src 'none'" in policy
+    assert all(visual_render.csp_hash(b) in policy for b in bodies) and "default-src 'none'" in policy
     assert 'data-step="2"' in text and "\\(" in text
     assert not re.search(r"""(?:src|href)\s*=\s*["']?\s*(?:https?:)?//""", text, re.I)  # self-contained
     image = Path(out["svg"]).read_text(encoding="utf-8")
-    assert visual.skald_tokens() in image
-    visual.check_svg(image.split("<style><![CDATA[", 1)[0].encode("utf-8") + b"</svg>\n")  # what was checked
+    assert visual_render.skald_tokens() in image
+    visual_check.check_svg(image.split("<style><![CDATA[", 1)[0].encode("utf-8") + b"</svg>\n")  # what was checked
 
 
 def test_opened(monkeypatch, capsys):
     seen = []
-    monkeypatch.setattr(visual, "open_in_browser", lambda path: seen.append(path) or True)
+    monkeypatch.setattr(visual_open, "open_in_browser", lambda path: seen.append(path) or True)
     assert release_check.main([]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["opened_html"] is True and out["opened_svg"] is True
@@ -85,7 +87,7 @@ def test_opened(monkeypatch, capsys):
 @pytest.mark.parametrize("results", [(False, False), (True, False), (False, True)])
 def test_not_opened(monkeypatch, capsys, results):
     answers = iter(results)
-    monkeypatch.setattr(visual, "open_in_browser", lambda path: next(answers))
+    monkeypatch.setattr(visual_open, "open_in_browser", lambda path: next(answers))
     assert release_check.main([]) == 1
     out = json.loads(capsys.readouterr().out)
     assert (out["opened_html"], out["opened_svg"]) == results
@@ -93,7 +95,7 @@ def test_not_opened(monkeypatch, capsys, results):
 
 
 def test_headless_linux_uses_the_shipped_opener(monkeypatch, capsys):
-    monkeypatch.setattr(visual, "_platform", lambda: "linux")
+    monkeypatch.setattr(visual_open, "detect_platform", lambda: "linux")
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
     assert release_check.main([]) == 1
@@ -103,7 +105,7 @@ def test_headless_linux_uses_the_shipped_opener(monkeypatch, capsys):
 
 @pytest.mark.parametrize("platform", ["linux", "macos", "windows", "wsl", "other"])
 def test_platform_is_echoed(monkeypatch, capsys, platform):
-    monkeypatch.setattr(visual, "_platform", lambda: platform)
+    monkeypatch.setattr(visual_open, "detect_platform", lambda: platform)
     assert release_check.main(["--no-open"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["platform"] == platform
@@ -125,7 +127,7 @@ def test_no_copy_of_the_opener():
     attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
     imports = {a.name for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom)) for a in n.names}
     assert "subprocess" not in imports | names and "startfile" not in attrs
-    assert "open_in_browser" in attrs and "_platform" in attrs
+    assert "open_in_browser" in attrs and "detect_platform" in attrs
     for word in ("xdg-open", "wslview", "explorer.exe"):
         assert word not in RC.read_text(encoding="utf-8")
 

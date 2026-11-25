@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,10 @@ KATEX = ROOT_DIR / "assets" / "vendor" / "katex"
 
 sys.path.insert(0, str(SCRIPTS))
 import visual  # noqa: E402
+import visual_check  # noqa: E402
+import visual_machine  # noqa: E402
+import visual_open  # noqa: E402
+import visual_render  # noqa: E402
 
 TERM, COURSE = "2026-Fall", "CS201 Theory"
 ROWS = [("past-papers/q.jpg", "past-papers", "1", "ocr"),
@@ -163,9 +168,9 @@ def csp(page: str) -> str:
 # --- constants and the shared page parts ---------------------------------------------------------------------------
 
 def test_constants_are_the_spec_values():
-    assert visual.ORIGINAL_EMBED_MAX_BYTES == 10 * 1024 * 1024 and visual.SVG_MAX_BYTES == 1024 * 1024
-    assert visual.TITLE_MAX_CHARS == 120 and visual.EXAMPLE_MAX_CHARS == 4000
-    assert visual.NAME_MAX_CHARS == 60 and visual.OPEN_WAIT_SECONDS == 5
+    assert visual_render.ORIGINAL_EMBED_MAX_BYTES == 10 * 1024 * 1024 and visual.SVG_MAX_BYTES == 1024 * 1024
+    assert visual.TITLE_MAX_CHARS == 120 and visual_machine.EXAMPLE_MAX_CHARS == 4000
+    assert visual.NAME_MAX_CHARS == 60 and visual_open.OPEN_WAIT_SECONDS == 5
     version = (KATEX / "VERSION").read_text().splitlines()
     assert version[0] == "0.19.0"
     assert "source: https://registry.npmjs.org/katex/-/katex-0.19.0.tgz" in version
@@ -203,7 +208,7 @@ def test_original_image_types_are_embedded(home, cdir, name, mime):
 
 @pytest.mark.parametrize("size,embedded", [(32, True), (33, False)])
 def test_embed_size_boundary(home, cdir, monkeypatch, size, embedded):
-    monkeypatch.setattr(visual, "ORIGINAL_EMBED_MAX_BYTES", 32)
+    monkeypatch.setattr(visual_render, "ORIGINAL_EMBED_MAX_BYTES", 32)
     _add_original(cdir, "edge.png", b"x" * size)
     out = visual.cmd_page(free_page(original("past-papers/edge.png", 1)))
     body = main_part(Path(out["path"]).read_text(encoding="utf-8"))
@@ -216,7 +221,7 @@ def test_original_without_known_pages_accepts_any_page(home, cdir):
 
 
 def test_big_image_becomes_a_link(home, cdir, monkeypatch):
-    monkeypatch.setattr(visual, "ORIGINAL_EMBED_MAX_BYTES", 16)
+    monkeypatch.setattr(visual_render, "ORIGINAL_EMBED_MAX_BYTES", 16)
     out = visual.cmd_page(free_page(original("past-papers/big.png", 1)))
     page = Path(out["path"]).read_text(encoding="utf-8")
     assert "<img" not in main_part(page) and "file://" in page and "Original: past-papers/big.png, p.1" in page
@@ -423,7 +428,7 @@ def built(home, cdir):
     return Path(ok(home, "page", PAGE)["path"])
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux") or visual._is_wsl(), reason="plain Linux only")
+@pytest.mark.skipif(not sys.platform.startswith("linux") or visual_open._is_wsl(), reason="plain Linux only")
 def test_open_headless_falls_back_to_the_path(home, built, tmp_path):
     called = tmp_path / "called"
     bin_dir = _fake_bin(tmp_path, "xdg-open", f'touch "{called}"')
@@ -432,7 +437,7 @@ def test_open_headless_falls_back_to_the_path(home, built, tmp_path):
     assert not called.exists()
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux") or visual._is_wsl(), reason="plain Linux only")
+@pytest.mark.skipif(not sys.platform.startswith("linux") or visual_open._is_wsl(), reason="plain Linux only")
 @pytest.mark.parametrize("code,opened", [(0, True), (3, False)])
 def test_open_with_display_uses_xdg_open(home, built, tmp_path, code, opened):
     log = tmp_path / "args"
@@ -468,30 +473,30 @@ def test_open_wsl_without_any_opener(home, built, tmp_path):
 
 def test_open_macos_and_windows(home, built, monkeypatch):
     calls = []
-    monkeypatch.setattr(visual, "_platform", lambda: "macos")
-    monkeypatch.setattr(visual, "_launch", lambda argv, ignore_exit: calls.append((argv, ignore_exit)) or True)
+    monkeypatch.setattr(visual_open, "detect_platform", lambda: "macos")
+    monkeypatch.setattr(visual_open, "_launch", lambda argv, ignore_exit: calls.append((argv, ignore_exit)) or True)
     assert visual.cmd_open(dict(OPEN))["opened"] is True
     assert calls == [(["open", str(built)], False)]
-    monkeypatch.setattr(visual, "_platform", lambda: "windows")
+    monkeypatch.setattr(visual_open, "detect_platform", lambda: "windows")
     started = []
-    monkeypatch.setattr(visual.os, "startfile", started.append, raising=False)
+    monkeypatch.setattr(visual_open.os, "startfile", started.append, raising=False)
     assert visual.cmd_open(dict(OPEN))["opened"] is True and started == [str(built)]
 
     def refuse(path):
         raise OSError("no association")
 
-    monkeypatch.setattr(visual.os, "startfile", refuse, raising=False)
+    monkeypatch.setattr(visual_open.os, "startfile", refuse, raising=False)
     assert visual.cmd_open(dict(OPEN))["opened"] is False
-    monkeypatch.setattr(visual, "_platform", lambda: "other")
+    monkeypatch.setattr(visual_open, "detect_platform", lambda: "other")
     assert visual.cmd_open(dict(OPEN))["opened"] is False
 
 
 def test_launch_waits_at_most_the_limit(monkeypatch, tmp_path):
-    monkeypatch.setattr(visual, "OPEN_WAIT_SECONDS", 0.2)
-    assert visual._launch([sys.executable, "-c", "import time; time.sleep(5)"], ignore_exit=False) is True
-    assert visual._launch([sys.executable, "-c", "raise SystemExit(2)"], ignore_exit=False) is False
-    assert visual._launch([sys.executable, "-c", "raise SystemExit(1)"], ignore_exit=True) is True
-    assert visual._launch([str(tmp_path / "nope")], ignore_exit=False) is False
+    monkeypatch.setattr(visual_open, "OPEN_WAIT_SECONDS", 0.2)
+    assert visual_open._launch([sys.executable, "-c", "import time; time.sleep(5)"], ignore_exit=False) is True
+    assert visual_open._launch([sys.executable, "-c", "raise SystemExit(2)"], ignore_exit=False) is False
+    assert visual_open._launch([sys.executable, "-c", "raise SystemExit(1)"], ignore_exit=True) is True
+    assert visual_open._launch([str(tmp_path / "nope")], ignore_exit=False) is False
 
 
 @pytest.mark.parametrize("file,needle", [
@@ -557,17 +562,19 @@ def test_old_template_kinds_are_unknown(home, cdir, kind):
 
 
 def test_stdlib_plus_own_scripts_only():
-    tree = ast.parse(VIS.read_text())
-    tops = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            tops.update(alias.name.split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            assert node.level == 0
-            tops.add(node.module.split(".")[0])
-    ours = {"workspace", "ingest", "verify"}
-    assert ours <= tops
-    assert tops - ours <= set(sys.stdlib_module_names) | {"__future__"}, tops
+    parts = sorted(SCRIPTS.glob("visual_*.py"))
+    ours = {"workspace", "ingest", "verify"} | {p.stem for p in parts}
+    for path in [VIS, *parts]:
+        tops = set()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                tops.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                assert node.level == 0
+                tops.add(node.module.split(".")[0])
+        if path == VIS:
+            assert {"workspace", "ingest", "verify"} <= tops
+        assert tops - ours <= set(sys.stdlib_module_names) | {"__future__"}, (path.name, tops)
 
 
 def test_vendored_katex_is_the_subset():
@@ -749,10 +756,10 @@ def test_delay_subcommand_is_gone(home, root, cdir):
 
 
 def test_new_constants_are_the_spec_values():
-    assert visual.STEPS_MAX == 50
-    assert visual.MACHINE_MAX_STATES == 60 and visual.MACHINE_MAX_TRANSITIONS == 400
-    assert visual.STATE_NAME_MAX_CHARS == 20 and visual.MACHINE_MAX_SYMBOLS == 64
-    assert visual.MACHINE_MAX_CONFIGS == 256 and visual.MACHINE_MAX_STACK == 64
+    assert visual_check.STEPS_MAX == 50
+    assert visual_machine.MACHINE_MAX_STATES == 60 and visual_machine.MACHINE_MAX_TRANSITIONS == 400
+    assert visual_machine.STATE_NAME_MAX_CHARS == 20 and visual_machine.MACHINE_MAX_SYMBOLS == 64
+    assert visual_machine.MACHINE_MAX_CONFIGS == 256 and visual_machine.MACHINE_MAX_STACK == 64
 
 
 @pytest.mark.parametrize("field, machine", [
@@ -942,8 +949,8 @@ def test_profile_that_cannot_be_read_gives_motion_none(home, root, cdir, monkeyp
 
 def test_motion_fallback_has_one_owner():
     """render_page builds a missing level as none; only read_motion decides what a valid level is."""
-    assert 'data-motion="none"' in visual.render_page("t", "<p>a</p>", False)
-    assert 'data-motion="gentle"' in visual.render_page("t", "<p>a</p>", False, motion="gentle")
+    assert 'data-motion="none"' in visual_render.render_page("t", "<p>a</p>", False)
+    assert 'data-motion="gentle"' in visual_render.render_page("t", "<p>a</p>", False, motion="gentle")
 
 
 def assert_no_katex(built: str) -> None:
@@ -1201,7 +1208,7 @@ def test_svg_gets_the_skald_tokens(home, cdir):
     before, style = written.split("<style><![CDATA[\n", 1)
     assert before == SVG_OK.rsplit("</svg>", 1)[0]
     assert style.endswith("]]></style></svg>\n")
-    visual.ET.fromstring(written.encode())  # still well-formed XML
+    ET.fromstring(written.encode())  # still well-formed XML
 
 
 def test_prefixed_svg_gets_prefixed_tokens(home, cdir):
@@ -1209,7 +1216,7 @@ def test_prefixed_svg_gets_prefixed_tokens(home, cdir):
            '<s:desc>d</s:desc></s:svg><!-- </s:svg> -->')
     written = Path(ok(home, "svg", svg(doc))["path"]).read_text(encoding="utf-8")
     assert written.endswith("]]></s:style></s:svg><!-- </s:svg> -->")
-    root = visual.ET.fromstring(written.encode())
+    root = ET.fromstring(written.encode())
     assert [child.tag for child in root][-1] == "{http://www.w3.org/2000/svg}style"
 
 
@@ -1218,7 +1225,7 @@ def test_page_rebuild_replaces_and_opens(home, cdir, monkeypatch):
     ok(home, "page", {**PAGE, "body": "<p>Second.</p>"})
     assert "<p>Second.</p>" in first.read_text(encoding="utf-8") and sorted(p.name for p in first.parent.iterdir()) == ["demo.html"]
     opened = []
-    monkeypatch.setattr(visual, "open_in_browser", lambda path: opened.append(path) or True)
+    monkeypatch.setattr(visual_open, "open_in_browser", lambda path: opened.append(path) or True)
     out = visual.cmd_open({"term": TERM, "course": COURSE, "file": "demo.html"})
     assert opened == [first] and out["line"] == f"Opened `{first}` in your browser."
 
@@ -1377,7 +1384,7 @@ def test_step_script_runs_after_math(home, cdir):
 
 def test_unrevealed_steps_hide_on_screen_only(home, cdir):
     """JS off: no mimir-js class, nothing hidden. Print: the hiding rule does not apply."""
-    tokens = visual.skald_tokens()
+    tokens = visual_render.skald_tokens()
     rule = ".mimir-js [data-step]:not([data-revealed]) { display: none !important; }"
     assert f"@media screen {{\n  {rule}\n}}" in tokens and tokens.count("[data-revealed]") == 1
     assert "mimir-js" in STEPS_JS
@@ -1446,7 +1453,7 @@ def test_a_page_without_steps_has_no_mascot(home, cdir):
 
 
 def test_mascot_tokens_place_him_hide_him_in_print_and_keep_still_at_motion_none():
-    tokens = visual.skald_tokens()
+    tokens = visual_render.skald_tokens()
     rule = tokens[tokens.index("#mimir-mascot {"):]
     rule = rule[:rule.index("}")]
     for decl in ("position: fixed", "pointer-events: none", "right: var(--mimir-mascot-right)",
