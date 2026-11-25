@@ -125,7 +125,7 @@ from pathlib import Path
 import fingerprint
 import ingest
 import workspace
-from workspace import InputError, _check_keys, _short, parse_segment, parse_term
+from workspace import InputError, check_keys, short, parse_segment, parse_term
 
 MAX_TOPICS = 10
 TOP_N = 5
@@ -144,7 +144,7 @@ def _date(data: dict, key: str) -> str:
     try:
         datetime.date.fromisoformat(value)
     except ValueError:
-        raise InputError(f"{key} is not a valid date: {_short(value)}") from None
+        raise InputError(f"{key} is not a valid date: {short(value)}") from None
     return value
 
 
@@ -318,7 +318,7 @@ def _exam(data: dict) -> tuple[str, str]:
 # --- write ----------------------------------------------------------------------------
 
 def cmd_write(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "date", "exam", "exam_name", "topics"})
+    check_keys(data, {"term", "course", "date", "exam", "exam_name", "topics"})
     date = _date(data, "date")
     exam, exam_name = _exam(data)
     if exam < date:
@@ -337,13 +337,13 @@ def cmd_write(data: dict) -> dict:
         where = f"topics[{n}]"
         if not isinstance(entry, dict):
             raise InputError(f"{where} must be an object")
-        _check_keys(entry, {"topic", "evidence", "sources"})
+        check_keys(entry, {"topic", "evidence", "sources"})
         topic = fingerprint._no_markers(fingerprint._line(entry.get("topic"), f"{where}.topic", required=True),
                                         f"{where}.topic")
         evidence = fingerprint._no_markers(
             fingerprint._line(entry.get("evidence"), f"{where}.evidence", required=True), f"{where}.evidence")
         if _norm(topic) in seen:
-            raise InputError(f"{where}.topic {_short(topic)} repeats an earlier topic (topics are distinct "
+            raise InputError(f"{where}.topic {short(topic)} repeats an earlier topic (topics are distinct "
                              "ignoring case)")
         seen.add(_norm(topic))
         srcs = fingerprint._sources(entry, where, current, prior, prior_note)
@@ -358,7 +358,7 @@ def cmd_write(data: dict) -> dict:
     for block in blocks:
         if _ident(block) == (exam, _norm(exam_name)):
             if _scored(block):
-                raise InputError(f"the forecast for {exam} {_short(exam_name)} is already scored "
+                raise InputError(f"the forecast for {exam} {short(exam_name)} is already scored "
                                  f"({_hit_rate(block)}); a scored forecast is never rewritten")
             replaced = True
             continue
@@ -384,7 +384,7 @@ def cmd_write(data: dict) -> dict:
 # --- score ----------------------------------------------------------------------------
 
 def cmd_score(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "date", "exam", "exam_name", "hits"})
+    check_keys(data, {"term", "course", "date", "exam", "exam_name", "hits"})
     date = _date(data, "date")
     exam, exam_name = _exam(data)
     if date < exam:
@@ -401,14 +401,14 @@ def cmd_score(data: dict) -> dict:
     pre, blocks = _split(old)
     at = next((i for i, b in enumerate(blocks) if _ident(b) == (exam, _norm(exam_name))), None)
     if at is None:
-        raise InputError(f"no forecast for {exam} {_short(exam_name)} in {fc}; nothing to score")
+        raise InputError(f"no forecast for {exam} {short(exam_name)} in {fc}; nothing to score")
     block = blocks[at]
     of = min(TOP_N, _rows(block))
     if of == 0:
-        raise InputError(f"the forecast for {exam} {_short(exam_name)} has no topic rows; nothing to score")
+        raise InputError(f"the forecast for {exam} {short(exam_name)} has no topic rows; nothing to score")
     for n, rank in enumerate(hits, 1):
         if isinstance(rank, bool) or not isinstance(rank, int) or not 1 <= rank <= of:
-            raise InputError(f"hits[{n}] must be a rank from 1 to {of} (the top {of} topics): {_short(str(rank))}")
+            raise InputError(f"hits[{n}] must be a rank from 1 to {of} (the top {of} topics): {short(str(rank))}")
     if len(set(hits)) != len(hits):
         raise InputError("hits lists a rank more than once")
     value = f"{len(hits)} of {of}"

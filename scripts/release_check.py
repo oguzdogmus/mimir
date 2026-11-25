@@ -12,7 +12,7 @@ inline and allowed by the page's CSP) and ``mimir-release-check.svg`` through
 the checks of ``visual.py svg`` (with ``<title>``, ``<desc>``, the label
 overlap check and the Skald tokens), both showing "Mimir release check" and
 the detected platform, into a new temp folder whose name contains a space. It then opens each one through
-``visual.open_in_browser``, the opener the skills ship with (never a copy),
+``visual_open.open_in_browser``, the opener the skills ship with (never a copy),
 and prints one JSON object::
 
     {"platform": "linux", "html": "/tmp/mimir release check abc/mimir-release-check.html",
@@ -34,7 +34,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import visual  # noqa: E402
-from workspace import _Parser  # noqa: E402
+import visual_check  # noqa: E402
+import visual_open  # noqa: E402
+import visual_render  # noqa: E402
+from workspace import Parser  # noqa: E402
 
 PROG = "release_check.py"
 HEADING = "Mimir release check"
@@ -52,8 +55,8 @@ def render_html(platform: str) -> str:
             "<p>Step one: the step script runs.</p></div>\n"
             '<div class="step" data-step="2"><div class="n">2</div>'
             "<p>Step two: the last step.</p></div>\n")
-    checked, math, steps = visual.check_page_body(body, _no_original)
-    return visual.render_page(HEADING, checked, math, steps)
+    checked, math, steps = visual_check.check_page_body(body, _no_original)
+    return visual_render.render_page(HEADING, checked, math, steps)
 
 
 def _no_original(marker: dict, k: int) -> str:
@@ -88,13 +91,13 @@ class BuildError(Exception):
 
 
 def run(open_files: bool) -> tuple[dict, int]:
-    platform = visual._platform()
+    platform = visual_open.detect_platform()
     try:
         page, image = build(platform)
     except OSError as exc:
         raise BuildError(f"cannot write the test files: {exc}") from None
-    opened_html = bool(visual.open_in_browser(page)) if open_files else False
-    opened_svg = bool(visual.open_in_browser(image)) if open_files else False
+    opened_html = bool(visual_open.open_in_browser(page)) if open_files else False
+    opened_svg = bool(visual_open.open_in_browser(image)) if open_files else False
     if not open_files:
         line, code = f"Built `{page}` and `{image}` (not opened).", 0
     elif opened_html and opened_svg:
@@ -107,7 +110,7 @@ def run(open_files: bool) -> tuple[dict, int]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = _Parser(prog=PROG, description="Mimir release check: build two test files and open them in the browser.")
+    parser = Parser(prog=PROG, description="Mimir release check: build two test files and open them in the browser.")
     parser.add_argument("--no-open", action="store_true", help="build the files only, do not open them")
     args = parser.parse_args(argv)
     try:

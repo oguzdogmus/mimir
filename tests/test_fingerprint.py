@@ -564,7 +564,7 @@ def test_internal_error_exits_1(home, monkeypatch, capsys):
         raise KeyError("bug")
 
     monkeypatch.setitem(fingerprint.COMMANDS, "write", (boom, "x"))
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}")))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}"), encoding="utf-8"))
     assert fingerprint.main(["write"]) == 1
     captured = capsys.readouterr()
     assert captured.out == "" and captured.err == "fingerprint.py: internal error (KeyError)\n"
@@ -606,7 +606,7 @@ def test_retake_rolls_back_everything_on_failure(root, home, prior, monkeypatch,
         raise OSError(28, "No space left on device")
 
     monkeypatch.setattr(fingerprint.ingest, "_write_atomic", broken)
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(retake("Dr. Ayse Kaya")).encode())))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(retake("Dr. Ayse Kaya")).encode()), encoding="utf-8"))
     assert fingerprint.main(["retake"]) == 2
     captured = capsys.readouterr()
     assert captured.out == "" and captured.err.startswith("fingerprint.py: filesystem error")
@@ -619,7 +619,7 @@ def test_retake_rollback_keeps_an_existing_course(root, home, prior, monkeypatch
     before = snapshot(root)
     monkeypatch.setattr(fingerprint.ingest, "_write_atomic",
                         lambda path, text: (_ for _ in ()).throw(OSError(13, "Permission denied")))
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(retake("")).encode())))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(retake("")).encode()), encoding="utf-8"))
     assert fingerprint.main(["retake"]) == 2
     capsys.readouterr()
     assert snapshot(root) == before and not (new / ".state" / "prior-term").is_symlink()

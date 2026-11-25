@@ -1333,7 +1333,7 @@ def checked(home: Path, *items: str, verdict: str = "correct", session: str = "s
         {"topic": topic, "origin": "practice"}
     sub = _ok(VF, home, "submit", {"term": TERM, "course": course, "session": session, "questions": [
         {"item": item, "question": f"Question {item}?", "key": f"Key {item}.", **question} for item in items]})
-    token = next(line.split(":", 1)[1].strip() for line in Path(sub["pack"]).read_text().splitlines()
+    token = next(line.split(":", 1)[1].strip() for line in Path(sub["pack"]).read_text(encoding="utf-8").splitlines()
                  if line.startswith("Pack token:"))
     lines = [token] + [f"{n} | {verdict} | reason" for n in range(1, len(items) + 1)]
     _ok(VF, home, "settle", {"term": TERM, "course": course, "session": session, "batch": sub["batch"],

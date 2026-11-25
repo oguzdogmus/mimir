@@ -14,6 +14,11 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
+## Closing tickets and committing spec edits
+
+- **A `ready-for-human` ticket is closed once its output is recorded** (a comment, a file, a branch). If its output is a branch, the closing comment names that branch, and every dependent ticket names it as its base.
+- **Glossary edits made while writing a spec are committed together with it**: commit them when the spec is published and name the commit or branch in the spec. Never leave them in the working tree.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_

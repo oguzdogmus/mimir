@@ -192,7 +192,7 @@ def analyse(path, acc):
         atype = None
         if os.path.exists(meta):
             try:
-                atype = json.load(open(meta)).get("agentType")
+                atype = json.load(open(meta, encoding="utf-8")).get("agentType")
             except Exception:
                 pass
         first_user = next((content(r) for r in srows if r.get("type") == "user"), "")

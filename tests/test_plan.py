@@ -361,7 +361,7 @@ def test_internal_error_exits_1_without_traceback(monkeypatch, capsys):
         raise ZeroDivisionError("bug")
 
     monkeypatch.setitem(plan.COMMANDS, "class", (boom, "test"))
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}")))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}"), encoding="utf-8"))
     assert plan.main(["class"]) == 1
     captured = capsys.readouterr()
     assert captured.out == ""

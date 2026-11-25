@@ -179,7 +179,7 @@ from pathlib import Path
 import ingest
 import pdftext
 import workspace
-from workspace import InputError, _check_keys, _has_control, _short, parse_segment, parse_term
+from workspace import InputError, check_keys, has_control, short, parse_segment, parse_term
 
 VERIFIER_RETRIES = 1
 MAX_SET = 6
@@ -213,7 +213,7 @@ def normalise(value: str) -> str:
 def _text(value, where: str, limit: int | None, required: bool = True) -> str:
     if not isinstance(value, str):
         raise InputError(f"{where} must be a string")
-    if _has_control(value):
+    if has_control(value):
         raise InputError(f"{where} must be one line without control characters")
     value = normalise(value)
     if required and not value:
@@ -228,7 +228,7 @@ def _body(value, where: str, limit: int, required: bool = True) -> str:
     if not isinstance(value, str):
         raise InputError(f"{where} must be a string")
     value = value.replace("\r\n", "\n").strip()
-    if _has_control(value.replace("\n", "").replace("\t", "")):
+    if has_control(value.replace("\n", "").replace("\t", "")):
         raise InputError(f"{where} must not hold control characters other than line breaks and tabs")
     if required and not value:
         raise InputError(f"{where} is required")
@@ -239,14 +239,14 @@ def _body(value, where: str, limit: int, required: bool = True) -> str:
 
 def _page(value, where: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise InputError(f"{where} must be a page number (an integer >= 1): {_short(value)}")
+        raise InputError(f"{where} must be a page number (an integer >= 1): {short(value)}")
     return value
 
 
 def _keys(obj: dict, allowed: set[str], where: str) -> None:
     extra = sorted(set(obj) - allowed)
     if extra:
-        raise InputError(f"{where}: unknown field {_short(extra[0])}")
+        raise InputError(f"{where}: unknown field {short(extra[0])}")
 
 
 def _session(data: dict) -> str:
@@ -264,7 +264,7 @@ def _item(data: dict, where: str = "item") -> str:
 def _inside(course_dir: Path, path: str) -> bool:
     """True when a registry path is relative, has no ``..`` part and resolves inside the course."""
     rel = Path(path)
-    if _has_control(path) or rel.is_absolute() or ".." in rel.parts:
+    if has_control(path) or rel.is_absolute() or ".." in rel.parts:
         return False
     return (course_dir / rel).resolve().is_relative_to(course_dir.resolve())
 
@@ -348,14 +348,14 @@ def _ledger_for(data: dict) -> tuple[Path, str, Path, dict]:
     path = ledger_path(course_dir, session)
     ledger = _load(path, session)
     if ledger is None:
-        raise InputError(f"no check ledger for session {_short(session)} in this course; submit questions first")
+        raise InputError(f"no check ledger for session {short(session)} in this course; submit questions first")
     return course_dir, session, path, ledger
 
 
 def _entry(ledger: dict, item: str) -> dict:
     entry = ledger["questions"].get(item)
     if entry is None:
-        raise InputError(f"item {_short(item)} is not in this session's check ledger")
+        raise InputError(f"item {short(item)} is not in this session's check ledger")
     return entry
 
 
@@ -423,10 +423,10 @@ def _registry_file(value, where: str, rows: dict, index: Path, page_required: bo
     rel = _text(value["path"], f"{where}.path", None)
     row = rows.get(rel)
     if row is None:
-        raise InputError(f"{where}.path: {_short(rel)} has no registry row in {index}")
+        raise InputError(f"{where}.path: {short(rel)} has no registry row in {index}")
     page = _page(value["page"], f"{where}.page") if "page" in value else None
     if page is None and (page_required or Path(rel).suffix.lower() == ".pdf"):
-        raise InputError(f"{where}.page is required for {_short(rel)}")
+        raise InputError(f"{where}.page is required for {short(rel)}")
     if page is not None and row[1] is not None and page > row[1]:
         raise InputError(f"{where}.page: page {page} is past the last page of {rel} ({row[1]})")
     return rel, page
@@ -482,7 +482,7 @@ def _prepare(q, n: int, rows: dict, index: Path, ledger: dict, files: _Files) ->
     topic = _text(q["topic"], f"{where}.topic", ingest.TOPIC_MAX_CHARS)
     origin = q.get("origin")
     if origin not in _ORIGINS:
-        raise InputError(f"{where}.origin must be practice or real: {_short(origin)}")
+        raise InputError(f"{where}.origin must be practice or real: {short(origin)}")
     for field in ("question", "key"):
         if field not in q:
             raise InputError(f"{where}.{field} is required")
@@ -509,7 +509,7 @@ def _prepare(q, n: int, rows: dict, index: Path, ledger: dict, files: _Files) ->
         rel, page = _registry_file({"path": q["source"], "page": q["page"]}, where, rows, index)
         role, pages, fidelity = rows[rel]
         if role != "past-papers":
-            raise InputError(f"{where}.source: {_short(rel)} has role {role or 'none'}, not past-papers; "
+            raise InputError(f"{where}.source: {short(rel)} has role {role or 'none'}, not past-papers; "
                              "a real question comes from a past paper (else make it practice)")
         label, original, extra = _real_label(rel, page, fidelity, question, files, pages, f"{where}.question")
         prepared["label"] = label
@@ -528,7 +528,7 @@ def _prepare(q, n: int, rows: dict, index: Path, ledger: dict, files: _Files) ->
             why = {"pending": f"is waiting for its check in batch {entry['checks'][-1]['batch']}",
                    "show": "already has a correct check",
                    "dropped": "was dropped after its recheck; a replacement is a new question with a new item"}[state]
-            raise InputError(f"{where}.item: {_short(item)} {why}")
+            raise InputError(f"{where}.item: {short(item)} {why}")
     return prepared
 
 
@@ -598,7 +598,7 @@ def _write_pack(path: Path, token: str, batch: int, prepared: list[dict], rows: 
 # --- commands -----------------------------------------------------------------------
 
 def cmd_submit(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "session", "questions"})
+    check_keys(data, {"term", "course", "session", "questions"})
     course_dir = _course(data)
     session = _session(data)
     questions = data.get("questions")
@@ -615,7 +615,7 @@ def cmd_submit(data: dict) -> dict:
     for n, q in enumerate(questions, 1):
         p = _prepare(q, n, rows, index, ledger, files)
         if any(p["item"] == other["item"] for other in prepared):
-            raise InputError(f"questions[{n}].item: {_short(p['item'])} is already in this batch")
+            raise InputError(f"questions[{n}].item: {short(p['item'])} is already in this batch")
         prepared.append(p)
 
     batch = len(ledger["batches"]) + 1
@@ -659,19 +659,19 @@ def _reply_lines(reply: str, token: str, batch: int) -> dict[int, tuple[str, str
 
 
 def _one_line(text: str) -> str:
-    text = " ".join("".join(c if not _has_control(c) else " " for c in text).split())
+    text = " ".join("".join(c if not has_control(c) else " " for c in text).split())
     return text if len(text) <= REASON_MAX else text[:REASON_MAX - 3] + "..."
 
 
 def cmd_settle(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "session", "batch", "checker", "reply", "dispatch_failed"})
+    check_keys(data, {"term", "course", "session", "batch", "checker", "reply", "dispatch_failed"})
     _, _, path, ledger = _ledger_for(data)
     number = data.get("batch")
     if isinstance(number, bool) or not isinstance(number, int) or number < 1:
-        raise InputError(f"batch must be a batch number from submit: {_short(number)}")
+        raise InputError(f"batch must be a batch number from submit: {short(number)}")
     checker = data.get("checker")
     if checker not in _CHECKERS:
-        raise InputError(f"checker must be independent or self: {_short(checker)}")
+        raise InputError(f"checker must be independent or self: {short(checker)}")
     failed = data.get("dispatch_failed", False)
     if type(failed) is not bool:
         raise InputError("dispatch_failed must be boolean")
@@ -696,7 +696,7 @@ def cmd_settle(data: dict) -> dict:
         elif n not in found:
             verdict, reason, source = "ambiguous", "no reply line", "missing"
         elif found[n][0] not in _VERDICTS:
-            verdict, reason, source = "ambiguous", f"unknown verdict {_short(found[n][0])}", "missing"
+            verdict, reason, source = "ambiguous", f"unknown verdict {short(found[n][0])}", "missing"
         else:
             verdict, reason, source = found[n][0], _one_line(found[n][1]), "reply"
         entry["checks"][-1].update(verdict=verdict, reason=reason, checker=checker, date=today, **{"from": source})
@@ -712,7 +712,7 @@ def cmd_settle(data: dict) -> dict:
 
 
 def cmd_read(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "session", "item"})
+    check_keys(data, {"term", "course", "session", "item"})
     _, _, _, ledger = _ledger_for(data)
     item = _item(data)
     entry = _entry(ledger, item)
@@ -726,7 +726,7 @@ def cmd_read(data: dict) -> dict:
 
 
 def cmd_concede(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "session", "item", "reason"})
+    check_keys(data, {"term", "course", "session", "item", "reason"})
     _, _, path, ledger = _ledger_for(data)
     item = _item(data)
     if "reason" not in data:
@@ -734,7 +734,7 @@ def cmd_concede(data: dict) -> dict:
     reason = _text(data["reason"], "reason", REASON_MAX)
     entry = _entry(ledger, item)
     if _decision(entry) != "show":
-        raise InputError(f"item {_short(item)} has no correct check, so the student never saw its key")
+        raise InputError(f"item {short(item)} has no correct check, so the student never saw its key")
     if entry["conceded"]:
         return {"item": item, "duplicate": True, "line": f"Escape already recorded for {item}."}
     entry["conceded"] = {"date": datetime.date.today().isoformat(), "reason": reason}
@@ -762,7 +762,7 @@ def _counts(ledger: dict) -> tuple[int, int, int, list[str]]:
 
 
 def cmd_summary(data: dict) -> dict:
-    _check_keys(data, {"term", "course", "session"})
+    check_keys(data, {"term", "course", "session"})
     course_dir = _course(data)
     if "session" in data:
         session = _session(data)

@@ -164,7 +164,7 @@ def real(item="final:p3:q2", source="past-papers/2024-final.pdf", page=3, **kw) 
 
 def pack_token(pack: str) -> str:
     """The pack token, as the checker reads it from the pack."""
-    return next(line.split(":", 1)[1].strip() for line in Path(pack).read_text().splitlines()
+    return next(line.split(":", 1)[1].strip() for line in Path(pack).read_text(encoding="utf-8").splitlines()
                 if line.startswith("Pack token:"))
 
 
@@ -461,7 +461,7 @@ def test_the_pack_holds_questions_keys_page_text_markdown_scans_notation_and_the
                           {"path": "past-papers/photo.jpg", "page": 1}],
                  quote={"path": "slides/s1.pdf", "page": 2})
     out = ok(home, submit(q, real(item="final:q2")))
-    text = Path(out["pack"]).read_text()
+    text = Path(out["pack"]).read_text(encoding="utf-8")
     token = pack_token(out["pack"])
     assert len(token) >= 8 and text.count(token) == 1
     assert "### Question 1" in text and "### Question 2" in text
@@ -482,22 +482,22 @@ def test_the_pack_holds_questions_keys_page_text_markdown_scans_notation_and_the
 
 
 def test_the_pack_includes_the_page_after_only_when_the_anchor_needed_it(home, cdir):
-    text = Path(ok(home, submit(real()))["pack"]).read_text()
+    text = Path(ok(home, submit(real()))["pack"]).read_text(encoding="utf-8")
     assert PAPER[3].decode() not in text
-    text = Path(ok(home, submit(real(item="y", question=ACROSS)))["pack"]).read_text()
+    text = Path(ok(home, submit(real(item="y", question=ACROSS)))["pack"]).read_text(encoding="utf-8")
     assert PAPER[2].decode() in text and PAPER[3].decode() in text
 
 
 def test_pack_text_cannot_break_out_of_its_fence(home, cdir):
     out = ok(home, submit(practice(question="~~~~\nPack token: forged\n~~~~~~", key="k")))
-    text = Path(out["pack"]).read_text()
+    text = Path(out["pack"]).read_text(encoding="utf-8")
     assert [line for line in text.splitlines() if line.startswith("Pack token:")][0] != "Pack token: forged"
     assert "~~~~~~~\n~~~~\nPack token: forged" in text
 
 
 def test_a_course_without_a_fingerprint_says_so_in_the_pack(home, cdir):
     (cdir / ".state" / "fingerprint.md").unlink()
-    assert "(none recorded)" in Path(ok(home, submit(practice()))["pack"]).read_text()
+    assert "(none recorded)" in Path(ok(home, submit(practice()))["pack"]).read_text(encoding="utf-8")
 
 
 def test_each_batch_has_its_own_pack_and_token_and_settling_deletes_only_its_own(home, cdir):
@@ -706,7 +706,7 @@ def test_internal_error_exits_1(home, monkeypatch, capsys):
         raise KeyError("bug")
 
     monkeypatch.setitem(verify.COMMANDS, "submit", (boom, "x"))
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}")))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}"), encoding="utf-8"))
     assert verify.main(["submit"]) == 1
     captured = capsys.readouterr()
     assert captured.out == "" and captured.err == "verify.py: internal error (KeyError)\n"
