@@ -145,8 +145,8 @@ def test_a_figure_without_stable_part_ids_is_refused_and_not_saved(home, root, s
 def test_a_figure_that_fails_the_shell_svg_checks_is_refused_and_not_saved(home, root):
     """#101: a built candidate changed after the build is checked again, exactly as visual.py svg checks it."""
     path = built(home)
-    path.write_text(path.read_text(encoding="utf-8").replace("</desc>", '</desc><image href="https://x.test/a.png"/>'),
-                    encoding="utf-8")
+    # bytes, not text: write_text turns "\n" into "\r\n" on Windows, and the shell compares the tokens byte for byte
+    path.write_bytes(path.read_bytes().replace(b"</desc>", b'</desc><image href="https://x.test/a.png"/>'))
     before = snapshot(root)
     run_fails(BF, home, "save", save(home, path), "element <image> is not allowed")
     assert snapshot(root) == before
