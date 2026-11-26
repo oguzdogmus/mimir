@@ -119,10 +119,31 @@ _Avoid_: Animation preference, reduced motion
 Every visual property of a figure that carries meaning in its field or for the professor: shapes, symbols, proportions, positions, scales, and colours where the field assigns them. The house style never changes notation. When unsure whether a property is notation, it is.
 
 **Figure kind**:
-One of four kinds of figure, each allowing a different amount of house style: a depiction of a real thing (a heart, a bacterium), a formal notation (an ERD, a DFA, a circuit), a plot of data or a function, or Mimir's own sketch (an analogy, a concept map). When unsure, the stricter kind applies.
+One of four kinds of figure, each allowing a different amount of house style: a depiction of a real thing (a heart, a bacterium), a formal notation (an ERD, a DFA, a circuit), a plot of data or a function, or Mimir's own sketch (an analogy, a concept map). When unsure, the stricter kind applies. A field pack's own figures (an anatomical section, a free-body diagram) are its figures, each mapped to one figure kind, never figure kinds themselves.
 
-**Field notes**:
-The conventions of one field that a figure must keep, recorded one line each in the house style guide when a real case shows the need. A professor's own conventions belong in the fingerprint instead.
+**Cross-field recipes**:
+The only figure recipes kept in the core house style guide: the ones several fields share, such as the graph geometry (arrowheads, edges between neighbours, self-loops and their labels) of state diagrams in computer science, electrical engineering and linguistics. The conventions and recipes of one field, such as an automaton's input tape, live in its field pack; a professor's own live in the fingerprint's notation section.
+_Avoid_: Field notes
+
+**Field pack**:
+The builder guidance for one field, saved once in the student's workspace and shared by all of the student's courses in that field: the field's own figures (an anatomical section, a free-body diagram, an alignment table), each mapped to one of the four figure kinds, its conventions and recipes, an accuracy checklist per figure, its base figures and the content of its blind test page. Researched from public sources when a course's field is first known, every rule with its source. A course uses one field pack, or two when it spans two fields. Precedence, highest first: the course's own materials, then the field pack, then the core house style guide. No builder draws without it: the visual shell refuses to build for a course with no field pack.
+_Avoid_: Field notes, field guide, domain pack
+
+**Field researcher**:
+The helper that researches a field pack from high-trust public sources, in the background, when ingest first meets a course's field, or when a visual is wanted for a course that has no field pack yet. Its whole input is the field name and public topic names, never text, names or paths from the student's course files. It saves the pack through the field pack store, which refuses a rule without a source or a figure kind without a checklist.
+_Avoid_: Field scout, pack builder
+
+**Base figure**:
+A recurring subject of a field (a heart, a truss, a neuron) built carefully once, checked against its field pack's checklist and saved in the field pack as a reusable SVG with stable part ids. Later visuals of that subject start from it and only add labels, steps, highlights and leader lines; the visual shell refuses a build that redraws a part. A professor's own diagram can be one course's base figure: it comes before the pack's for that course and never leaves the course folder.
+_Avoid_: Template, stock figure
+
+**Base figure builder**:
+The helper that draws a base figure the first time its subject is needed, on the stronger model and in the background, while the student already has a normal build. Its figure is saved only after the figure checker passes every checklist item.
+_Avoid_: Base builder, figure grower
+
+**Figure checker**:
+The independent, read-only helper that checks one built figure against its field pack's accuracy checklist for that figure, before a base figure is saved or a blind test page is scored. It returns a pass or a fail with a reason for every checklist item, plus an overall verdict that passes only when every item does. It reads only the figure, the pack's name for it with its figure kind, and that checklist.
+_Avoid_: Figure verifier, figure grader
 
 **Teaching highlight**:
 The one standard mark that points at the part of a figure being discussed. Never a colour change where colour is notation.

@@ -15,8 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      # The version is pinned: ruff.toml takes two preview rules, and preview rules change between releases.
-      - run: uvx ruff@0.17.6 check
+      # tests/check.py pins the ruff version: ruff.toml takes preview rules, and preview rules change between releases.
+      - run: python3 tests/check.py lint
 
   scripts:
     name: ${{ matrix.os }}, Python ${{ matrix.python }}

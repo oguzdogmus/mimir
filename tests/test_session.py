@@ -2248,7 +2248,7 @@ def test_scope_refuses_a_symlinked_scope_file_and_reads_it_as_empty(home, root, 
     target = tmp_path / "elsewhere.md"
     target.write_text("## 2026-11-05 midterm\nwords: x\n- out: Heaps\n", encoding="utf-8")
     (cdir / ".state" / "scope.md").symlink_to(target)
-    fails(home, "scope", SCOPE_BASE, "scope.md must not be a symlink")
+    fails(home, "scope", SCOPE_BASE, "scope.md is a symlink")
     assert ok(home, "start", {"now": NOW})["scope"] is None
     assert target.read_text(encoding="utf-8").startswith("## 2026-11-05")
 

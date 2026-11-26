@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from test_visual import link_pack
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 GUIDE = ROOT_DIR / "reference" / "house-style.md"
@@ -38,11 +39,39 @@ def test_guide_is_a_plain_reference_file_with_every_part_the_spec_names():
     assert not text.startswith("---")  # plain reference file, no skill frontmatter
     heads = " | ".join(_headings(text))
     for part in ("feel", "composing", "tokens", "teaching highlight", "motion", "print",
-                 "meaning test", "figure kinds", "plots are computed", "field notes"):
+                 "meaning test", "figure kinds", "plots are computed", "cross-field recipes"):
         assert part in heads, (part, heads)
+    assert "field notes" not in heads  # #103: field conventions live in field packs
     for kind in ("depiction of a real thing", "formal notation", "plot of data or a function",
                  "mimir's own sketch"):
         assert kind in text.lower(), kind
+
+
+# Rules of one field that #87 put in the guide and #103 moved to field packs. The
+# examples that name a field's subject (a heart, a DFA) stay: they teach the look.
+FIELD_RULES = re.compile(
+    r"anatomy|anterior view|microbiolog|envelope order|length-to-width|not to scale"
+    r"|erd notation|time axis|input tape|automata|double circles?|start arrow from nowhere"
+    r"|textbook convention", re.I)
+
+
+def test_guide_holds_no_field_specific_rules():
+    text = " ".join(_guide().split())  # a rule may wrap across lines
+    hits = [text[max(m.start() - 40, 0):m.end() + 40] for m in FIELD_RULES.finditer(text)]
+    assert not hits, "field rules belong in field packs:\n" + "\n".join(hits)
+
+
+def test_guide_keeps_the_cross_field_graph_geometry():
+    section = _guide().lower().split("### cross-field recipes", 1)[1]
+    for recipe in ("arrowhead", "11 long and 8 wide", "edges between neighbours", "±25°",
+                   "0.45 × the centre distance", "self-loop", "−115°", "2.6r", "12 units above the apex"):
+        assert recipe in section, recipe
+
+
+def test_plots_label_every_curve_with_its_function():
+    """A cross-field plot rule (#103 live run): a curve carries its function or series name."""
+    plots = " ".join(_guide().split("### Plots are computed", 1)[1].split("\n### ", 1)[0].split())
+    assert "Label every curve" in plots and "`.tex-i`" in plots
 
 
 def _blocks(lang: str) -> list[str]:
@@ -56,6 +85,7 @@ def home(tmp_path):
     for cmd, payload in (("init", {}), ("course", {"term": TERM, "course": COURSE})):
         subprocess.run([sys.executable, str(WS), cmd], input=json.dumps(payload).encode(),
                        capture_output=True, env=_env(home), check=True)
+    link_pack(home, TERM, COURSE)
     return home
 
 
@@ -132,3 +162,31 @@ def test_builder_offers_the_machine_of_a_page():
         assert f'"{field}"' in body, field
     guide = GUIDE.read_text(encoding="utf-8")
     assert "## A machine page" in guide and 'id="state-<i>"' in guide
+
+
+def test_builder_reads_the_core_guide_the_field_packs_and_the_notation_section():
+    """#100: every builder reads the core guide, the course's field packs and its notation section,
+    from ``visual.py inputs``, which refuses a course with no pack before anything is composed."""
+    body = _helper()[1]
+    given = body.split("\n## Input\n", 1)[1].split("\n## ", 1)[0]
+    for part in ("core house style guide", "field pack", "notation section"):
+        assert part in given, part
+    run = body.index('python3 "<script>" inputs')
+    assert body.index("## Read the house style guide") < run < body.index("## Compose")
+    assert "`packs`" in body and "`notation`" in body
+    refusal = body[run:body.index("## Compose")]
+    assert "`visual.py: field pack missing" in refusal and "stop" in refusal
+
+
+def test_builder_puts_the_professor_first_then_the_field_pack_then_the_core_guide():
+    order = _helper()[1].split("\n## Precedence\n", 1)[1].split("\n## ", 1)[0]
+    own, pack, guide = (order.index(s) for s in ("course's own materials", "field pack", "core guide"))
+    assert own < pack < guide
+    assert "notation section" in order[own:pack] and "slides" in order[own:pack]
+    assert "the professor always wins" in order.lower()
+
+
+def test_guide_says_the_builder_reads_the_field_packs_beside_it():
+    head = _guide().split("\n## ", 1)[0]
+    assert "no other file" not in head
+    assert "field pack" in head and "notation section" in head

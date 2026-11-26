@@ -21,6 +21,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT_DIR / "scripts"
 VIS = SCRIPTS / "visual.py"
 WS = SCRIPTS / "workspace.py"
+FP = SCRIPTS / "fieldpack.py"
+PACK = ROOT_DIR / "tests" / "fixtures" / "field-pack-theory-of-computation.json"
 KATEX = ROOT_DIR / "assets" / "vendor" / "katex"
 
 sys.path.insert(0, str(SCRIPTS))
@@ -80,6 +82,7 @@ def root(home):
 @pytest.fixture
 def cdir(home, root, tmp_path):
     ws_ok(home, "course", {"term": TERM, "course": COURSE})
+    link_pack(home, TERM, COURSE)
     cdir = root / TERM / COURSE
     index = cdir / "INDEX.md"
     lines = index.read_text().splitlines()
@@ -133,6 +136,20 @@ def ws_ok(home: Path, cmd: str, payload) -> dict:
     return json.loads(proc.stdout)
 
 
+def link_pack(home: Path, term: str, course: str, pack: Path = PACK) -> dict:
+    """Save ``pack`` once through the field pack store, then link it to the course; its ``link`` output."""
+    def run(cmd: str, payload: dict) -> dict:
+        proc = subprocess.run([sys.executable, str(FP), cmd], input=json.dumps(payload).encode(),
+                              capture_output=True, env=_env(home))
+        assert proc.returncode == 0, proc.stderr.decode()
+        return json.loads(proc.stdout)
+
+    data = json.loads(pack.read_text(encoding="utf-8"))
+    if data["field"] not in [p["field"] for p in run("list", {})["packs"]]:
+        run("save", data)
+    return run("link", {"term": term, "course": course, "field": data["field"]})
+
+
 def _add_original(cdir: Path, name: str, data: bytes) -> None:
     """File ``past-papers/<name>`` with an ``ocr`` registry row of 1 page."""
     (cdir / "past-papers" / name).write_bytes(data)
@@ -168,7 +185,7 @@ def csp(page: str) -> str:
 # --- constants and the shared page parts ---------------------------------------------------------------------------
 
 def test_constants_are_the_spec_values():
-    assert visual_render.ORIGINAL_EMBED_MAX_BYTES == 10 * 1024 * 1024 and visual.SVG_MAX_BYTES == 1024 * 1024
+    assert visual_render.ORIGINAL_EMBED_MAX_BYTES == 10 * 1024 * 1024 and visual_check.SVG_MAX_BYTES == 1024 * 1024
     assert visual.TITLE_MAX_CHARS == 120 and visual_machine.EXAMPLE_MAX_CHARS == 4000
     assert visual.NAME_MAX_CHARS == 60 and visual_open.OPEN_WAIT_SECONDS == 5
     version = (KATEX / "VERSION").read_text().splitlines()
@@ -398,6 +415,63 @@ def test_symlinked_course_folders_refused(home, root, tmp_path, which):
         fails(home, cmd, payload, "is a symlink")
 
 
+@pytest.mark.parametrize("cmd,payload", [("svg", svg()), ("page", PAGE)])
+def test_course_without_a_field_pack_refused_and_nothing_written(home, root, cmd, payload):
+    ws_ok(home, "course", {"term": TERM, "course": COURSE})
+    before = sorted(root.rglob("*"))
+    err = fails(home, cmd, payload, f"field pack missing for course {TERM}/{COURSE}")
+    assert "field research" in err
+    assert sorted(root.rglob("*")) == before
+    assert not any((root / TERM / COURSE / ".state" / "out").iterdir())
+
+
+@pytest.mark.parametrize("cmd,payload,name", [("svg", svg(), "dfa.svg"), ("page", PAGE, "demo.html")])
+def test_course_with_a_linked_field_pack_builds(home, cdir, cmd, payload, name):
+    assert ok(home, cmd, payload)["path"] == str(cdir / ".state" / "out" / name)
+
+
+# --- inputs: what every builder reads beside the core guide ------------------------------------------
+
+def test_inputs_name_the_linked_packs_in_link_order_and_no_notation(home, root, cdir):
+    second = ROOT_DIR / "tests" / "fixtures" / "field-pack-microbiology.json"
+    link_pack(home, TERM, COURSE, second)
+    out = ok(home, "inputs", {"term": TERM, "course": COURSE})
+    store = root / ".state" / "field-packs"
+    assert out["course_dir"] == str(cdir)
+    assert out["packs"] == [
+        {"field": "theory-of-computation", "title": "Theory of computation",
+         "path": str(store / "theory-of-computation" / "pack.json")},
+        {"field": "microbiology", "title": "Microbiology", "path": str(store / "microbiology" / "pack.json")}]
+    assert out["notation"] == ""
+    assert out["line"] == ("CS201 Theory: field packs theory-of-computation, microbiology; "
+                           "no notation section.")
+
+
+def test_inputs_pass_the_fingerprint_notation_section(home, cdir):
+    (cdir / ".state" / "fingerprint.md").write_text(
+        "# Fingerprint\n\n## Notation\n- Writes the transition function as delta(q, a) (source: slides/s1.pdf)\n"
+        "\n## Phrasing\n- Asks to justify each step\n", encoding="utf-8")
+    out = ok(home, "inputs", {"term": TERM, "course": COURSE})
+    assert out["notation"] == "- Writes the transition function as delta(q, a) (source: slides/s1.pdf)"
+    assert out["line"] == "CS201 Theory: field pack theory-of-computation; notation section included."
+
+
+def test_inputs_refuse_a_course_without_a_field_pack_and_write_nothing(home, root):
+    ws_ok(home, "course", {"term": TERM, "course": COURSE})
+    before = sorted(root.rglob("*"))
+    fails(home, "inputs", {"term": TERM, "course": COURSE}, f"field pack missing for course {TERM}/{COURSE}")
+    fails(home, "inputs", {"term": TERM, "course": COURSE, "name": "x"}, "unknown field 'name'")
+    assert sorted(root.rglob("*")) == before
+
+
+@pytest.mark.parametrize("cmd,payload", [("svg", svg()), ("page", PAGE)])
+def test_linked_field_pack_that_is_damaged_refused(home, root, cdir, cmd, payload):
+    pack = Path(ok(home, "inputs", {"term": TERM, "course": COURSE})["packs"][0]["path"])
+    pack.write_text("{", encoding="utf-8")
+    fails(home, cmd, payload, "is damaged")
+    assert not any((cdir / ".state" / "out").iterdir())
+
+
 def test_requires_workspace(home):
     fails(home, "svg", svg(), "no workspace")
     fails(home, "page", PAGE, "no workspace")
@@ -555,7 +629,7 @@ def test_old_template_kinds_are_unknown(home, cdir, kind):
     proc = _run(home, kind, {"term": TERM, "course": COURSE, "name": "old", "title": "Old", "blocks": []})
     assert proc.returncode == 2 and proc.stdout == b""
     assert f"invalid choice: '{kind}'".encode() in proc.stderr
-    assert kind not in visual.COMMANDS and list(visual.COMMANDS) == ["page", "svg", "open"]
+    assert kind not in visual.COMMANDS and list(visual.COMMANDS) == ["inputs", "page", "svg", "open"]
     assert not (cdir / ".state" / "out" / "old.html").exists()
     assert not (ROOT_DIR / "assets" / "math-sheet.html").exists()
     assert not (ROOT_DIR / "assets" / "interactive").exists()
@@ -563,7 +637,7 @@ def test_old_template_kinds_are_unknown(home, cdir, kind):
 
 def test_stdlib_plus_own_scripts_only():
     parts = sorted(SCRIPTS.glob("visual_*.py"))
-    ours = {"workspace", "ingest", "verify"} | {p.stem for p in parts}
+    ours = {"workspace", "ingest", "verify", "fieldpack", "figurecheck", "basefigure"} | {p.stem for p in parts}
     for path in [VIS, *parts]:
         tops = set()
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):

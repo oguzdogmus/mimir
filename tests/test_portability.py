@@ -7,6 +7,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 SKILLS = sorted(d for d in (ROOT_DIR / "skills").iterdir() if (d / "SKILL.md").is_file())
 MARKDOWN = (sorted((ROOT_DIR / "skills").rglob("*.md")) + sorted((ROOT_DIR / "reference").glob("*.md"))
             + sorted((ROOT_DIR / "helpers").glob("*.md")))
+HELPERS = sorted((ROOT_DIR / "helpers").glob("*.md"))
+HELPER_NAMES = "|".join(re.escape(p.stem) for p in HELPERS)  # the only `mimir:` agent names
 NAME = re.compile(r"^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
 
 
@@ -28,7 +30,7 @@ def test_no_claude_only_paths_or_command_names():
         text = path.read_text(encoding="utf-8")
         assert "CLAUDE_PLUGIN_ROOT" not in text, path
         assert not re.search(r"/mimir:(?!mimir-)", text), path
-        assert not re.search(r"`mimir:(?!verifier`|visual-builder`)", text), path
+        assert not re.search(rf"`mimir:(?!(?:{HELPER_NAMES})`)", text), path
 
 
 INTERNAL = {"mimir-core-rules", "mimir-notation"}
@@ -76,8 +78,6 @@ def test_manifests_agree():
     allowed = {"$schema", "name", "version", "description", "author", "homepage", "repository", "license",
                "keywords", "extensions"}
     assert set(portable) <= allowed
-    for agent in claude["agents"]:
-        assert (ROOT_DIR / agent).is_file(), agent
 
 
 def test_manifests_match_shipped_plugin():
@@ -87,6 +87,10 @@ def test_manifests_match_shipped_plugin():
     assert listed == [s.name for s in SKILLS]  # every shipped skill listed once, nothing extra
     for skill in claude["skills"]:
         assert (ROOT_DIR / skill / "SKILL.md").is_file(), skill
+    # every helper file is a shipped agent, listed once, and named after its file
+    assert sorted(claude["agents"]) == [f"./helpers/{p.name}" for p in HELPERS]
+    for helper in HELPERS:
+        assert frontmatter(helper)["name"] == helper.stem, helper.name
     assert market["plugins"][0]["version"] == claude["version"]
     readme = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
     assert re.search(r"\*\*Version (\S+)\*\*", readme).group(1) == claude["version"]
@@ -193,6 +197,43 @@ def test_no_living_doc_names_the_removed_visual_kinds():
             assert not REMOVED_VISUALS.search(line), f"{path}:{n}: {line.strip()[:100]}"
     assert not (ROOT_DIR / "assets" / "math-sheet.html").exists()
     assert not (ROOT_DIR / "assets" / "interactive").exists()
+
+
+# Living docs must not describe maintainer-added field notes (#103): a field's
+# conventions live in its field pack, researched per course. The glossary may
+# still list the old name on an _Avoid_ line. Historical records (CHANGELOG.md,
+# the rest of docs/, assets/prototype-skald/) keep their wording.
+FIELD_NOTES = re.compile(r"field[- ]notes?\b|when a real case shows the need|added by the maintainer", re.I)
+
+
+def test_no_living_doc_describes_maintainer_added_field_notes():
+    for path in LIVING_DOCS:
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.startswith("_Avoid_:"):
+                assert not FIELD_NOTES.search(line), f"{path}:{n}: {line.strip()[:100]}"
+
+
+FIGURE_PRECEDENCE = re.compile(r"own materials.{0,300}?field pack.{0,300}?core (?:house style )?guide", re.I)
+
+
+def test_living_docs_give_the_figure_precedence_order():
+    """#96: the course's own materials beat the field pack, which beats the core guide."""
+    for rel in ("reference/notation.md", "reference/core-rules.md", "helpers/visual-builder.md",
+                "reference/house-style.md", "GLOSSARY.md"):
+        text = " ".join(_read(rel).split())
+        assert FIGURE_PRECEDENCE.search(text), rel
+
+
+HELPER_COUNT = {2: "Two", 3: "Three", 4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
+
+
+def test_core_rules_count_and_name_every_helper():
+    """The helper line in core rules names every helper file, and its count is the number of helpers."""
+    helpers = sorted(p.name for p in (ROOT_DIR / "helpers").glob("*.md"))
+    line = next(l for l in core_section("Paths, commands and helpers").splitlines() if "helpers/verifier.md" in l)
+    assert line.startswith(f"- {HELPER_COUNT[len(helpers)]} helpers "), line[:60]
+    for name in helpers:
+        assert f"`<mimir>/helpers/{name}`" in line, name
 
 
 # Sessions end only when the student says "end session": no episode timer and
@@ -797,3 +838,92 @@ def test_record_writes_the_results_line_and_skills_no_longer_append_it():
         assert "## Quiz results" not in text, path
         assert not re.search(r"[Aa]ppend (the outcome|to the log)|logging under `## Results`|"
                              r"Log each under `## Results`", text), path
+
+
+# Field research (#98): ingest dispatches the field researcher in the background
+# with only the field name and public topic names, never course text or paths.
+RESEARCHER = "helpers/field-researcher.md"
+INGEST = "skills/mimir-ingest/SKILL.md"
+
+
+def _ingest_step(number):
+    text = _read(INGEST)
+    return text.split(f"\n{number}. ", 1)[1].split(f"\n{number + 1}. ", 1)[0]
+
+
+def test_field_researcher_is_a_registered_helper_with_web_tools_and_no_file_readers():
+    front = frontmatter(ROOT_DIR / RESEARCHER)
+    assert front["name"] == "field-researcher"
+    assert front["description"].endswith("Dispatched by Mimir skills; not for direct use.")
+    assert front["tools"] == "WebSearch, WebFetch, Bash"  # no Read, Grep or Glob over the workspace
+
+
+def test_field_researcher_input_is_only_the_field_name_and_public_topic_names():
+    helper = _read(RESEARCHER)
+    contract = "only the field name and public topic names"
+    given = helper.split("\n## Input\n", 1)[1].split("\n## ", 1)[0]
+    assert contract in given
+    assert "`script`" in given and "`field`" in given and "`topics`" in given
+    assert "never receive" in given and "course files" in given and "paths" in given
+    queries = helper.split("\n## Queries\n", 1)[1].split("\n## ", 1)[0]
+    assert "only the field name and topic names" in queries
+    research = _ingest_step(10)
+    assert contract in research and "`fieldpack.py match`" in research and "`brief`" in research
+    assert "nothing else" in research
+    assert "`mimir:field-researcher`" in research or "Background dispatch" in research
+    core = core_section("Background dispatch")
+    assert contract in core and "field-researcher.md" in core
+
+
+def test_ingest_asks_nothing_about_the_field_and_never_waits_for_research():
+    research = _ingest_step(10)
+    assert "?" not in research and "ask nothing" in research.lower()
+    assert "background" in research and "never waits" in research
+    assert "`fieldpack.py report`" in research and "`fieldpack.py list`" in research
+    assert "one researcher per field" in research
+    assert "one line" in research  # the result, when the research finishes
+    final = _read(INGEST).split("\n11. ", 1)[1]
+    assert final.startswith("Finish with one line")
+
+
+def test_background_dispatch_names_one_recipe_per_host_and_leaves_the_checker_in_the_foreground():
+    dispatch = core_section("Background dispatch")
+    claude = dispatch.index("`run_in_background: true`")
+    codex = dispatch.index("`spawn_agent`")
+    antigravity = dispatch.index("`define_subagent`")
+    fallback = dispatch.index("no independent agent")
+    assert claude < codex < antigravity < fallback
+    assert "`mimir:field-researcher`" in dispatch and "`fork_turns` none" in dispatch
+    assert "never the checker" in dispatch
+    helpers = core_section("Paths, commands and helpers")
+    assert "field research" in helpers and "<mimir>/helpers/field-researcher.md" in helpers
+
+
+# What left the core house style guide (#103) must be found again by research: the
+# automata input tape, the bacterium's ratio recipe, the anatomical view, one ERD
+# notation per course and the units of a time axis.
+def test_field_researcher_asks_for_what_left_the_core_guide():
+    find = " ".join(_read(RESEARCHER).split("\n## What to find\n", 1)[1].split("\n## ", 1)[0].split())
+    assert "parts drawn with it" in find and "input tape" in find
+    assert "which part keeps them" in find and "not to scale" in find
+    assert "length-to-width ratio" in find and "its key proportion as a number" in find
+    assert "rival notations" in find and "the course's own" in find
+    assert "standard views" in find and "units and their notation" in find
+
+
+# No builder without its field pack (#100): the builder dispatch makes sure the course has a
+# pack first, running field research (#98's Background dispatch) and only then the builder.
+def _building_a_file():
+    return _read("reference/notation.md").split("\n## Building a file\n", 1)[1].split("\n## ", 1)[0]
+
+
+def test_builder_dispatch_runs_field_research_and_then_the_builder_when_a_pack_is_missing():
+    text = _building_a_file()
+    report, match = text.index("`fieldpack.py report`"), text.index("`fieldpack.py match`")
+    research, builder = text.index("Background dispatch"), text.index("`mimir:visual-builder`")
+    assert report < match < research < builder
+    assert "`mimir-ingest` step 10" in text  # the field is named as ingest names it
+    assert "`visual.py: field pack missing" in text and "dispatch the builder again" in text
+    assert "then dispatch the builder" in text
+    background = core_section("Background dispatch")
+    assert "Building a file" in background and "notation.md" in background

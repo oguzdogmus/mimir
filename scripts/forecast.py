@@ -303,8 +303,7 @@ def _target(data: dict) -> tuple[Path, Path, Path, str, str]:
     if not course_dir.is_dir():
         raise InputError(f"no course folder at {course_dir}")
     fc = course_dir / ".state" / "forecast.md"
-    if fc.is_symlink():
-        raise InputError(f"{fc} is a symlink; refusing to write through it")
+    workspace.refuse_symlinks(fc, reason="refusing to write through it")
     return root, course_dir, fc, term, course
 
 
@@ -395,8 +394,7 @@ def cmd_score(data: dict) -> dict:
     root, course_dir, fc, _, _ = _target(data)
     profile = root / ".state" / "profile.md"
     for path in (root / ".state", profile):
-        if path.is_symlink():
-            raise InputError(f"{path} is a symlink; refusing to write through it")
+        workspace.refuse_symlinks(path, reason="refusing to write through it")
     old = ingest.read_text(fc)
     pre, blocks = _split(old)
     at = next((i for i, b in enumerate(blocks) if _ident(b) == (exam, _norm(exam_name))), None)

@@ -14,7 +14,7 @@ Single-context: one root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.
 
 ### Coding standards
 
-Judgement rules for scripts and tests: `CODING_STANDARDS.md`. Lint (`uvx ruff@0.17.6 check`), tests and the commit hook: README "Development".
+Judgement rules for scripts and tests: `CODING_STANDARDS.md`. Every check (lint, tests, release build): `python3 tests/check.py`. The commit hook: README "Development".
 
 ### Running the plugin from a worktree
 

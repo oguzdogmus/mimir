@@ -288,8 +288,7 @@ def cmd_write(data: dict) -> dict:
     if not course_dir.is_dir():
         raise InputError(f"no course folder at {course_dir}")
     fp = course_dir / ".state" / "fingerprint.md"
-    if fp.is_symlink():
-        raise InputError(f"{fp} is a symlink; refusing to write through it")
+    workspace.refuse_symlinks(fp, reason="refusing to write through it")
     old = ingest.read_text(fp)
     prior_value = _key_value(old, "prior_term") or ""
     current_prof = _key_value(old, "professor")
@@ -462,8 +461,7 @@ def cmd_retake(data: dict) -> dict:
     if not linked and not stale and (link.exists() or link.is_symlink()):
         raise InputError(f"{link} already exists and is not a link to {prior_state}; nothing was changed")
     fp = course_dir / ".state" / "fingerprint.md"
-    if fp.is_symlink():
-        raise InputError(f"{fp} is a symlink; refusing to write through it")
+    workspace.refuse_symlinks(fp, reason="refusing to write through it")
     old = ingest.read_text(fp)
     prior_fp = prior_state / "fingerprint.md"
     prior_text = ingest.read_text(prior_fp)

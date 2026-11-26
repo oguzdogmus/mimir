@@ -4,7 +4,7 @@
 Standard library only, Python 3.11+. Shares the JSON contract and helpers of
 ``workspace.py``, ``ingest.py`` and ``verify.py`` (same folder). Run as::
 
-    python3 visual.py <page|svg|open>  < input.json
+    python3 visual.py <inputs|page|svg|open>  < input.json
 
 Each subcommand reads ONE JSON object on stdin (unknown fields are rejected)
 and prints ONE JSON object on stdout: structured data plus a ready-to-print
@@ -12,12 +12,19 @@ and prints ONE JSON object on stdout: structured data plus a ready-to-print
 the learning root (see ``workspace.py``) and an existing course folder; the
 term and course folders and the course ``.state/`` must not be symlinks.
 
+No builder draws without its field's guidance: ``inputs``, ``page`` and
+``svg`` refuse a course that uses no field pack (``fieldpack.py``), right
+after the course folder is found and before anything is checked or written,
+with "field pack missing for course <term>/<course>: run field research for
+its field first, then build again". A linked pack that is missing or damaged
+is refused too. ``open`` only opens a file already built.
+
 This script is the command line and owns the contract below; the work is
 split by job into sibling modules: ``visual_check.py`` (the SVG and page body
 allowlist checkers), ``visual_labels.py`` (the label overlap check),
 ``visual_machine.py`` (the simulator's machine), ``visual_render.py`` (the
-page file, the Skald tokens and the assets) and ``visual_open.py`` (the
-browser open). The limits named below live with the module that applies them.
+page file, the Skald tokens and the assets), ``visual_base.py`` (base figures:
+stable part ids and their reuse) and ``visual_open.py`` (the browser open). The limits named below live with the module that applies them.
 
 This script is the trust boundary for generated pages: the model supplies
 content, this script escapes it, checks it and places the file. Output goes
@@ -26,6 +33,27 @@ missing, neither ``out/`` nor the target may be a symlink, and the file is
 written atomically (a rebuild replaces it). ``name`` matches
 ``[a-z0-9]+(-[a-z0-9]+)*``, at most NAME_MAX_CHARS (60) characters. Errors
 name the field, e.g. ``body.original[2].page`` (lists are numbered from 1).
+
+inputs -- what the builder reads beside the core house style guide.
+    in : {"term": "2026-Fall", "course": "CS201 Theory"}
+    out: {"course_dir": "/home/u/learning/2026-Fall/CS201 Theory",
+          "packs": [{"field": "theory-of-computation", "title": "Theory of
+          computation", "path": "/home/u/learning/.state/field-packs/
+          theory-of-computation/pack.json"}],
+          "notation": "- Writes the transition function as delta(q, a) ...",
+          "line": "CS201 Theory: field pack theory-of-computation; notation
+          section included."}
+    ``packs`` are the course's field packs in link order, each checked as
+    ``fieldpack.py`` checks it on save. ``notation`` is the ``## Notation``
+    section of the course's ``.state/fingerprint.md``, or "" when there is
+    none ("no notation section." in ``line``). Writes nothing.
+    With ``subject`` (optional, a base figure subject as ``basefigure.py``
+    names it), ``base`` is the base figure the course builds that subject
+    from, ``{"subject", "status", "source", "field", "path", "parts"}``
+    exactly as ``basefigure.py find`` reports it (the course's own
+    first; ``status`` "missing" when it has none yet); ``line`` ends "; base
+    figure <subject> from the field pack <field>." (or "the course's own
+    diagram", or "; no base figure <subject> yet.").
 
 page -- an offline page in the Skald house style from a body the builder wrote.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "name": "even-zeros",
@@ -174,6 +202,45 @@ svg -- check one SVG document and write it with the Skald tokens.
     Skald tokens and the figure's CSS (type, class and id selectors), once
     without and once with its ``@media`` rules (the phone sizes).
 
+Base figures (``page`` and ``svg``)
+    With ``base`` (optional, a subject), the build starts from the subject's
+    base figure, the one ``inputs`` names for the course, and must keep it
+    exactly. The check fails closed (``visual_base``): it lists what may
+    change and what may be added, and refuses everything else.
+    - The SVG that holds its parts (for ``page``, the first outermost inline
+      ``<svg>`` with one of its part ids) has the base figure's viewBox and
+      ``<svg>`` attributes; it may gain an id, aria-* and a style attribute
+      of FRAME_PROPERTIES only.
+    - Every part, by id, keeps its tag, every attribute and everything inside
+      it; only class, ``data-step`` and ``data-highlight``
+      (``visual_base.PART_MAY_CHANGE``) may change, and a new class is one
+      of ink, ink-fill, soft, soft-fill, curve, ghost or wash
+      (``PART_CLASSES``). A group round a part keeps every attribute but
+      those, so a step group ``<g data-step="N">`` is fine and a transform,
+      opacity, clip or mask round a part is refused.
+    - Definitions outside the parts (defs, markers, clip paths, masks,
+      gradients) stay exactly as the base figure has them, and so does its
+      own ``<style>``: none is added, dropped or changed.
+    - Outside the parts, the build may add labels (``<text>``), groups that
+      carry only class, id, ``data-step``, ``data-highlight`` and aria-*, and
+      shapes of exactly one class (``ADDED_CLASSES``), with only their own
+      geometry and those attributes, never a fill or a style: a leader is an
+      open stroke (a ``<path>`` without Z, a ``<line>`` or a ``<polyline>``;
+      a content arrow is a leader whose head is part of the stroke), an
+      anchor a ``<circle>`` of radius at most ANCHOR_MAX_SHARE (1%) of the
+      viewBox's larger side, a highlight mark (mark-loop, mark-swipe) a
+      ``<path>`` with ``data-highlight``.
+    - CSS: every ``<style>`` rule but the base figure's own selects only by
+      type, class and id with descendant or child combinators (no
+      pseudo-class, attribute or sibling selector, no nested rule), reaches
+      no part or shape of the figure (labels are fine), and sets on the
+      figure's ``<svg>`` and the elements round it only FRAME_PROPERTIES
+      (layout and type). An element round the figure carries no ``hidden``,
+      no Skald class but board, work-first, step and body, and a style
+      attribute of FRAME_PROPERTIES only.
+    Anything else, or a subject with no base figure, exits 2 with ``base:
+    ...`` and nothing is written.
+
 open -- open a built file in the default browser.
     in : {"term": "2026-Fall", "course": "CS201 Theory", "file": "pumping-lemma.html"}
     out: {"path": "/home/u/learning/2026-Fall/CS201 Theory/.state/out/pumping-lemma.html",
@@ -202,11 +269,13 @@ import os
 import re
 import sys
 import tempfile
-import unicodedata
 from pathlib import Path
 
+import basefigure
+import fieldpack
 import ingest
 import verify
+import visual_base
 import visual_check
 import visual_labels
 import visual_machine
@@ -217,12 +286,9 @@ from workspace import InputError, check_keys, has_control, parse_segment, parse_
 
 NAME_MAX_CHARS = 60
 TITLE_MAX_CHARS = 120
-SVG_MAX_BYTES = 1024 * 1024
-PAGE_BODY_MAX_BYTES = 1024 * 1024
 
 _NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 _FILE = re.compile(r"([a-z0-9]+(?:-[a-z0-9]+)*)\.(html|svg)")
-_ALLOWED_CONTROL = {"\t", "\n", "\r"}
 
 
 # --- Shared ------------------------------------------------------------------------
@@ -237,10 +303,14 @@ def _name(data: dict) -> str:
     return value
 
 
+def out_folder(course_dir: Path) -> Path:
+    """``<course>/.state/out``: where every built file of a course goes."""
+    return course_dir / ".state" / "out"
+
+
 def _out_dir(course_dir: Path, create: bool) -> Path:
-    out = course_dir / ".state" / "out"
-    if out.is_symlink():
-        raise InputError(f"output folder {out} is a symlink; refusing to write through it")
+    out = out_folder(course_dir)
+    workspace.refuse_symlinks(out, field="output folder", reason="refusing to write through it")
     if out.exists() and not out.is_dir():
         raise InputError(f"output folder {out} exists and is not a folder")
     if not out.exists():
@@ -252,8 +322,7 @@ def _out_dir(course_dir: Path, create: bool) -> Path:
 
 def _write_new_or_replace(target: Path, data: bytes) -> None:
     """Write ``data`` to ``target`` atomically (temp file in the same folder, then replace)."""
-    if target.is_symlink():
-        raise InputError(f"{target} is a symlink; refusing to replace it")
+    workspace.refuse_symlinks(target, reason="refusing to replace it")
     if target.exists() and not target.is_file():
         raise InputError(f"{target} exists and is not a regular file")
     fd, tmp = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
@@ -279,38 +348,69 @@ def _write_out(course_dir: Path, name: str, ext: str, content: bytes) -> dict:
     return {"course_dir": str(course_dir), "path": str(target), "line": f"Built {target}."}
 
 
-def _markup_field(value, field: str, what: str, max_bytes: int) -> bytes:
-    """A builder-written markup field (``svg``, ``body``) as UTF-8: non-empty, no control characters, not too big."""
-    if not isinstance(value, str) or not value.strip():
-        raise InputError(f"{field} is required ({what})")
-    if any(c not in _ALLOWED_CONTROL and unicodedata.category(c) in ("Cc", "Cs") for c in value):
-        raise InputError(f"{field} contains control characters or lone surrogates")
-    raw = value.encode("utf-8")
-    if len(raw) > max_bytes:
-        raise InputError(f"{field} is {len(raw)} bytes; at most {max_bytes}")
-    return raw
+def _course_with_pack(term: str, course: str) -> tuple[Path, list[dict]]:
+    """The course folder and the field packs it uses; a course with no linked pack is refused."""
+    course_dir = verify._course_dir(term, course)
+    packs = fieldpack.course_packs(ingest._workspace_root(), course_dir)
+    if not packs:
+        raise InputError(f"field pack missing for course {term}/{course}: run field research for its field "
+                         "first, then build again")
+    return course_dir, packs
+
+
+# --- inputs --------------------------------------------------------------------------
+
+def cmd_inputs(data: dict) -> dict:
+    check_keys(data, {"term", "course", "subject"})
+    term, course = parse_term(data), parse_segment(data, "course")
+    subject = basefigure.parse_subject(data) if "subject" in data else None
+    course_dir, packs = _course_with_pack(term, course)
+    notation = verify._notation(course_dir)
+    fields = ", ".join(p["field"] for p in packs)
+    line = (f"{course}: field pack{'s' if len(packs) > 1 else ''} {fields}; "
+            f"{'notation section included' if notation else 'no notation section'}")
+    out = {"course_dir": str(course_dir), "packs": packs, "notation": notation}
+    if subject is not None:
+        out["base"] = basefigure.lookup(ingest._workspace_root(), course_dir, subject)
+        line += (f"; no base figure {subject} yet" if out["base"]["status"] == "missing"
+                 else f"; base figure {subject} from {basefigure.origin(out['base'])}")
+    return {**out, "line": line + "."}
+
+
+def _check_base(data: dict, course_dir: Path, course: str, figures) -> None:
+    """With ``base``: refuse a build that does not keep the subject's base figure exactly (``visual_base``)."""
+    if "base" not in data:
+        return
+    subject = basefigure.parse_subject(data, "base")
+    found = basefigure.find(ingest._workspace_root(), course_dir, subject)
+    if found is None:
+        raise InputError(f"base: no base figure {subject} for {course}; build without base")
+    base = visual_labels._tree_from_svg(visual_labels.checked_svg(found["svg"]))
+    visual_base.check_reuse(base, figures(), "base")
 
 
 # --- svg ---------------------------------------------------------------------------
 
 def build_svg(svg) -> str:
     """The standalone SVG file for ``svg``: every check of ``visual.py svg``, then the Skald tokens added."""
-    root = visual_check.check_svg(_markup_field(svg, "svg", "the SVG document as a string", SVG_MAX_BYTES))
-    visual_labels.check_svg_labels(root)
+    visual_labels.checked_svg(svg)
     return visual_render.svg_with_tokens(svg)
 
 
 def cmd_svg(data: dict) -> dict:
-    check_keys(data, {"term", "course", "name", "svg"})
+    check_keys(data, {"term", "course", "name", "svg", "base"})
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
-    course_dir = verify._course_dir(term, course)
-    return _write_out(course_dir, name, "svg", build_svg(data.get("svg")).encode("utf-8"))
+    course_dir, _ = _course_with_pack(term, course)
+    svg = data.get("svg")
+    root = visual_labels.checked_svg(svg)
+    _check_base(data, course_dir, course, lambda: [visual_labels._tree_from_svg(root)])
+    return _write_out(course_dir, name, "svg", visual_render.svg_with_tokens(svg).encode("utf-8"))
 
 
 # --- page ----------------------------------------------------------------------------
 
 def cmd_page(data: dict) -> dict:
-    check_keys(data, {"term", "course", "name", "title", "body", "machine", "example"})
+    check_keys(data, {"term", "course", "name", "title", "body", "machine", "example", "base"})
     term, course, name = parse_term(data), parse_segment(data, "course"), _name(data)
     if "title" not in data:
         raise InputError("title is required")
@@ -320,14 +420,15 @@ def cmd_page(data: dict) -> dict:
         raise InputError("example is only for a page with a machine")
     example = visual_machine.parse_example(data)
     body = data.get("body")
-    _markup_field(body, "body", "the page body as an HTML string", PAGE_BODY_MAX_BYTES)
-    course_dir = verify._course_dir(term, course)
+    visual_check.markup_field(body, "body", "the page body as an HTML string", visual_check.PAGE_BODY_MAX_BYTES)
+    course_dir, _ = _course_with_pack(term, course)
     index = course_dir / "INDEX.md"
     rows = {p: r for p, r in ingest.registry(index).items() if verify._inside(course_dir, p)}
     body_html, math, steps = visual_check.check_page_body(
         body, lambda marker, k: visual_render.original_html(marker, f"body.original[{k}]", rows, course_dir, index),
         machine["states"] if machine else ())
     visual_labels.check_body_labels(body_html)
+    _check_base(data, course_dir, course, lambda: visual_labels.body_figures(body_html))
     page = visual_render.render_page(title, body_html, math, steps, machine, example,
                                      workspace.read_motion(ingest._workspace_root()))
     return _write_out(course_dir, name, "html", page.encode("utf-8"))
@@ -354,6 +455,7 @@ def cmd_open(data: dict) -> dict:
 
 
 COMMANDS = {
+    "inputs": (cmd_inputs, "name the course's field packs and notation section; refuses a course with no pack"),
     "page": (cmd_page, "build an offline Skald page from a checked page body in <course>/.state/out/"),
     "svg": (cmd_svg, "check an SVG document and write it to <course>/.state/out/"),
     "open": (cmd_open, "open a built file in the default browser"),
@@ -362,7 +464,7 @@ COMMANDS = {
 
 def main(argv: list[str] | None = None) -> int:
     return workspace.run_cli("visual.py",
-                             ("Mimir visual builder. Subcommands: page, svg, open. Reads one JSON object on "
+                             ("Mimir visual builder. Subcommands: inputs, page, svg, open. Reads one JSON object on "
                               "stdin and prints one JSON object on stdout."),
                              COMMANDS, argv)
 

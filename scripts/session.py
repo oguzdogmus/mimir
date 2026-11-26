@@ -1219,8 +1219,7 @@ def _save_choice(course_dir: Path, line: str) -> None:
     """Write the ``delivery_choice:`` line into ``save.md``: replace the first one, else add it
     after the last key line above the first ``##`` heading (else at the end)."""
     path = course_dir / ".state" / "save.md"
-    if path.is_symlink():
-        raise InputError("save.md must not be a symlink")
+    workspace.refuse_symlinks(path, reason="refusing to use it")
     lines = _text(path).splitlines()
     at = next((i for i, row in enumerate(lines) if re.fullmatch(r"delivery_choice:.*", row.strip())), None)
     if at is not None:
@@ -1535,8 +1534,7 @@ def cmd_scope(data: dict) -> dict:
         raise InputError(f"no ## Exam dates row of {short(code)} named {short(exam_name or '(none)')} "
                          f"on {exam_date} in profile.md")
     path = folder / ".state" / SCOPE_FILE
-    if path.is_symlink():
-        raise InputError(f"{SCOPE_FILE} must not be a symlink")
+    workspace.refuse_symlinks(path, reason="refusing to use it")
     sections = scopes(folder)
     entry = {"exam_date": exam_date, "exam_name": exam_name, "code": code if noted else "",
              "words": " ".join(words.split()), **lists}
@@ -1868,8 +1866,7 @@ def cmd_record(data: dict) -> dict:
         if not (folder / "INDEX.md").is_file():
             raise InputError("course has no INDEX.md")
         path = folder / ".state" / "mastery.md"
-        if path.is_symlink():
-            raise InputError("mastery.md must not be a symlink")
+        workspace.refuse_symlinks(path, reason="refusing to use it")
         rows = mastery(folder)
         existing = next((r for r in rows if _norm(r["name"]) == _norm(topic)), None)
         if existing:
@@ -1903,8 +1900,7 @@ def cmd_record(data: dict) -> dict:
     if not (folder / "INDEX.md").is_file():
         raise InputError("course has no INDEX.md")
     path = folder / ".state" / "mastery.md"
-    if path.is_symlink():
-        raise InputError("mastery.md must not be a symlink")
+    workspace.refuse_symlinks(path, reason="refusing to use it")
     text = _memory(folder, "mastery.md")
     state = _record_state(text)
     key = _norm(data["topic"])
@@ -2008,8 +2004,7 @@ def _default_axes() -> dict:
 
 def _prefs_path(root: Path) -> Path:
     path = root / ".state" / PREFS_FILE
-    if path.is_symlink():
-        raise InputError(f"{PREFS_FILE} must not be a symlink")
+    workspace.refuse_symlinks(path, reason="refusing to use it")
     return path
 
 

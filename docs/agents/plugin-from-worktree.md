@@ -1,6 +1,6 @@
 # Running the plugin from a worktree
 
-An installed Mimir (`/plugin install mimir@mimir`, from GitHub or from a local clone) is a snapshot copied into Claude Code's plugin cache under `~/.claude/plugins/cache/mimir/`. It does not follow any branch: its skills, its helpers (`mimir:verifier`, `mimir:visual-builder`) and the scripts they run stay at the installed version until you update or reinstall.
+An installed Mimir (`/plugin install mimir@mimir`, from GitHub or from a local clone) is a snapshot copied into Claude Code's plugin cache under `~/.claude/plugins/cache/mimir/`. It does not follow any branch: its skills, its helpers (the `mimir:` agents under `helpers/`) and the scripts they run stay at the installed version until you update or reinstall.
 
 To test a branch as it would ship, start Claude Code from the worktree with the worktree loaded as a session-only plugin:
 
@@ -14,5 +14,15 @@ Check before a live test:
 
 - `claude plugin validate .` checks the manifests in `.claude-plugin/` (two known warnings: the root `CLAUDE.md` is not shipped as context, and there is no icon).
 - In the session, the `mimir:visual-builder` description in the agent list matches `helpers/visual-builder.md` of the worktree. Checked on 2026-11-25 with Claude Code 2.1.331 and Mimir 0.5.0 installed: `claude --plugin-dir <worktree> -p "..."` listed the worktree's description, not the installed one.
+
+## Headless run of one helper
+
+A live acceptance run drives one helper from the worktree without a session:
+
+```sh
+claude -p --plugin-dir "$PWD" --agent mimir:visual-builder --allowedTools=Bash "<prompt>"
+```
+
+Write `--allowedTools=Bash` with the `=`. `--allowedTools` takes several values, so `--allowedTools Bash "<prompt>"` reads the prompt as a second tool name, and the helper runs with no prompt and builds nothing (#102's first live run). A helper with no shell tool, such as `mimir:figure-checker`, needs no `--allowedTools`. `tests/acceptance/blind_test_pages.py` (`_agent_cmd`) has the full command it uses, with a lean HOME and JSON output.
 
 `scripts/release_check.py` imports `scripts/` straight from the clone, so it needs no plugin loading. Codex and Antigravity: install from the worktree path as README "From a local clone" says, and reinstall after every change (installed copies are snapshots there too).

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html
 import re
+import unicodedata
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 
@@ -17,6 +18,9 @@ import workspace
 from workspace import InputError
 
 STEPS_MAX = 50                 # data-step numbers on one page
+SVG_MAX_BYTES = 1024 * 1024    # the ``svg`` of ``visual.py svg``, as UTF-8
+PAGE_BODY_MAX_BYTES = 1024 * 1024  # the ``body`` of ``visual.py page``, as UTF-8
+_ALLOWED_CONTROL = {"\t", "\n", "\r"}
 
 _SVG_NS = "http://www.w3.org/2000/svg"
 _SVG_ELEMENTS = {"svg", "g", "defs", "symbol", "use", "title", "desc", "style", "path", "rect", "circle",
@@ -32,6 +36,18 @@ _ENCODING = re.compile(r"""\bencoding\s*=\s*["']([^"']*)["']""")
 _XLINK_NS = "http://www.w3.org/1999/xlink"
 ET.register_namespace("", _SVG_NS)
 ET.register_namespace("xlink", _XLINK_NS)
+
+
+def markup_field(value, field: str, what: str, max_bytes: int) -> bytes:
+    """A builder-written markup field (``svg``, ``body``) as UTF-8: non-empty, no control characters, not too big."""
+    if not isinstance(value, str) or not value.strip():
+        raise InputError(f"{field} is required ({what})")
+    if any(c not in _ALLOWED_CONTROL and unicodedata.category(c) in ("Cc", "Cs") for c in value):
+        raise InputError(f"{field} contains control characters or lone surrogates")
+    raw = value.encode("utf-8")
+    if len(raw) > max_bytes:
+        raise InputError(f"{field} is {len(raw)} bytes; at most {max_bytes}")
+    return raw
 
 
 def split_tag(tag: str) -> tuple[str, str]:
