@@ -1616,6 +1616,26 @@ def test_record_a_partial_answer_clears_solves_so_mastered_needs_two_fresh_ones(
     assert rec(4, "s4", "unassisted") == "mastered"
 
 
+@pytest.mark.parametrize("retry", ["partial", "wrong"])
+def test_record_a_miss_after_a_partial_answer_is_a_duplicate(home, root, retry):
+    record_course(home)
+    checked(home, "a")
+    ok(home, "record", attempt(item="a", outcome="partial"))
+    again = ok(home, "record", attempt(item="a", outcome=retry))
+    assert (again["recorded"], again["duplicate"]) == (False, True)
+
+
+def test_record_a_right_answer_after_a_partial_one_as_assisted(home, root):
+    cdir = record_course(home)
+    checked(home, "a")
+    ok(home, "record", attempt(item="a", outcome="partial"))
+    right = ok(home, "record", attempt(item="a", outcome="unassisted"))
+    assert (right["recorded"], right["status"]) == (True, "shaky")
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"]) == (1, 0)
+    assert results(cdir)[-1] == f"- a {PRACTICE} (Heaps): assisted solve"
+
+
 def test_record_initialization_and_legacy_evidence(home, root):
     record_course(home, mastery=[("Heaps", "shaky", "2026-10-01", 0, 1)])
     init = dict(term=TERM, course="CS201 Theory", topic="Graphs", initialize=True)
