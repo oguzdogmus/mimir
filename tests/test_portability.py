@@ -927,3 +927,21 @@ def test_builder_dispatch_runs_field_research_and_then_the_builder_when_a_pack_i
     assert "then dispatch the builder" in text
     background = core_section("Background dispatch")
     assert "Building a file" in background and "notation.md" in background
+
+
+# A denied helper is not a missing helper (#110): in the field test a host denied
+# `mimir:field-researcher` and the skill ran its body in a `general-purpose` agent instead.
+DENIED_HELPER = "the host's permissions or the student deny is not a missing agent"
+
+
+def _states_the_denied_helper_rule(text):
+    text = " ".join(text.split())
+    assert DENIED_HELPER in text
+    assert "never run its body in another agent or in a separate pass" in text
+    assert "stays undone" in text and "one line what is missing and why" in text
+
+
+def test_background_dispatch_never_stands_in_for_a_denied_field_researcher():
+    dispatch = core_section("Background dispatch")
+    _states_the_denied_helper_rule(dispatch)
+    assert dispatch.index("no independent agent") < dispatch.index(DENIED_HELPER)
