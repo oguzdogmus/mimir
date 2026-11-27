@@ -1583,6 +1583,25 @@ def test_record_invalid(home, root, change, field):
     fails(home, "record", {**attempt(item="a"), **change}, field)
 
 
+def test_record_rejects_an_unknown_outcome_and_names_all_four(home, root):
+    record_course(home)
+    fails(home, "record", attempt(item="a", outcome="half"),
+          "outcome must be unassisted, assisted, partial or wrong")
+
+
+@pytest.mark.parametrize("before,after", [
+    (None, "shaky"), ("shaky", "shaky"), ("gap", "gap"), ("mastered", "shaky"),
+])
+def test_record_a_partial_answer_moves_the_topic(home, root, before, after):
+    """A partly right answer: an unseen topic becomes shaky, a gap stays a gap, mastered drops to shaky."""
+    record_course(home, mastery=[("Heaps", before, "2026-10-01", 0, 1)] if before else ())
+    checked(home, "a")
+    out = ok(home, "record", attempt(item="a", outcome="partial"))
+    assert (out["recorded"], out["status"]) == (True, after)
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["status"], row["assisted"], row["unassisted"]) == (after, 0, 0 if before is None else 1)
+
+
 def test_record_initialization_and_legacy_evidence(home, root):
     record_course(home, mastery=[("Heaps", "shaky", "2026-10-01", 0, 1)])
     init = dict(term=TERM, course="CS201 Theory", topic="Graphs", initialize=True)
