@@ -317,7 +317,7 @@ def test_file_moves_into_role(home):
 
 
 def checkpoint(home: Path) -> dict:
-    path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / "ingest-coverage.json"
+    path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / ws.READING_CHECKPOINT
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -339,7 +339,7 @@ def test_filing_a_second_file_keeps_the_first_files_checkpoint_entry(home):
     first = ok(home, "file", {"source": str(inbox / "outline.pdf"), **COURSE, "role": "outline"})
     entries = checkpoint(home)["files"]
     entries[0]["completed"], entries[0]["observations"] = ["1-20"], ["professor: Ada Lovelace"]
-    (Path(first["course_dir"]) / ".state" / "ingest-coverage.json").write_text(json.dumps({"files": entries}))
+    (Path(first["course_dir"]) / ".state" / ws.READING_CHECKPOINT).write_text(json.dumps({"files": entries}))
     second = ok(home, "file", {"source": str(inbox / "week1.pdf"), **COURSE, "role": "slides"})
     entries = checkpoint(home)["files"]
     assert [e["path"] for e in entries] == [first["dest"], second["dest"]]
@@ -425,7 +425,7 @@ def test_filing_into_a_legacy_checkpoint_keeps_every_entry_and_adds_the_pending_
     '{"notes/a.pdf": [1, 2]}', '{"professor": {"name": "Ada"}}'])
 def test_filing_refuses_a_malformed_reading_checkpoint_and_moves_nothing(home, content):
     ok(home, "course", COURSE)
-    path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / "ingest-coverage.json"
+    path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / ws.READING_CHECKPOINT
     path.write_text(content)
     src = home / "learning" / "_inbox" / "a.pdf"
     src.write_text("x")
@@ -483,7 +483,7 @@ def test_filing_collision_writes_no_checkpoint_entry(home):
     out = ok(home, "file", {"source": str(inbox / "a.md"), **COURSE, "role": "notes"})
     before = checkpoint(home)
     before["files"][0]["completed"] = ["intro"]  # partly read: a rewrite would reset it
-    (Path(out["course_dir"]) / ".state" / "ingest-coverage.json").write_text(json.dumps(before))
+    (Path(out["course_dir"]) / ".state" / ws.READING_CHECKPOINT).write_text(json.dumps(before))
     (inbox / "a.md").write_text("second")
     fails(home, "file", {"source": str(inbox / "a.md"), **COURSE, "role": "notes"}, "already exists")
     assert checkpoint(home) == before
@@ -987,7 +987,7 @@ def test_file_refuses_a_symlinked_reading_checkpoint(home, tmp_path):
     ok(home, "course", COURSE)
     target = tmp_path / "elsewhere.json"
     target.write_text('{"files": []}')
-    link = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / "ingest-coverage.json"
+    link = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / ws.READING_CHECKPOINT
     link.symlink_to(target)
     src = home / "attachment.txt"
     src.write_text("paper")
