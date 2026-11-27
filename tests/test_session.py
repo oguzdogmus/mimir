@@ -1636,6 +1636,23 @@ def test_record_a_right_answer_after_a_partial_one_as_assisted(home, root):
     assert results(cdir)[-1] == f"- a {PRACTICE} (Heaps): assisted solve"
 
 
+def test_record_writes_partial_in_the_results_line_and_the_evidence(home, root):
+    cdir = record_course(home)
+    checked(home, "a")
+    ok(home, "record", attempt(item="a", outcome="partial"))
+    assert results(cdir) == [f"- a {PRACTICE} (Heaps): partial"]
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert row["evidence"] == f"2026-10-17: a {PRACTICE}: partial"
+
+
+def test_record_a_partial_knowledge_gauge_answer(home, root):
+    cdir = record_course(home)
+    checked(home, "gauge:Heaps:1")
+    out = ok(home, "record", attempt(item="gauge:Heaps:1", outcome="partial"))
+    assert (out["recorded"], out["status"]) == (True, "shaky")
+    assert results(cdir) == [f"- gauge:Heaps:1 {PRACTICE} (Heaps): partial"]
+
+
 def test_record_initialization_and_legacy_evidence(home, root):
     record_course(home, mastery=[("Heaps", "shaky", "2026-10-01", 0, 1)])
     init = dict(term=TERM, course="CS201 Theory", topic="Graphs", initialize=True)
