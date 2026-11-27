@@ -261,6 +261,21 @@ def test_sessions_close_only_on_end_session_with_a_set_hand_off():
         assert "End-of-set hand-off" in text and '"end session"' in text, flow
 
 
+# Partial answers: one grading rule, in the recording reference and in every flow that records answers.
+RECORDING_FLOWS = ["skills/mimir-quiz/SKILL.md", "skills/mimir-study/references/session.md",
+                   "skills/mimir-past-questions/SKILL.md", "skills/mimir-study/references/urgent.md",
+                   "reference/core-rules.md"]
+PARTIAL_RULE = ("at least one required part is right and at least one required part is wrong or missing")
+
+
+def test_every_flow_that_records_answers_carries_the_partial_grading_rule():
+    recording = (ROOT_DIR / "reference/recording.md").read_text(encoding="utf-8")
+    assert PARTIAL_RULE in recording and "unassisted | assisted | partial | wrong" in recording
+    for flow in RECORDING_FLOWS:
+        text = (ROOT_DIR / flow).read_text(encoding="utf-8")
+        assert PARTIAL_RULE in text and "`partial`" in text, flow
+
+
 # Teaching settings: three global axes with named levels, read once per Standard
 # session through session.py; the frustration override saves no preference.
 LEVELS = ["example-first", "method-first", "try-first", "checks only", "key decisions", "every step",
@@ -325,7 +340,7 @@ def test_standard_study_has_unlimited_retries_and_the_recording_rule():
     assert "`duplicate`" in session  # repeated misses add no log line either
     assert not re.search(r'"idk": show the key', session)  # "idk" gets guidance, not the key
     recording = (ROOT_DIR / "reference/recording.md").read_text(encoding="utf-8")
-    assert "first wrong answer" in recording and "records as assisted" in recording
+    assert "first miss on an item, wrong or partial" in recording and "records as assisted" in recording
 
 
 # Per-item labels only for real, OCR and tentative items; plain
