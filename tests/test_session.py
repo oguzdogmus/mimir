@@ -621,6 +621,14 @@ def test_close_counts_every_results_line_kind(home, root):
     assert out["results"] == {"unassisted": 1, "assisted": 1, "partial": 1, "wrong": 2, "not reached": 2}
 
 
+def test_close_with_no_results_counts_zeros(home, root):
+    """A session ended after zero items reports zero for every outcome, never a missing count."""
+    cdir = course(home)
+    log(cdir, "2026-10-17-0900", session_log(NOW))
+    out = ok(home, "close", close_args(cdir, "2026-10-17T09:05:00+03:00"))
+    assert out["results"] == {"unassisted": 0, "assisted": 0, "partial": 0, "wrong": 0, "not reached": 0}
+
+
 def test_repeated_close_returns_the_same_counts(home, root):
     cdir = course(home)
     log(cdir, "2026-10-17-0900", session_log(NOW, extra=RESULTS_EVERY_KIND))
