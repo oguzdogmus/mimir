@@ -276,6 +276,22 @@ def test_every_flow_that_records_answers_carries_the_partial_grading_rule():
         assert PARTIAL_RULE in text and "`partial`" in text, flow
 
 
+# Closing lines count what the log recorded: session.py close's `results`, never the tutor's memory.
+CLOSE_LINE_STEPS = {"skills/mimir-quiz/SKILL.md": "11. ", "skills/mimir-past-questions/SKILL.md": "8. "}
+
+
+def test_closing_lines_report_counts_from_close_results():
+    close = (ROOT_DIR / "reference/session-close.md").read_text(encoding="utf-8")
+    assert "`results`" in close and "never count" in close
+    for flow, step in CLOSE_LINE_STEPS.items():
+        line = next(l for l in (ROOT_DIR / flow).read_text(encoding="utf-8").splitlines() if l.startswith(step))
+        assert "`results`" in line and "`unassisted`" in line, flow
+        assert line.index("partial") < line.index("wrong") < line.index("not reached"), flow
+    for flow in SESSION_FLOWS:
+        text = (ROOT_DIR / flow).read_text(encoding="utf-8")
+        assert "session-close.md" in text, flow  # the shared close carries the rule to the study closes
+
+
 # Teaching settings: three global axes with named levels, read once per Standard
 # session through session.py; the frustration override saves no preference.
 LEVELS = ["example-first", "method-first", "try-first", "checks only", "key decisions", "every step",

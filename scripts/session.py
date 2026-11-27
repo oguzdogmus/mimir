@@ -279,7 +279,8 @@ close -- stamp a session's end in its log, once.
           "CS201 Theory", "log": "2026-10-17-0900", "started": "2026-10-17T09:00:00+03:00"}
     out: {"log": ".../.state/logs/2026-10-17-0900.md", "started": "...", "ended":
           "2026-10-17T10:47:30+03:00", "minutes": 107, "last_session":
-          "2026-10-17 10:47", "already_closed": false,
+          "2026-10-17 10:47", "already_closed": false, "results": {"unassisted":
+          2, "assisted": 1, "partial": 0, "wrong": 1, "not reached": 1},
           "line": "Session closed after 107 min."}
     ``log`` is ``session.py now``'s ``log_name``; ``started`` the session's
     ``started:`` value in that log, matched exactly. When that session's block
@@ -288,7 +289,11 @@ close -- stamp a session's end in its log, once.
     with ``already_closed`` true ("Session already closed after N min."), so a
     session gets one end stamp however often it is closed. ``minutes`` is whole
     minutes from started to ended, rounded down; ``last_session`` the end stamp
-    as the ``save.md`` value. Exits 2 when the log is missing or a symlink,
+    as the ``save.md`` value. ``results`` counts the lines under ``## Results``
+    in this session's block by their ending (``unassisted solve``, ``assisted
+    solve``, ``partial``, ``wrong``, ``not reached``); frustration-override
+    lines count in none. Every close, repeated or not, counts the block as it
+    is. Exits 2 when the log is missing or a symlink,
     has no such ``started:`` line, a later session already started in it
     while this one is open, its ``ended:`` line is not a datetime, or ``now``
     is before ``started`` or mixes offset and no-offset with it.
@@ -1678,8 +1683,10 @@ def cmd_close(data: dict) -> dict:
     _, path = _session_log(data)
     name = data["log"]
     text = _text(path)
-    ended, found, inside = None, False, False
+    ended, found, inside, block = None, False, False, []
     for line in text.splitlines():
+        if inside:
+            block.append(line)
         m = re.fullmatch(r"(started|ended):(.*)", line.strip())
         if not m:
             continue
@@ -1707,7 +1714,29 @@ def cmd_close(data: dict) -> dict:
     minutes = max(0, int((ended - started).total_seconds() // 60))
     line = f"Session {'already closed' if already else 'closed'} after {minutes} min."
     return {"log": str(path), "started": data["started"], "ended": ended.isoformat(), "minutes": minutes,
-            "last_session": ended.strftime("%Y-%m-%d %H:%M"), "already_closed": already, "line": line}
+            "last_session": ended.strftime("%Y-%m-%d %H:%M"), "already_closed": already,
+            "results": _results(block), "line": line}
+
+
+# Results line endings (``record``'s outcome lines and the skills' ``not reached``) and the count each feeds.
+RESULT_ENDINGS = {": unassisted solve": "unassisted", ": assisted solve": "assisted", ": partial": "partial",
+                  ": wrong": "wrong", ": not reached": "not reached"}
+
+
+def _results(block: list[str]) -> dict:
+    """Counts of the lines under ``## Results`` in one session block, by outcome; zero for an outcome
+    with none."""
+    counts = dict.fromkeys(RESULT_ENDINGS.values(), 0)
+    section = False
+    for line in block:
+        text = line.rstrip()
+        if text.startswith("#"):
+            section = text == "## Results"
+        elif section and text.startswith("- "):
+            kind = next((k for e, k in RESULT_ENDINGS.items() if text.endswith(e)), None)
+            if kind:
+                counts[kind] += 1
+    return counts
 
 
 def cmd_gauge(data: dict) -> dict:
