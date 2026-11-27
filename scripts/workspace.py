@@ -82,9 +82,14 @@ file -- file one regular file into ``<course>/<role>/``, same basename.
     10, "mtime": 1793000000, "completed": [], "observations": [], "scope":
     "full"}]}``. ``mtime`` is whole seconds. The optional ``textbook``
     boolean (default false) sets ``scope`` to ``contents``: ingest reads only
-    the book's contents pages. An entry without ``scope`` reads as ``full``. A symlinked checkpoint, or one that is not an object with a
-    ``files`` list of entries that each have a ``path``, refuses filing
-    before anything moves.
+    the book's contents pages. A textbook files only into ``notes``: with any
+    other role, filing refuses. An entry without ``scope`` reads as ``full``.
+    A legacy checkpoint, written before this shape was fixed, keys its
+    entries by path, under ``files`` or at the top level: filing rewrites it
+    in the list form, ``path`` taken from the key (a relative key is under
+    the course folder) and every other field of every entry kept. A
+    symlinked checkpoint, or one that is not JSON or matches neither shape,
+    refuses filing before anything moves.
 
 relocate -- move the whole tree to a new root, then update the pointer.
     in : {"to": "~/Documents/uni"}
@@ -121,6 +126,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import unicodedata
@@ -132,6 +138,9 @@ POINTER_PATH = "~/.config/mimir/root"
 _ROLES = ("outline", "slides", "past-papers", "notes")
 _COURSE_MEMORY = ("mastery.md", "fingerprint.md", "save.md", "forecast.md")
 READING_CHECKPOINT = "ingest-coverage.json"
+# Reading scopes of a checkpoint entry: a textbook reads only its contents pages, any other file in full. An entry
+# without "scope" (written before scopes existed) reads as SCOPE_FULL.
+SCOPE_FULL, SCOPE_CONTENTS = "full", "contents"
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "assets" / "templates"
 
 _TERM = re.compile(r"[0-9]{4}-\w+")
@@ -276,12 +285,22 @@ def set_pointer(root: Path) -> None:
         pointer.unlink(missing_ok=True)  # a concurrent writer may have removed it already
         return
     pointer.parent.mkdir(parents=True, exist_ok=True)
-    # A unique temp file per writer in the pointer's folder, so concurrent writers never share one.
-    fd, tmp = tempfile.mkstemp(prefix=f".{pointer.name}.", suffix=".tmp", dir=pointer.parent)
+    write_atomic(pointer, f"{root}\n")
+
+
+def write_atomic(path: Path, text: str) -> None:
+    """Write ``text`` to ``path`` atomically: a temp file in the same folder, then ``os.replace``.
+
+    Each writer gets its own temp file, so concurrent writers never share one. An existing file keeps its mode; a
+    new file keeps mkstemp's private mode.
+    """
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(f"{root}\n")
-        os.replace(tmp, pointer)
+            handle.write(text)
+        if path.exists():
+            os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
+        os.replace(tmp, path)
     except BaseException:
         try:
             os.unlink(tmp)
@@ -443,24 +462,13 @@ def _is_memory_file(source: Path, root: Path) -> bool:
     return False
 
 
-def _write_json(path: Path, data: dict) -> None:
-    """Write ``data`` to ``path`` atomically: a temp file in the same folder, then ``os.replace``."""
-    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(data, handle, ensure_ascii=False, indent=2)
-            handle.write("\n")
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
-
-
 def _read_checkpoint(checkpoint: Path) -> dict:
-    """The course's reading checkpoint, ``{"files": [entry, ...]}``; empty when the file does not exist yet."""
+    """The course's reading checkpoint, ``{"files": [entry, ...]}``; empty when the file does not exist yet.
+
+    A legacy checkpoint keys its entries by path, under ``files`` or at the top level; its entries come back in
+    the list form with ``path`` taken from the key (a relative key is under the course folder) and every other
+    field untouched.
+    """
     refuse_symlinks(checkpoint, field="reading checkpoint", reason="refusing to write through it; nothing was moved")
     if not checkpoint.exists():
         return {"files": []}
@@ -468,6 +476,13 @@ def _read_checkpoint(checkpoint: Path) -> dict:
         data = json.loads(checkpoint.read_text(encoding="utf-8"))
     except (UnicodeDecodeError, ValueError, RecursionError):
         data = None
+    if isinstance(data, dict) and "files" not in data and all(len(Path(key).parts) > 1 for key in data):
+        data = {"files": data}
+    if isinstance(data, dict) and isinstance(data.get("files"), dict):
+        by_path = data["files"]
+        if all(isinstance(entry, dict) for entry in by_path.values()):
+            course_dir = checkpoint.parent.parent
+            data = {**data, "files": [{"path": str(course_dir / key), **entry} for key, entry in by_path.items()]}
     if (not isinstance(data, dict) or not isinstance(data.get("files"), list)
             or not all(isinstance(e, dict) and isinstance(e.get("path"), str) for e in data["files"])):
         raise InputError(f"reading checkpoint {checkpoint} is not a JSON object with a \"files\" list of "
@@ -481,11 +496,11 @@ def _add_pending_entry(checkpoint: Path, data: dict, dest: Path, scope: str) -> 
     Every other entry is kept; a stale entry for the same path (its file is gone, or filing would have collided)
     is replaced.
     """
-    stat = dest.stat()
-    entry = {"path": str(dest), "size": stat.st_size, "mtime": int(stat.st_mtime),
+    info = dest.stat()
+    entry = {"path": str(dest), "size": info.st_size, "mtime": int(info.st_mtime),
              "completed": [], "observations": [], "scope": scope}
     files = [e for e in data["files"] if e["path"] != str(dest)] + [entry]
-    _write_json(checkpoint, {**data, "files": files})
+    write_atomic(checkpoint, json.dumps({**data, "files": files}, ensure_ascii=False, indent=2) + "\n")
 
 
 # --- Subcommands -------------------------------------------------------------------
@@ -545,6 +560,8 @@ def cmd_file(data: dict) -> dict:
     textbook = data.get("textbook", False)
     if not isinstance(textbook, bool):
         raise InputError("textbook must be true or false")
+    if textbook and role != "notes":
+        raise InputError(f"textbook files into notes, not {role}: use role notes")
     if source.is_symlink() or not source.is_file():
         raise InputError(f"source is not an existing regular file: {source}")
     root, _ = resolve_root()
@@ -574,7 +591,7 @@ def cmd_file(data: dict) -> dict:
         source.unlink()
     except OSError:
         action = "copied"
-    _add_pending_entry(checkpoint, pending, dest, "contents" if textbook else "full")
+    _add_pending_entry(checkpoint, pending, dest, SCOPE_CONTENTS if textbook else SCOPE_FULL)
     verb = "Moved" if action == "moved" else "Copied"
     line = f"{verb} {source.name} to {dest_dir}/"
     if action == "copied":

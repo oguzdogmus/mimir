@@ -1715,27 +1715,28 @@ def cmd_close(data: dict) -> dict:
     line = f"Session {'already closed' if already else 'closed'} after {minutes} min."
     return {"log": str(path), "started": data["started"], "ended": ended.isoformat(), "minutes": minutes,
             "last_session": ended.strftime("%Y-%m-%d %H:%M"), "already_closed": already,
-            "results": _results(block), "line": line}
+            "results": _result_counts(block), "line": line}
 
 
-# Results line endings (``record``'s outcome lines and the skills' ``not reached``) and the count each feeds.
-RESULT_ENDINGS = {": unassisted solve": "unassisted", ": assisted solve": "assisted", ": partial": "partial",
-                  ": wrong": "wrong", ": not reached": "not reached"}
+# The ending of a results line per outcome: ``record`` writes the first four, the skills write
+# ``not reached``, and ``close`` counts each outcome by its ending.
+RESULT_ENDINGS = {"unassisted": ": unassisted solve", "assisted": ": assisted solve", "partial": ": partial",
+                  "wrong": ": wrong", "not reached": ": not reached"}
 
 
-def _results(block: list[str]) -> dict:
+def _result_counts(block: list[str]) -> dict:
     """Counts of the lines under ``## Results`` in one session block, by outcome; zero for an outcome
     with none."""
-    counts = dict.fromkeys(RESULT_ENDINGS.values(), 0)
+    counts = dict.fromkeys(RESULT_ENDINGS, 0)
     section = False
     for line in block:
         text = line.rstrip()
         if text.startswith("#"):
             section = text == "## Results"
         elif section and text.startswith("- "):
-            kind = next((k for e, k in RESULT_ENDINGS.items() if text.endswith(e)), None)
-            if kind:
-                counts[kind] += 1
+            outcome = next((o for o, ending in RESULT_ENDINGS.items() if text.endswith(ending)), None)
+            if outcome:
+                counts[outcome] += 1
     return counts
 
 
@@ -1952,14 +1953,14 @@ def cmd_record(data: dict) -> dict:
     # Three-element identities predate this split and block both.
     base = [data["session"], data["item"], bool(data.get("override"))]
     outcome = data["outcome"]
-    # A partial answer is a miss: it shares the wrong answer's identity.
-    kind = "wrong" if outcome in ("wrong", "partial") else "right"
-    blocking = [base, base + ["right"]] + ([base + ["wrong"]] if kind == "wrong" else [])
+    # A partial answer is a miss: it shares the wrong answer's identity, which keeps the value "wrong".
+    miss = outcome in ("wrong", "partial")
+    blocking = [base, base + ["right"]] + ([base + ["wrong"]] if miss else [])
     if any(identity in entry["attempts"] for identity in blocking):
         return {**result, "duplicate": True, "line": "Attempt already recorded."}
-    if kind == "right" and base + ["wrong"] in entry["attempts"]:
+    if not miss and base + ["wrong"] in entry["attempts"]:
         outcome = "assisted"
-    identity = base + [kind]
+    identity = base + ["wrong" if miss else "right"]
     override = data.get("override", False)
     # An override needs no ledger entry, so a damaged ledger cannot block it.
     checked = None if override else verify.ledger_question(folder, data["session"], data["item"])
@@ -2009,7 +2010,7 @@ def cmd_record(data: dict) -> dict:
     # Mastery first: a failed write leaves no log line claiming an attempt that was never recorded.
     _save_record(path, text, state)
     _log_result(log_path, f'- {data["topic"]} frustration override: answer given' if override else
-                f'{shown}: {outcome if kind == "wrong" else outcome + " solve"}')
+                f"{shown}{RESULT_ENDINGS[outcome]}")
     return {"status": row["status"], "duplicate": False, "recorded": True,
             "line": f'{row["name"]}: {row["status"]}.'}
 
