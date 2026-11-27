@@ -621,6 +621,16 @@ def test_close_counts_every_results_line_kind(home, root):
     assert out["results"] == {"unassisted": 1, "assisted": 1, "partial": 1, "wrong": 2, "not reached": 2}
 
 
+def test_repeated_close_returns_the_same_counts(home, root):
+    cdir = course(home)
+    log(cdir, "2026-10-17-0900", session_log(NOW, extra=RESULTS_EVERY_KIND))
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:47:30+03:00"))
+    again = ok(home, "close", close_args(cdir, "2026-10-17T11:30:00+03:00"))
+    assert again["already_closed"] is True
+    assert again["results"] == out["results"] == {"unassisted": 1, "assisted": 1, "partial": 1, "wrong": 2,
+                                                  "not reached": 2}
+
+
 def test_close_counts_only_this_sessions_block(home, root):
     """An earlier session in the same log keeps its own counts; neither block leaks into the other."""
     cdir = course(home)
