@@ -379,6 +379,19 @@ def test_file_collision_leaves_source(home):
     assert not (dest.parent / "a (1).md").exists()
 
 
+def test_filing_collision_writes_no_checkpoint_entry(home):
+    ok(home, "course", COURSE)
+    inbox = home / "learning" / "_inbox"
+    (inbox / "a.md").write_text("first")
+    out = ok(home, "file", {"source": str(inbox / "a.md"), **COURSE, "role": "notes"})
+    before = checkpoint(home)
+    before["files"][0]["completed"] = ["intro"]  # partly read: a rewrite would reset it
+    (Path(out["course_dir"]) / ".state" / "ingest-coverage.json").write_text(json.dumps(before))
+    (inbox / "a.md").write_text("second")
+    fails(home, "file", {"source": str(inbox / "a.md"), **COURSE, "role": "notes"}, "already exists")
+    assert checkpoint(home) == before
+
+
 def test_bad_source(home, tmp_path):
     ok(home, "init", {})
     base = {**COURSE, "role": "slides"}
