@@ -279,7 +279,8 @@ close -- stamp a session's end in its log, once.
           "CS201 Theory", "log": "2026-10-17-0900", "started": "2026-10-17T09:00:00+03:00"}
     out: {"log": ".../.state/logs/2026-10-17-0900.md", "started": "...", "ended":
           "2026-10-17T10:47:30+03:00", "minutes": 107, "last_session":
-          "2026-10-17 10:47", "already_closed": false,
+          "2026-10-17 10:47", "already_closed": false, "results": {"unassisted":
+          2, "assisted": 1, "partial": 0, "wrong": 1, "not reached": 1},
           "line": "Session closed after 107 min."}
     ``log`` is ``session.py now``'s ``log_name``; ``started`` the session's
     ``started:`` value in that log, matched exactly. When that session's block
@@ -288,7 +289,11 @@ close -- stamp a session's end in its log, once.
     with ``already_closed`` true ("Session already closed after N min."), so a
     session gets one end stamp however often it is closed. ``minutes`` is whole
     minutes from started to ended, rounded down; ``last_session`` the end stamp
-    as the ``save.md`` value. Exits 2 when the log is missing or a symlink,
+    as the ``save.md`` value. ``results`` counts the lines under ``## Results``
+    in this session's block by their ending (``unassisted solve``, ``assisted
+    solve``, ``partial``, ``wrong``, ``not reached``); frustration-override
+    lines count in none. Every close, repeated or not, counts the block as it
+    is. Exits 2 when the log is missing or a symlink,
     has no such ``started:`` line, a later session already started in it
     while this one is open, its ``ended:`` line is not a datetime, or ``now``
     is before ``started`` or mixes offset and no-offset with it.
@@ -358,7 +363,7 @@ progress -- what Mimir believes the student knows. Read-only; never calls plan.p
 
 record -- persist an eligible answer or a frustration override.
     Required: term, course, topic, item (stable identity: the ``item`` the
-    question had in ``verify.py submit``), outcome (unassisted|assisted|wrong),
+    question had in ``verify.py submit``), outcome (unassisted|assisted|partial|wrong),
     session (unique identity, the same as in ``verify.py submit``), date
     (YYYY-MM-DD), log (this session's log name from ``session.py now``; the
     log must exist). Optional override and explanation_only booleans
@@ -370,12 +375,17 @@ record -- persist an eligible answer or a frustration override.
     records nothing. The label and the real-paper flag come from the ledger
     (a real question counts as a real past-paper solve). A frustration
     override (with or without explanation_only) needs no ledger entry.
-    Per session, item and event, the first wrong answer records once (later
-    misses return duplicate) and a right answer after it records as assisted.
+    A partial answer (some required parts right, some wrong or missing) is
+    never a solve: it moves unseen and mastered to shaky, leaves shaky and gap
+    as they are, clears the topic's solves as a wrong answer does, adds to no
+    counter and lifts no frustration-override block.
+    Per session, item and event, the first miss (wrong or partial) records
+    once (later misses return duplicate) and a right answer after it records
+    as assisted.
     Each recorded answer adds one line under ``## Results`` in the log's last
     session block (from its last ``started:`` line; the section is created at
     the end when that block has none): ``- <item> <label> (<topic>):
-    <unassisted solve|assisted solve|wrong>``, ``- <topic> frustration
+    <unassisted solve|assisted solve|partial|wrong>``, ``- <topic> frustration
     override: answer given`` for an override, and ``- <item> <label>
     (<topic>): after frustration override, not counted`` for an answer the
     override blocks. A duplicate, a retried call and an item without a correct
@@ -1673,8 +1683,10 @@ def cmd_close(data: dict) -> dict:
     _, path = _session_log(data)
     name = data["log"]
     text = _text(path)
-    ended, found, inside = None, False, False
+    ended, found, inside, block = None, False, False, []
     for line in text.splitlines():
+        if inside:
+            block.append(line)
         m = re.fullmatch(r"(started|ended):(.*)", line.strip())
         if not m:
             continue
@@ -1702,7 +1714,30 @@ def cmd_close(data: dict) -> dict:
     minutes = max(0, int((ended - started).total_seconds() // 60))
     line = f"Session {'already closed' if already else 'closed'} after {minutes} min."
     return {"log": str(path), "started": data["started"], "ended": ended.isoformat(), "minutes": minutes,
-            "last_session": ended.strftime("%Y-%m-%d %H:%M"), "already_closed": already, "line": line}
+            "last_session": ended.strftime("%Y-%m-%d %H:%M"), "already_closed": already,
+            "results": _result_counts(block), "line": line}
+
+
+# The ending of a results line per outcome: ``record`` writes the first four, the skills write
+# ``not reached``, and ``close`` counts each outcome by its ending.
+RESULT_ENDINGS = {"unassisted": ": unassisted solve", "assisted": ": assisted solve", "partial": ": partial",
+                  "wrong": ": wrong", "not reached": ": not reached"}
+
+
+def _result_counts(block: list[str]) -> dict:
+    """Counts of the lines under ``## Results`` in one session block, by outcome; zero for an outcome
+    with none."""
+    counts = dict.fromkeys(RESULT_ENDINGS, 0)
+    section = False
+    for line in block:
+        text = line.rstrip()
+        if text.startswith("#"):
+            section = text == "## Results"
+        elif section and text.startswith("- "):
+            outcome = next((o for o, ending in RESULT_ENDINGS.items() if text.endswith(ending)), None)
+            if outcome:
+                counts[outcome] += 1
+    return counts
 
 
 def cmd_gauge(data: dict) -> dict:
@@ -1853,6 +1888,10 @@ def _log_result(path: Path, line: str) -> None:
     ingest._write_atomic(path, "\n".join(lines) + "\n")
 
 
+# The answer outcomes ``record`` accepts; its error message lists them from here.
+OUTCOMES = ("unassisted", "assisted", "partial", "wrong")
+
+
 def cmd_record(data: dict) -> dict:
     """Record an idempotent attempt and its line in the session log; retain legacy text and atomic
     authoritative state."""
@@ -1890,8 +1929,8 @@ def cmd_record(data: dict) -> dict:
     day = _valid_date(data["date"])
     if day is None:
         raise InputError("date must be YYYY-MM-DD")
-    if data.get("outcome") not in ("unassisted", "assisted", "wrong"):
-        raise InputError("outcome must be unassisted, assisted or wrong")
+    if data.get("outcome") not in OUTCOMES:
+        raise InputError(f"outcome must be {', '.join(OUTCOMES[:-1])} or {OUTCOMES[-1]}")
     for field in ("override", "explanation_only"):
         if type(data.get(field, False)) is not bool:
             raise InputError(f"{field} must be boolean")
@@ -1914,13 +1953,14 @@ def cmd_record(data: dict) -> dict:
     # Three-element identities predate this split and block both.
     base = [data["session"], data["item"], bool(data.get("override"))]
     outcome = data["outcome"]
-    kind = "wrong" if outcome == "wrong" else "right"
-    blocking = [base, base + ["right"]] + ([base + ["wrong"]] if kind == "wrong" else [])
+    # A partial answer is a miss: it shares the wrong answer's identity, which keeps the value "wrong".
+    miss = outcome in ("wrong", "partial")
+    blocking = [base, base + ["right"]] + ([base + ["wrong"]] if miss else [])
     if any(identity in entry["attempts"] for identity in blocking):
         return {**result, "duplicate": True, "line": "Attempt already recorded."}
-    if kind == "right" and base + ["wrong"] in entry["attempts"]:
+    if not miss and base + ["wrong"] in entry["attempts"]:
         outcome = "assisted"
-    identity = base + [kind]
+    identity = base + ["wrong" if miss else "right"]
     override = data.get("override", False)
     # An override needs no ledger entry, so a damaged ledger cannot block it.
     checked = None if override else verify.ledger_question(folder, data["session"], data["item"])
@@ -1946,6 +1986,9 @@ def cmd_record(data: dict) -> dict:
         if outcome == "wrong":
             row["status"] = "shaky" if row["status"] == "mastered" else "gap"
             entry["solves"] = []
+        elif outcome == "partial":
+            row["status"] = "gap" if row["status"] == "gap" else "shaky"
+            entry["solves"] = []
         elif outcome == "assisted":
             row["assisted"] += 1
             if not entry["blocked_session"] and row["status"] != "mastered":
@@ -1967,7 +2010,7 @@ def cmd_record(data: dict) -> dict:
     # Mastery first: a failed write leaves no log line claiming an attempt that was never recorded.
     _save_record(path, text, state)
     _log_result(log_path, f'- {data["topic"]} frustration override: answer given' if override else
-                f'{shown}: {outcome if outcome == "wrong" else outcome + " solve"}')
+                f"{shown}{RESULT_ENDINGS[outcome]}")
     return {"status": row["status"], "duplicate": False, "recorded": True,
             "line": f'{row["name"]}: {row["status"]}.'}
 

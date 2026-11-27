@@ -597,6 +597,63 @@ def test_close_never_stamps_over_a_later_session(home, root):
     assert out["minutes"] == 59 and out["already_closed"] is False
 
 
+RESULTS_EVERY_KIND = (
+    "## Results\n"
+    "- q1 [from the past paper] (Recursion): unassisted solve\n"
+    "- q2 (Recursion): assisted solve\n"
+    "- q3 (Graphs): partial\n"
+    "- q4 (Graphs): wrong\n"
+    "- q5 (Graphs): wrong\n"
+    "- Graphs frustration override: answer given\n"
+    "- q6 (Graphs): after frustration override, not counted\n"
+    "- item 7 [practice] (Trees): not reached\n"
+    "- Proof past question [2023 final]: not reached\n"
+    "\n## Verifier disagreements\n"
+    "- 2026-10-17 item q4 (Graphs): fixed, checker said: wrong\n"
+)
+
+
+def test_close_counts_every_results_line_kind(home, root):
+    """The counts come from the log's results lines, not from what the tutor remembers."""
+    cdir = course(home)
+    log(cdir, "2026-10-17-0900", session_log(NOW, extra=RESULTS_EVERY_KIND))
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:47:30+03:00"))
+    assert out["results"] == {"unassisted": 1, "assisted": 1, "partial": 1, "wrong": 2, "not reached": 2}
+
+
+def test_close_with_no_results_counts_zeros(home, root):
+    """A session ended after zero items reports zero for every outcome, never a missing count."""
+    cdir = course(home)
+    log(cdir, "2026-10-17-0900", session_log(NOW))
+    out = ok(home, "close", close_args(cdir, "2026-10-17T09:05:00+03:00"))
+    assert out["results"] == {"unassisted": 0, "assisted": 0, "partial": 0, "wrong": 0, "not reached": 0}
+
+
+def test_repeated_close_returns_the_same_counts(home, root):
+    cdir = course(home)
+    log(cdir, "2026-10-17-0900", session_log(NOW, extra=RESULTS_EVERY_KIND))
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:47:30+03:00"))
+    again = ok(home, "close", close_args(cdir, "2026-10-17T11:30:00+03:00"))
+    assert again["already_closed"] is True
+    assert again["results"] == out["results"] == {"unassisted": 1, "assisted": 1, "partial": 1, "wrong": 2,
+                                                  "not reached": 2}
+
+
+def test_close_counts_only_this_sessions_block(home, root):
+    """An earlier session in the same log keeps its own counts; neither block leaks into the other."""
+    cdir = course(home)
+    first, second = "2026-10-17T08:00:00+03:00", NOW
+    earlier = session_log(first, "2026-10-17T08:30:00+03:00",
+                          extra="## Results\n- q1 (Graphs): wrong\n- q2 (Graphs): unassisted solve\n")
+    this = session_log(second, extra="## Results\n- q3 (Trees): partial\n- q4 (Trees): not reached\n")
+    log(cdir, "2026-10-17-0900", earlier + this)
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:00:00+03:00", started=second))
+    assert out["results"] == {"unassisted": 0, "assisted": 0, "partial": 1, "wrong": 0, "not reached": 1}
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:00:00+03:00", started=first))
+    assert out["already_closed"] is True
+    assert out["results"] == {"unassisted": 1, "assisted": 0, "partial": 0, "wrong": 1, "not reached": 0}
+
+
 def test_closed_session_counts_in_the_cram_bill(home, root):
     cdir = due_course(home, root)
     started = "2026-11-01T20:00:00+02:00"
@@ -1356,6 +1413,17 @@ def test_record_writes_one_results_line_in_the_session_log(home, root):
     assert text.count("## Results") == 1
 
 
+def test_close_counts_every_outcome_record_writes(home, root):
+    """What ``record`` writes is what ``close`` counts: one count per recorded outcome."""
+    cdir = record_course(home)
+    items = {"a": "unassisted", "b": "assisted", "c": "partial", "d": "wrong"}
+    checked(home, *items)
+    for item, outcome in items.items():
+        assert ok(home, "record", attempt(item=item, outcome=outcome))["recorded"] is True
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:00:00+03:00", log_name=REC_LOG))
+    assert out["results"] == {"unassisted": 1, "assisted": 1, "partial": 1, "wrong": 1, "not reached": 0}
+
+
 def test_a_retried_record_and_a_duplicate_write_no_second_line(home, root):
     cdir = record_course(home)
     checked(home, "heaps-practice-1")
@@ -1581,6 +1649,76 @@ def test_record_override_legacy_and_recent(home, root):
 def test_record_invalid(home, root, change, field):
     record_course(home)
     fails(home, "record", {**attempt(item="a"), **change}, field)
+
+
+def test_record_rejects_an_unknown_outcome_and_names_all_four(home, root):
+    record_course(home)
+    fails(home, "record", attempt(item="a", outcome="half"),
+          "outcome must be unassisted, assisted, partial or wrong")
+
+
+@pytest.mark.parametrize("before,after", [
+    (None, "shaky"), ("shaky", "shaky"), ("gap", "gap"), ("mastered", "shaky"),
+])
+def test_record_a_partial_answer_moves_the_topic(home, root, before, after):
+    """A partly right answer: an unseen topic becomes shaky, a gap stays a gap, mastered drops to shaky."""
+    record_course(home, mastery=[("Heaps", before, "2026-10-01", 0, 1)] if before else ())
+    checked(home, "a")
+    out = ok(home, "record", attempt(item="a", outcome="partial"))
+    assert (out["recorded"], out["status"]) == (True, after)
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["status"], row["assisted"], row["unassisted"]) == (after, 0, 0 if before is None else 1)
+
+
+def test_record_a_partial_answer_clears_solves_so_mastered_needs_two_fresh_ones(home, root):
+    record_course(home)
+    for n, session in enumerate(("s1", "s2", "s3", "s4"), start=1):
+        checked(home, f"q{n}", session=session)
+    day = {"s1": "2026-10-17", "s2": "2026-10-18", "s3": "2026-10-19", "s4": "2026-10-20"}
+    def rec(n: int, session: str, outcome: str) -> str:
+        return ok(home, "record", attempt(item=f"q{n}", session=session, date=day[session],
+                                          outcome=outcome))["status"]
+    assert rec(1, "s1", "unassisted") == "shaky"
+    assert rec(2, "s2", "partial") == "shaky"
+    assert rec(3, "s3", "unassisted") == "shaky"  # the solve before the partial answer no longer counts
+    assert rec(4, "s4", "unassisted") == "mastered"
+
+
+@pytest.mark.parametrize("retry", ["partial", "wrong"])
+def test_record_a_miss_after_a_partial_answer_is_a_duplicate(home, root, retry):
+    record_course(home)
+    checked(home, "a")
+    ok(home, "record", attempt(item="a", outcome="partial"))
+    again = ok(home, "record", attempt(item="a", outcome=retry))
+    assert (again["recorded"], again["duplicate"]) == (False, True)
+
+
+def test_record_a_right_answer_after_a_partial_one_as_assisted(home, root):
+    cdir = record_course(home)
+    checked(home, "a")
+    ok(home, "record", attempt(item="a", outcome="partial"))
+    right = ok(home, "record", attempt(item="a", outcome="unassisted"))
+    assert (right["recorded"], right["status"]) == (True, "shaky")
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"]) == (1, 0)
+    assert results(cdir)[-1] == f"- a {PRACTICE} (Heaps): assisted solve"
+
+
+def test_record_writes_partial_in_the_results_line_and_the_evidence(home, root):
+    cdir = record_course(home)
+    checked(home, "a")
+    ok(home, "record", attempt(item="a", outcome="partial"))
+    assert results(cdir) == [f"- a {PRACTICE} (Heaps): partial"]
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert row["evidence"] == f"2026-10-17: a {PRACTICE}: partial"
+
+
+def test_record_a_partial_knowledge_gauge_answer(home, root):
+    cdir = record_course(home)
+    checked(home, "gauge:Heaps:1")
+    out = ok(home, "record", attempt(item="gauge:Heaps:1", outcome="partial"))
+    assert (out["recorded"], out["status"]) == (True, "shaky")
+    assert results(cdir) == [f"- gauge:Heaps:1 {PRACTICE} (Heaps): partial"]
 
 
 def test_record_initialization_and_legacy_evidence(home, root):

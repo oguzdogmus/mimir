@@ -26,6 +26,10 @@ _Avoid_: Knowledge gauge, placement test
 A course-specific initial assessment of what the student already knows, distinct from their teaching settings.
 _Avoid_: Setup sampler
 
+**Partial answer**:
+An answer with at least one required part right and at least one required part wrong or missing. A required part is anything the question asks for: each named item, the value with its unit, a check the question asks to be shown, the direction and the magnitude. It is recorded as `partial`, never a solve: an `unseen` or `mastered` topic becomes `shaky`, a `gap` stays a `gap`.
+_Avoid_: Half credit, partly wrong
+
 **Probe trial**:
 A natural trial of one transition toward more independent teaching, continued across eligible Standard sessions until adopted or rejected. Paused, not applied, in sessions within 48 hours of an exam.
 _Avoid_: Preference probe, knowledge check
@@ -144,6 +148,12 @@ _Avoid_: Base builder, figure grower
 **Figure checker**:
 The independent, read-only helper that checks one built figure against its field pack's accuracy checklist for that figure, before a base figure is saved or a blind test page is scored. It returns a pass or a fail with a reason for every checklist item, plus an overall verdict that passes only when every item does. It reads only the figure, the pack's name for it with its figure kind, and that checklist.
 _Avoid_: Figure verifier, figure grader
+
+**Reading checkpoint**:
+A course's record of how far ingest has read each filed document: its size and modification time, the page ranges read and the observations gathered. Filing writes a pending entry for every document at once, so a later ingest resumes every document that is not fully read, including one it never started.
+
+**Textbook**:
+A published book a course uses: it has an author and publisher, an edition or an ISBN, or it is book-length with no sign that the course's professor wrote it. Ingest files it into `notes/` and reads only its contents pages, indexing each chapter as a topic. A professor's own lecture notes are notes, not a textbook, whatever their length.
 
 **Teaching highlight**:
 The one standard mark that points at the part of a figure being discussed. Never a colour change where colour is notation.

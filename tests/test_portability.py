@@ -261,6 +261,37 @@ def test_sessions_close_only_on_end_session_with_a_set_hand_off():
         assert "End-of-set hand-off" in text and '"end session"' in text, flow
 
 
+# Partial answers: one grading rule, in the recording reference and in every flow that records answers.
+RECORDING_FLOWS = ["skills/mimir-quiz/SKILL.md", "skills/mimir-study/references/session.md",
+                   "skills/mimir-past-questions/SKILL.md", "skills/mimir-study/references/urgent.md",
+                   "reference/core-rules.md"]
+PARTIAL_RULE = ("at least one required part is right and at least one required part is wrong or missing")
+
+
+def test_every_flow_that_records_answers_carries_the_partial_grading_rule():
+    recording = (ROOT_DIR / "reference/recording.md").read_text(encoding="utf-8")
+    assert PARTIAL_RULE in recording and "unassisted | assisted | partial | wrong" in recording
+    for flow in RECORDING_FLOWS:
+        text = (ROOT_DIR / flow).read_text(encoding="utf-8")
+        assert PARTIAL_RULE in text and "`partial`" in text, flow
+
+
+# Closing lines count what the log recorded: session.py close's `results`, never the tutor's memory.
+CLOSE_LINE_STEPS = {"skills/mimir-quiz/SKILL.md": "11. ", "skills/mimir-past-questions/SKILL.md": "8. "}
+
+
+def test_closing_lines_report_counts_from_close_results():
+    close = (ROOT_DIR / "reference/session-close.md").read_text(encoding="utf-8")
+    assert "`results`" in close and "never count" in close
+    for flow, step in CLOSE_LINE_STEPS.items():
+        line = next(l for l in (ROOT_DIR / flow).read_text(encoding="utf-8").splitlines() if l.startswith(step))
+        assert "`results`" in line and "`unassisted`" in line, flow
+        assert line.index("partial") < line.index("wrong") < line.index("not reached"), flow
+    for flow in SESSION_FLOWS:
+        text = (ROOT_DIR / flow).read_text(encoding="utf-8")
+        assert "session-close.md" in text, flow  # the shared close carries the rule to the study closes
+
+
 # Teaching settings: three global axes with named levels, read once per Standard
 # session through session.py; the frustration override saves no preference.
 LEVELS = ["example-first", "method-first", "try-first", "checks only", "key decisions", "every step",
@@ -325,7 +356,7 @@ def test_standard_study_has_unlimited_retries_and_the_recording_rule():
     assert "`duplicate`" in session  # repeated misses add no log line either
     assert not re.search(r'"idk": show the key', session)  # "idk" gets guidance, not the key
     recording = (ROOT_DIR / "reference/recording.md").read_text(encoding="utf-8")
-    assert "first wrong answer" in recording and "records as assisted" in recording
+    assert "first miss on an item, wrong or partial" in recording and "records as assisted" in recording
 
 
 # Per-item labels only for real, OCR and tentative items; plain
@@ -927,3 +958,51 @@ def test_builder_dispatch_runs_field_research_and_then_the_builder_when_a_pack_i
     assert "then dispatch the builder" in text
     background = core_section("Background dispatch")
     assert "Building a file" in background and "notation.md" in background
+
+
+# A denied helper is not a missing helper (#110): in the field test a host denied
+# `mimir:field-researcher` and the skill ran its body in a `general-purpose` agent instead.
+DENIED_HELPER = "the host's permissions or the student deny is not a missing agent"
+
+
+def _states_the_denied_helper_rule(text):
+    text = " ".join(text.split())
+    assert DENIED_HELPER in text
+    assert "never run its body in another agent or in a separate pass" in text
+    assert "stays undone" in text and "one line what is missing and why" in text
+
+
+def test_background_dispatch_never_stands_in_for_a_denied_field_researcher():
+    dispatch = core_section("Background dispatch")
+    _states_the_denied_helper_rule(dispatch)
+    assert dispatch.index("no independent agent") < dispatch.index(DENIED_HELPER)
+
+
+def test_visual_building_never_stands_in_for_a_denied_visual_builder():
+    line = next(l for l in core_section("Paths, commands and helpers").splitlines() if "For visual building" in l)
+    visual = line[line.index("For visual building"):]
+    _states_the_denied_helper_rule(visual)
+    fallback = "only when no independent agent is available, make a fresh separate pass following the helper body"
+    assert visual.index(fallback) < visual.index(DENIED_HELPER)
+
+
+# Textbooks (#112): ingest files a published book into notes/ and reads only its contents pages.
+def test_ingest_files_textbooks_into_notes_and_reads_only_their_contents_pages():
+    table = _ingest_step(4)
+    assert "`textbook`" in table and "columns exactly `file | term | course | role`" in table
+    assert "ISBN" in table and "edition" in table and "publisher" in table  # the published-book hint
+    assert "lecture notes" in table and "whatever their length" in table  # a professor's own notes stay notes
+    filing = _ingest_step(5)
+    assert '"role": "notes", "textbook": true' in filing
+    reading = _ingest_step(6)
+    assert '"scope": "contents"' in reading
+    assert "table of contents ends" in reading and "at most 30 pages" in reading
+    assert "chapter" in reading and "`page=N`" in reading and "complete" in reading
+    final = _read(INGEST).split("\n11. ", 1)[1]
+    assert "contents pages" in final and "textbook" in final
+
+
+def test_the_glossary_defines_a_textbook():
+    text = _read("GLOSSARY.md")
+    entry = text.split("**Textbook**:\n", 1)[1].split("\n\n", 1)[0]
+    assert "contents pages" in entry and "notes/" in entry

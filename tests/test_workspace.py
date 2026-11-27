@@ -316,6 +316,124 @@ def test_file_moves_into_role(home):
     assert (dest_dir.parent / "INDEX.md").is_file()  # course created on the fly
 
 
+def checkpoint(home: Path) -> dict:
+    path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / ws.READING_CHECKPOINT
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_filed_document_gets_a_pending_reading_checkpoint(home):
+    ok(home, "init", {})
+    src = home / "learning" / "_inbox" / "2024-final.pdf"
+    src.write_bytes(b"%PDF paper")
+    out = ok(home, "file", {"source": str(src), **COURSE, "role": "past-papers"})
+    stat = Path(out["dest"]).stat()
+    assert checkpoint(home) == {"files": [{"path": out["dest"], "size": 10, "mtime": int(stat.st_mtime),
+                                           "completed": [], "observations": [], "scope": "full"}]}
+
+
+def test_filing_a_second_file_keeps_the_first_files_checkpoint_entry(home):
+    ok(home, "init", {})
+    inbox = home / "learning" / "_inbox"
+    (inbox / "outline.pdf").write_text("outline")
+    (inbox / "week1.pdf").write_text("slides")
+    first = ok(home, "file", {"source": str(inbox / "outline.pdf"), **COURSE, "role": "outline"})
+    entries = checkpoint(home)["files"]
+    entries[0]["completed"], entries[0]["observations"] = ["1-20"], ["professor: Ada Lovelace"]
+    (Path(first["course_dir"]) / ".state" / ws.READING_CHECKPOINT).write_text(json.dumps({"files": entries}))
+    second = ok(home, "file", {"source": str(inbox / "week1.pdf"), **COURSE, "role": "slides"})
+    entries = checkpoint(home)["files"]
+    assert [e["path"] for e in entries] == [first["dest"], second["dest"]]
+    assert entries[0]["completed"] == ["1-20"] and entries[0]["observations"] == ["professor: Ada Lovelace"]
+    assert entries[1]["completed"] == [] and entries[1]["scope"] == "full"
+
+
+def test_filing_a_textbook_lands_it_in_notes_with_contents_scope(home):
+    ok(home, "init", {})
+    src = home / "learning" / "_inbox" / "sipser.pdf"
+    src.write_bytes(b"%PDF book")
+    out = ok(home, "file", {"source": str(src), **COURSE, "role": "notes", "textbook": True})
+    notes = home / "learning" / "2026-Fall" / "CS201 Theory" / "notes"
+    assert out["dest"] == str(notes / "sipser.pdf")
+    assert [(e["path"], e["scope"]) for e in checkpoint(home)["files"]] == [(out["dest"], "contents")]
+
+
+@pytest.mark.parametrize("role", ["slides", "outline", "past-papers"])
+def test_filing_refuses_a_textbook_outside_notes_and_moves_nothing(home, role):
+    ok(home, "course", COURSE)
+    src = home / "learning" / "_inbox" / "sipser.pdf"
+    src.write_bytes(b"%PDF book")
+    fails(home, "file", {"source": str(src), **COURSE, "role": role, "textbook": True}, "textbook")
+    course_dir = home / "learning" / COURSE["term"] / COURSE["course"]
+    assert src.exists() and list((course_dir / role).iterdir()) == []
+    assert not (course_dir / ".state" / ws.READING_CHECKPOINT).exists()
+
+
+def test_filing_with_textbook_false_reads_in_full(home):
+    ok(home, "init", {})
+    src = home / "learning" / "_inbox" / "lecture-notes.pdf"
+    src.write_bytes(b"%PDF notes")
+    ok(home, "file", {"source": str(src), **COURSE, "role": "notes", "textbook": False})
+    assert checkpoint(home)["files"][0]["scope"] == "full"
+
+
+@pytest.mark.parametrize("textbook", ["yes", 1, None])
+def test_filing_refuses_a_textbook_flag_that_is_not_a_boolean(home, textbook):
+    ok(home, "init", {})
+    src = home / "learning" / "_inbox" / "book.pdf"
+    src.write_bytes(b"%PDF book")
+    fails(home, "file", {"source": str(src), **COURSE, "role": "notes", "textbook": textbook}, "textbook")
+    assert src.exists()
+
+
+# Legacy entries, keyed by path, as ingest wrote them before the checkpoint shape was fixed: the field
+# test's workspaces hold a relative key with an absolute "dest", an absolute key, "completed": "all",
+# "completed_pages" ranges and free-form "observations".
+LEGACY_ENTRIES = {
+    "past-papers/2019-midterm.pdf": {"dest": "/old/run/past-papers/2019-midterm.pdf", "size": 278448,
+                                     "mtime": 1795694099.1558726, "completed": [[1, 5]], "pending": []},
+    "slides/lec1.pdf": {"size": 966580, "mtime": 1795701069.2308164, "completed": "all",
+                        "observations": ["Vectors, forces and moments|2"]},
+}
+LEGACY_ABSOLUTE = {"size": 383607, "mtime": 1795695958.1750197, "completed_pages": [[1, 2]], "total_pages": 9}
+
+
+@pytest.mark.parametrize("under_files", [True, False], ids=["files-keyed-by-path", "top-level-keyed-by-path"])
+def test_filing_into_a_legacy_checkpoint_keeps_every_entry_and_adds_the_pending_one(home, under_files):
+    ok(home, "course", COURSE)
+    course_dir = home / "learning" / COURSE["term"] / COURSE["course"]
+    absolute_key = str(home / "old-run" / "notes" / "pset1.pdf")
+    entries = {**LEGACY_ENTRIES, absolute_key: LEGACY_ABSOLUTE}
+    legacy = {"files": entries, "observations": {"professor": "Ada"}} if under_files else entries
+    (course_dir / ".state" / ws.READING_CHECKPOINT).write_text(json.dumps(legacy))
+    src = home / "learning" / "_inbox" / "2024-final.pdf"
+    src.write_bytes(b"%PDF paper")
+    out = ok(home, "file", {"source": str(src), **COURSE, "role": "past-papers"})
+    stat = Path(out["dest"]).stat()
+    expected = {"files": [
+        {"path": str(course_dir / "past-papers" / "2019-midterm.pdf"), **LEGACY_ENTRIES["past-papers/2019-midterm.pdf"]},
+        {"path": str(course_dir / "slides" / "lec1.pdf"), **LEGACY_ENTRIES["slides/lec1.pdf"]},
+        {"path": absolute_key, **LEGACY_ABSOLUTE},
+        {"path": out["dest"], "size": 10, "mtime": int(stat.st_mtime), "completed": [], "observations": [],
+         "scope": "full"}]}
+    if under_files:
+        expected["observations"] = {"professor": "Ada"}
+    assert checkpoint(home) == expected
+
+
+@pytest.mark.parametrize("content", [
+    "not json", "[]", '{"files": "all"}', '{"files": [{"size": 1}]}', '{"files": {"notes/a.pdf": "done"}}',
+    '{"notes/a.pdf": [1, 2]}', '{"professor": {"name": "Ada"}}'])
+def test_filing_refuses_a_malformed_reading_checkpoint_and_moves_nothing(home, content):
+    ok(home, "course", COURSE)
+    path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / ws.READING_CHECKPOINT
+    path.write_text(content)
+    src = home / "learning" / "_inbox" / "a.pdf"
+    src.write_text("x")
+    fails(home, "file", {"source": str(src), **COURSE, "role": "notes"}, "reading checkpoint")
+    assert src.exists() and path.read_text() == content
+    assert list((path.parent.parent / "notes").iterdir()) == []
+
+
 def test_file_creates_workspace_and_course_when_new(home, tmp_path):
     src = tmp_path / "Downloads" / "outline.pdf"
     src.parent.mkdir()
@@ -334,6 +452,41 @@ def test_file_collision_leaves_source(home):
     fails(home, "file", {"source": str(src), **COURSE, "role": "notes"}, "already exists")
     assert src.read_text() == "new" and dest.read_text() == "existing"
     assert not (dest.parent / "a (1).md").exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no POSIX permission bits")
+def test_filing_keeps_the_reading_checkpoints_file_mode(home):
+    ok(home, "course", COURSE)
+    path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / ws.READING_CHECKPOINT
+    path.write_text('{"files": []}')
+    path.chmod(0o644)
+    src = home / "learning" / "_inbox" / "a.pdf"
+    src.write_text("x")
+    ok(home, "file", {"source": str(src), **COURSE, "role": "notes"})
+    assert len(checkpoint(home)["files"]) == 1
+    assert path.stat().st_mode & 0o777 == 0o644
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no POSIX permission bits")
+def test_setting_the_root_keeps_the_pointer_files_mode(home, tmp_path):
+    ok(home, "init", {"root": str(tmp_path / "uni")})
+    pointer(home).chmod(0o644)
+    ok(home, "relocate", {"to": str(tmp_path / "uni2")})
+    assert pointer(home).read_text() == f"{tmp_path / 'uni2'}\n"
+    assert pointer(home).stat().st_mode & 0o777 == 0o644
+
+
+def test_filing_collision_writes_no_checkpoint_entry(home):
+    ok(home, "course", COURSE)
+    inbox = home / "learning" / "_inbox"
+    (inbox / "a.md").write_text("first")
+    out = ok(home, "file", {"source": str(inbox / "a.md"), **COURSE, "role": "notes"})
+    before = checkpoint(home)
+    before["files"][0]["completed"] = ["intro"]  # partly read: a rewrite would reset it
+    (Path(out["course_dir"]) / ".state" / ws.READING_CHECKPOINT).write_text(json.dumps(before))
+    (inbox / "a.md").write_text("second")
+    fails(home, "file", {"source": str(inbox / "a.md"), **COURSE, "role": "notes"}, "already exists")
+    assert checkpoint(home) == before
 
 
 def test_bad_source(home, tmp_path):
@@ -828,3 +981,17 @@ def test_file_refuses_destination_role_symlink(home, tmp_path):
     fails(home, "file", {"source": str(src), **COURSE, "role": "notes"}, "symlink")
     assert src.exists()
     assert not (tmp_path / src.name).exists()
+
+
+def test_file_refuses_a_symlinked_reading_checkpoint(home, tmp_path):
+    ok(home, "course", COURSE)
+    target = tmp_path / "elsewhere.json"
+    target.write_text('{"files": []}')
+    link = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / ws.READING_CHECKPOINT
+    link.symlink_to(target)
+    src = home / "attachment.txt"
+    src.write_text("paper")
+    fails(home, "file", {"source": str(src), **COURSE, "role": "notes"}, "symlink")
+    assert src.exists() and link.is_symlink()
+    assert target.read_text() == '{"files": []}'
+    assert not (link.parent.parent / "notes" / src.name).exists()
