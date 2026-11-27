@@ -968,3 +968,19 @@ def test_visual_building_never_stands_in_for_a_denied_visual_builder():
     _states_the_denied_helper_rule(visual)
     fallback = "only when no independent agent is available, make a fresh separate pass following the helper body"
     assert visual.index(fallback) < visual.index(DENIED_HELPER)
+
+
+# Textbooks (#112): ingest files a published book into notes/ and reads only its contents pages.
+def test_ingest_files_textbooks_into_notes_and_reads_only_their_contents_pages():
+    table = _ingest_step(4)
+    assert "`textbook`" in table and "columns exactly `file | term | course | role`" in table
+    assert "ISBN" in table and "edition" in table and "publisher" in table  # the published-book hint
+    assert "lecture notes" in table and "whatever their length" in table  # a professor's own notes stay notes
+    filing = _ingest_step(5)
+    assert '"role": "notes", "textbook": true' in filing
+    reading = _ingest_step(6)
+    assert '"scope": "contents"' in reading
+    assert "table of contents ends" in reading and "at most 30 pages" in reading
+    assert "chapter" in reading and "`page=N`" in reading and "complete" in reading
+    final = _read(INGEST).split("\n11. ", 1)[1]
+    assert "contents pages" in final and "textbook" in final
