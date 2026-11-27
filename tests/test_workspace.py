@@ -347,6 +347,33 @@ def test_filing_a_second_file_keeps_the_first_files_checkpoint_entry(home):
     assert entries[1]["completed"] == [] and entries[1]["scope"] == "full"
 
 
+def test_filing_a_textbook_lands_it_in_notes_with_contents_scope(home):
+    ok(home, "init", {})
+    src = home / "learning" / "_inbox" / "sipser.pdf"
+    src.write_bytes(b"%PDF book")
+    out = ok(home, "file", {"source": str(src), **COURSE, "role": "notes", "textbook": True})
+    notes = home / "learning" / "2026-Fall" / "CS201 Theory" / "notes"
+    assert out["dest"] == str(notes / "sipser.pdf")
+    assert [(e["path"], e["scope"]) for e in checkpoint(home)["files"]] == [(out["dest"], "contents")]
+
+
+def test_filing_with_textbook_false_reads_in_full(home):
+    ok(home, "init", {})
+    src = home / "learning" / "_inbox" / "lecture-notes.pdf"
+    src.write_bytes(b"%PDF notes")
+    ok(home, "file", {"source": str(src), **COURSE, "role": "notes", "textbook": False})
+    assert checkpoint(home)["files"][0]["scope"] == "full"
+
+
+@pytest.mark.parametrize("textbook", ["yes", 1, None])
+def test_filing_refuses_a_textbook_flag_that_is_not_a_boolean(home, textbook):
+    ok(home, "init", {})
+    src = home / "learning" / "_inbox" / "book.pdf"
+    src.write_bytes(b"%PDF book")
+    fails(home, "file", {"source": str(src), **COURSE, "role": "notes", "textbook": textbook}, "textbook")
+    assert src.exists()
+
+
 @pytest.mark.parametrize("content", ["not json", "[]", '{"files": {}}', '{"files": [{"size": 1}]}'])
 def test_filing_refuses_a_malformed_reading_checkpoint_and_moves_nothing(home, content):
     ok(home, "course", COURSE)

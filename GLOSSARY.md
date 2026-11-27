@@ -152,5 +152,8 @@ _Avoid_: Figure verifier, figure grader
 **Reading checkpoint**:
 A course's record of how far ingest has read each filed document: its size and modification time, the page ranges read and the observations gathered. Filing writes a pending entry for every document at once, so a later ingest resumes every document that is not fully read, including one it never started.
 
+**Textbook**:
+A published book a course uses: it has an author and publisher, an edition or an ISBN, or it is book-length with no sign that the course's professor wrote it. Ingest files it into `notes/` and reads only its contents pages, indexing each chapter as a topic. A professor's own lecture notes are notes, not a textbook, whatever their length.
+
 **Teaching highlight**:
 The one standard mark that points at the part of a figure being discussed. Never a colour change where colour is notation.

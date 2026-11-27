@@ -64,7 +64,8 @@ course -- create one course tree (runs init on the current root first).
 
 file -- file one regular file into ``<course>/<role>/``, same basename.
     in : {"source": "/home/u/learning/_inbox/2024-final.pdf", "term":
-          "2026-Fall", "course": "CS201 Theory", "role": "past-papers"}
+          "2026-Fall", "course": "CS201 Theory", "role": "past-papers",
+          "textbook": false}
     out: {"source": "...", "dest": "/home/u/learning/2026-Fall/CS201
           Theory/past-papers/2024-final.pdf", "course_dir": "...", "created":
           [...], "line": "Saved 2024-final.pdf to /home/u/learning/2026-Fall/
@@ -79,8 +80,9 @@ file -- file one regular file into ``<course>/<role>/``, same basename.
     course's reading checkpoint ``.state/ingest-coverage.json`` (written
     atomically, other entries kept): ``{"files": [{"path": "<dest>", "size":
     10, "mtime": 1793000000, "completed": [], "observations": [], "scope":
-    "full"}]}``. ``mtime`` is whole seconds. An entry without ``scope`` reads
-    as ``full``. A symlinked checkpoint, or one that is not an object with a
+    "full"}]}``. ``mtime`` is whole seconds. The optional ``textbook``
+    boolean (default false) sets ``scope`` to ``contents``: ingest reads only
+    the book's contents pages. An entry without ``scope`` reads as ``full``. A symlinked checkpoint, or one that is not an object with a
     ``files`` list of entries that each have a ``path``, refuses filing
     before anything moves.
 
@@ -473,15 +475,15 @@ def _read_checkpoint(checkpoint: Path) -> dict:
     return data
 
 
-def _add_pending_entry(checkpoint: Path, data: dict, dest: Path) -> None:
-    """Add a pending entry for the filed ``dest`` to ``data`` (nothing read yet, scope ``full``) and write it.
+def _add_pending_entry(checkpoint: Path, data: dict, dest: Path, scope: str) -> None:
+    """Add a pending entry for the filed ``dest`` to ``data`` (nothing read yet, the given ``scope``) and write it.
 
     Every other entry is kept; a stale entry for the same path (its file is gone, or filing would have collided)
     is replaced.
     """
     stat = dest.stat()
     entry = {"path": str(dest), "size": stat.st_size, "mtime": int(stat.st_mtime),
-             "completed": [], "observations": [], "scope": "full"}
+             "completed": [], "observations": [], "scope": scope}
     files = [e for e in data["files"] if e["path"] != str(dest)] + [entry]
     _write_json(checkpoint, {**data, "files": files})
 
@@ -537,9 +539,12 @@ def cmd_course(data: dict) -> dict:
 
 
 def cmd_file(data: dict) -> dict:
-    check_keys(data, {"source", "term", "course", "role"})
+    check_keys(data, {"source", "term", "course", "role", "textbook"})
     source = parse_path(data, "source")
     term, course, role = parse_term(data), parse_segment(data, "course"), parse_role(data)
+    textbook = data.get("textbook", False)
+    if not isinstance(textbook, bool):
+        raise InputError("textbook must be true or false")
     if source.is_symlink() or not source.is_file():
         raise InputError(f"source is not an existing regular file: {source}")
     root, _ = resolve_root()
@@ -569,7 +574,7 @@ def cmd_file(data: dict) -> dict:
         source.unlink()
     except OSError:
         action = "copied"
-    _add_pending_entry(checkpoint, pending, dest)
+    _add_pending_entry(checkpoint, pending, dest, "contents" if textbook else "full")
     verb = "Moved" if action == "moved" else "Copied"
     line = f"{verb} {source.name} to {dest_dir}/"
     if action == "copied":
