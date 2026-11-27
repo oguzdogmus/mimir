@@ -75,6 +75,14 @@ file -- file one regular file into ``<course>/<role>/``, same basename.
     or anything under a ``.state`` directory inside the root). If a move
     across filesystems fails while the source still exists, the partial
     destination file is removed.
+    After the move, filing adds a pending entry for the destination to the
+    course's reading checkpoint ``.state/ingest-coverage.json`` (written
+    atomically, other entries kept): ``{"files": [{"path": "<dest>", "size":
+    10, "mtime": 1793000000, "completed": [], "observations": [], "scope":
+    "full"}]}``. ``mtime`` is whole seconds. An entry without ``scope`` reads
+    as ``full``. A symlinked checkpoint, or one that is not an object with a
+    ``files`` list of entries that each have a ``path``, refuses filing
+    before anything moves.
 
 relocate -- move the whole tree to a new root, then update the pointer.
     in : {"to": "~/Documents/uni"}
@@ -451,6 +459,7 @@ def _write_json(path: Path, data: dict) -> None:
 
 def _read_checkpoint(checkpoint: Path) -> dict:
     """The course's reading checkpoint, ``{"files": [entry, ...]}``; empty when the file does not exist yet."""
+    refuse_symlinks(checkpoint, field="reading checkpoint", reason="refusing to write through it; nothing was moved")
     if not checkpoint.exists():
         return {"files": []}
     try:

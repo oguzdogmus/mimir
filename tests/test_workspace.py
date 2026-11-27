@@ -884,3 +884,17 @@ def test_file_refuses_destination_role_symlink(home, tmp_path):
     fails(home, "file", {"source": str(src), **COURSE, "role": "notes"}, "symlink")
     assert src.exists()
     assert not (tmp_path / src.name).exists()
+
+
+def test_file_refuses_a_symlinked_reading_checkpoint(home, tmp_path):
+    ok(home, "course", COURSE)
+    target = tmp_path / "elsewhere.json"
+    target.write_text('{"files": []}')
+    link = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / "ingest-coverage.json"
+    link.symlink_to(target)
+    src = home / "attachment.txt"
+    src.write_text("paper")
+    fails(home, "file", {"source": str(src), **COURSE, "role": "notes"}, "symlink")
+    assert src.exists() and link.is_symlink()
+    assert target.read_text() == '{"files": []}'
+    assert not (link.parent.parent / "notes" / src.name).exists()
