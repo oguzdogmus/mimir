@@ -984,3 +984,9 @@ def test_ingest_files_textbooks_into_notes_and_reads_only_their_contents_pages()
     assert "chapter" in reading and "`page=N`" in reading and "complete" in reading
     final = _read(INGEST).split("\n11. ", 1)[1]
     assert "contents pages" in final and "textbook" in final
+
+
+def test_the_glossary_defines_a_textbook():
+    text = _read("GLOSSARY.md")
+    entry = text.split("**Textbook**:\n", 1)[1].split("\n\n", 1)[0]
+    assert "contents pages" in entry and "notes/" in entry
