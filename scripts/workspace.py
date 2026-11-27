@@ -138,6 +138,9 @@ POINTER_PATH = "~/.config/mimir/root"
 _ROLES = ("outline", "slides", "past-papers", "notes")
 _COURSE_MEMORY = ("mastery.md", "fingerprint.md", "save.md", "forecast.md")
 READING_CHECKPOINT = "ingest-coverage.json"
+# Reading scopes of a checkpoint entry: a textbook reads only its contents pages, any other file in full. An entry
+# without "scope" (written before scopes existed) reads as SCOPE_FULL.
+SCOPE_FULL, SCOPE_CONTENTS = "full", "contents"
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "assets" / "templates"
 
 _TERM = re.compile(r"[0-9]{4}-\w+")
@@ -588,7 +591,7 @@ def cmd_file(data: dict) -> dict:
         source.unlink()
     except OSError:
         action = "copied"
-    _add_pending_entry(checkpoint, pending, dest, "contents" if textbook else "full")
+    _add_pending_entry(checkpoint, pending, dest, SCOPE_CONTENTS if textbook else SCOPE_FULL)
     verb = "Moved" if action == "moved" else "Copied"
     line = f"{verb} {source.name} to {dest_dir}/"
     if action == "copied":
