@@ -945,3 +945,11 @@ def test_background_dispatch_never_stands_in_for_a_denied_field_researcher():
     dispatch = core_section("Background dispatch")
     _states_the_denied_helper_rule(dispatch)
     assert dispatch.index("no independent agent") < dispatch.index(DENIED_HELPER)
+
+
+def test_visual_building_never_stands_in_for_a_denied_visual_builder():
+    line = next(l for l in core_section("Paths, commands and helpers").splitlines() if "For visual building" in l)
+    visual = line[line.index("For visual building"):]
+    _states_the_denied_helper_rule(visual)
+    fallback = "only when no independent agent is available, make a fresh separate pass following the helper body"
+    assert visual.index(fallback) < visual.index(DENIED_HELPER)
