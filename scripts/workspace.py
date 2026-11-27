@@ -75,6 +75,14 @@ file -- file one regular file into ``<course>/<role>/``, same basename.
     or anything under a ``.state`` directory inside the root). If a move
     across filesystems fails while the source still exists, the partial
     destination file is removed.
+    After the move, filing adds a pending entry for the destination to the
+    course's reading checkpoint ``.state/ingest-coverage.json`` (written
+    atomically, other entries kept): ``{"files": [{"path": "<dest>", "size":
+    10, "mtime": 1793000000, "completed": [], "observations": [], "scope":
+    "full"}]}``. ``mtime`` is whole seconds. An entry without ``scope`` reads
+    as ``full``. A symlinked checkpoint, or one that is not an object with a
+    ``files`` list of entries that each have a ``path``, refuses filing
+    before anything moves.
 
 relocate -- move the whole tree to a new root, then update the pointer.
     in : {"to": "~/Documents/uni"}
@@ -121,6 +129,7 @@ POINTER_PATH = "~/.config/mimir/root"
 
 _ROLES = ("outline", "slides", "past-papers", "notes")
 _COURSE_MEMORY = ("mastery.md", "fingerprint.md", "save.md", "forecast.md")
+READING_CHECKPOINT = "ingest-coverage.json"
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "assets" / "templates"
 
 _TERM = re.compile(r"[0-9]{4}-\w+")
@@ -432,6 +441,51 @@ def _is_memory_file(source: Path, root: Path) -> bool:
     return False
 
 
+def _write_json(path: Path, data: dict) -> None:
+    """Write ``data`` to ``path`` atomically: a temp file in the same folder, then ``os.replace``."""
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _read_checkpoint(checkpoint: Path) -> dict:
+    """The course's reading checkpoint, ``{"files": [entry, ...]}``; empty when the file does not exist yet."""
+    refuse_symlinks(checkpoint, field="reading checkpoint", reason="refusing to write through it; nothing was moved")
+    if not checkpoint.exists():
+        return {"files": []}
+    try:
+        data = json.loads(checkpoint.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        data = None
+    if (not isinstance(data, dict) or not isinstance(data.get("files"), list)
+            or not all(isinstance(e, dict) and isinstance(e.get("path"), str) for e in data["files"])):
+        raise InputError(f"reading checkpoint {checkpoint} is not a JSON object with a \"files\" list of "
+                         "entries; nothing was moved")
+    return data
+
+
+def _add_pending_entry(checkpoint: Path, data: dict, dest: Path) -> None:
+    """Add a pending entry for the filed ``dest`` to ``data`` (nothing read yet, scope ``full``) and write it.
+
+    Every other entry is kept; a stale entry for the same path (its file is gone, or filing would have collided)
+    is replaced.
+    """
+    stat = dest.stat()
+    entry = {"path": str(dest), "size": stat.st_size, "mtime": int(stat.st_mtime),
+             "completed": [], "observations": [], "scope": "full"}
+    files = [e for e in data["files"] if e["path"] != str(dest)] + [entry]
+    _write_json(checkpoint, {**data, "files": files})
+
+
 # --- Subcommands -------------------------------------------------------------------
 
 def cmd_root(data: dict) -> dict:
@@ -500,6 +554,8 @@ def cmd_file(data: dict) -> dict:
         raise InputError(f"{dest} already exists; nothing was moved")
     created: list[str] = []
     course_dir = build_course(root, term, course, created)
+    checkpoint = course_dir / ".state" / READING_CHECKPOINT
+    pending = _read_checkpoint(checkpoint)
     # Exclusive creation preserves an existing destination, even in a race.
     writer = dest.open("xb")
     try:
@@ -513,6 +569,7 @@ def cmd_file(data: dict) -> dict:
         source.unlink()
     except OSError:
         action = "copied"
+    _add_pending_entry(checkpoint, pending, dest)
     verb = "Moved" if action == "moved" else "Copied"
     line = f"{verb} {source.name} to {dest_dir}/"
     if action == "copied":
