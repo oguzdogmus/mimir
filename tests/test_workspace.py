@@ -316,6 +316,21 @@ def test_file_moves_into_role(home):
     assert (dest_dir.parent / "INDEX.md").is_file()  # course created on the fly
 
 
+def checkpoint(home: Path) -> dict:
+    path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / "ingest-coverage.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_filed_document_gets_a_pending_reading_checkpoint(home):
+    ok(home, "init", {})
+    src = home / "learning" / "_inbox" / "2024-final.pdf"
+    src.write_bytes(b"%PDF paper")
+    out = ok(home, "file", {"source": str(src), **COURSE, "role": "past-papers"})
+    stat = Path(out["dest"]).stat()
+    assert checkpoint(home) == {"files": [{"path": out["dest"], "size": 10, "mtime": int(stat.st_mtime),
+                                           "completed": [], "observations": [], "scope": "full"}]}
+
+
 def test_file_creates_workspace_and_course_when_new(home, tmp_path):
     src = tmp_path / "Downloads" / "outline.pdf"
     src.parent.mkdir()

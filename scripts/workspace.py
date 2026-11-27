@@ -121,6 +121,7 @@ POINTER_PATH = "~/.config/mimir/root"
 
 _ROLES = ("outline", "slides", "past-papers", "notes")
 _COURSE_MEMORY = ("mastery.md", "fingerprint.md", "save.md", "forecast.md")
+READING_CHECKPOINT = "ingest-coverage.json"
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "assets" / "templates"
 
 _TERM = re.compile(r"[0-9]{4}-\w+")
@@ -432,6 +433,30 @@ def _is_memory_file(source: Path, root: Path) -> bool:
     return False
 
 
+def _write_json(path: Path, data: dict) -> None:
+    """Write ``data`` to ``path`` atomically: a temp file in the same folder, then ``os.replace``."""
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _add_pending_entry(checkpoint: Path, dest: Path) -> None:
+    """Add a pending reading checkpoint entry for the filed ``dest``: nothing read yet, scope ``full``."""
+    stat = dest.stat()
+    entry = {"path": str(dest), "size": stat.st_size, "mtime": int(stat.st_mtime),
+             "completed": [], "observations": [], "scope": "full"}
+    _write_json(checkpoint, {"files": [entry]})
+
+
 # --- Subcommands -------------------------------------------------------------------
 
 def cmd_root(data: dict) -> dict:
@@ -513,6 +538,7 @@ def cmd_file(data: dict) -> dict:
         source.unlink()
     except OSError:
         action = "copied"
+    _add_pending_entry(course_dir / ".state" / READING_CHECKPOINT, dest)
     verb = "Moved" if action == "moved" else "Copied"
     line = f"{verb} {source.name} to {dest_dir}/"
     if action == "copied":
