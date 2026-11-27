@@ -621,6 +621,21 @@ def test_close_counts_every_results_line_kind(home, root):
     assert out["results"] == {"unassisted": 1, "assisted": 1, "partial": 1, "wrong": 2, "not reached": 2}
 
 
+def test_close_counts_only_this_sessions_block(home, root):
+    """An earlier session in the same log keeps its own counts; neither block leaks into the other."""
+    cdir = course(home)
+    first, second = "2026-10-17T08:00:00+03:00", NOW
+    earlier = session_log(first, "2026-10-17T08:30:00+03:00",
+                          extra="## Results\n- q1 (Graphs): wrong\n- q2 (Graphs): unassisted solve\n")
+    this = session_log(second, extra="## Results\n- q3 (Trees): partial\n- q4 (Trees): not reached\n")
+    log(cdir, "2026-10-17-0900", earlier + this)
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:00:00+03:00", started=second))
+    assert out["results"] == {"unassisted": 0, "assisted": 0, "partial": 1, "wrong": 0, "not reached": 1}
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:00:00+03:00", started=first))
+    assert out["already_closed"] is True
+    assert out["results"] == {"unassisted": 1, "assisted": 0, "partial": 0, "wrong": 1, "not reached": 0}
+
+
 def test_closed_session_counts_in_the_cram_bill(home, root):
     cdir = due_course(home, root)
     started = "2026-11-01T20:00:00+02:00"
