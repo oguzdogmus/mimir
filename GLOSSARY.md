@@ -26,6 +26,10 @@ _Avoid_: Knowledge gauge, placement test
 A course-specific initial assessment of what the student already knows, distinct from their teaching settings.
 _Avoid_: Setup sampler
 
+**Partial answer**:
+An answer with at least one required part right and at least one required part wrong or missing. A required part is anything the question asks for: each named item, the value with its unit, a check the question asks to be shown, the direction and the magnitude. It is recorded as `partial`, never a solve: an `unseen` or `mastered` topic becomes `shaky`, a `gap` stays a `gap`.
+_Avoid_: Half credit, partly wrong
+
 **Probe trial**:
 A natural trial of one transition toward more independent teaching, continued across eligible Standard sessions until adopted or rejected. Paused, not applied, in sessions within 48 hours of an exam.
 _Avoid_: Preference probe, knowledge check
