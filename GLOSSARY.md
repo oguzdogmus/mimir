@@ -149,5 +149,8 @@ _Avoid_: Base builder, figure grower
 The independent, read-only helper that checks one built figure against its field pack's accuracy checklist for that figure, before a base figure is saved or a blind test page is scored. It returns a pass or a fail with a reason for every checklist item, plus an overall verdict that passes only when every item does. It reads only the figure, the pack's name for it with its figure kind, and that checklist.
 _Avoid_: Figure verifier, figure grader
 
+**Reading checkpoint**:
+A course's record of how far ingest has read each filed document: its size and modification time, the page ranges read and the observations gathered. Filing writes a pending entry for every document at once, so a later ingest resumes every document that is not fully read, including one it never started.
+
 **Teaching highlight**:
 The one standard mark that points at the part of a figure being discussed. Never a colour change where colour is notation.
