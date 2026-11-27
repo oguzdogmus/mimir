@@ -357,6 +357,17 @@ def test_filing_a_textbook_lands_it_in_notes_with_contents_scope(home):
     assert [(e["path"], e["scope"]) for e in checkpoint(home)["files"]] == [(out["dest"], "contents")]
 
 
+@pytest.mark.parametrize("role", ["slides", "outline", "past-papers"])
+def test_filing_refuses_a_textbook_outside_notes_and_moves_nothing(home, role):
+    ok(home, "course", COURSE)
+    src = home / "learning" / "_inbox" / "sipser.pdf"
+    src.write_bytes(b"%PDF book")
+    fails(home, "file", {"source": str(src), **COURSE, "role": role, "textbook": True}, "textbook")
+    course_dir = home / "learning" / COURSE["term"] / COURSE["course"]
+    assert src.exists() and list((course_dir / role).iterdir()) == []
+    assert not (course_dir / ".state" / ws.READING_CHECKPOINT).exists()
+
+
 def test_filing_with_textbook_false_reads_in_full(home):
     ok(home, "init", {})
     src = home / "learning" / "_inbox" / "lecture-notes.pdf"

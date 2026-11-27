@@ -82,7 +82,8 @@ file -- file one regular file into ``<course>/<role>/``, same basename.
     10, "mtime": 1793000000, "completed": [], "observations": [], "scope":
     "full"}]}``. ``mtime`` is whole seconds. The optional ``textbook``
     boolean (default false) sets ``scope`` to ``contents``: ingest reads only
-    the book's contents pages. An entry without ``scope`` reads as ``full``.
+    the book's contents pages. A textbook files only into ``notes``: with any
+    other role, filing refuses. An entry without ``scope`` reads as ``full``.
     A legacy checkpoint, written before this shape was fixed, keys its
     entries by path, under ``files`` or at the top level: filing rewrites it
     in the list form, ``path`` taken from the key (a relative key is under
@@ -561,6 +562,8 @@ def cmd_file(data: dict) -> dict:
     textbook = data.get("textbook", False)
     if not isinstance(textbook, bool):
         raise InputError("textbook must be true or false")
+    if textbook and role != "notes":
+        raise InputError(f"textbook files into notes, not {role}: use role notes")
     if source.is_symlink() or not source.is_file():
         raise InputError(f"source is not an existing regular file: {source}")
     root, _ = resolve_root()
