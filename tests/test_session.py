@@ -1413,6 +1413,17 @@ def test_record_writes_one_results_line_in_the_session_log(home, root):
     assert text.count("## Results") == 1
 
 
+def test_close_counts_every_outcome_record_writes(home, root):
+    """What ``record`` writes is what ``close`` counts: one count per recorded outcome."""
+    cdir = record_course(home)
+    items = {"a": "unassisted", "b": "assisted", "c": "partial", "d": "wrong"}
+    checked(home, *items)
+    for item, outcome in items.items():
+        assert ok(home, "record", attempt(item=item, outcome=outcome))["recorded"] is True
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:00:00+03:00", log_name=REC_LOG))
+    assert out["results"] == {"unassisted": 1, "assisted": 1, "partial": 1, "wrong": 1, "not reached": 0}
+
+
 def test_a_retried_record_and_a_duplicate_write_no_second_line(home, root):
     cdir = record_course(home)
     checked(home, "heaps-practice-1")
