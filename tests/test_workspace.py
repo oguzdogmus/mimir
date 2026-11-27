@@ -331,6 +331,34 @@ def test_filed_document_gets_a_pending_reading_checkpoint(home):
                                            "completed": [], "observations": [], "scope": "full"}]}
 
 
+def test_filing_a_second_file_keeps_the_first_files_checkpoint_entry(home):
+    ok(home, "init", {})
+    inbox = home / "learning" / "_inbox"
+    (inbox / "outline.pdf").write_text("outline")
+    (inbox / "week1.pdf").write_text("slides")
+    first = ok(home, "file", {"source": str(inbox / "outline.pdf"), **COURSE, "role": "outline"})
+    entries = checkpoint(home)["files"]
+    entries[0]["completed"], entries[0]["observations"] = ["1-20"], ["professor: Ada Lovelace"]
+    (Path(first["course_dir"]) / ".state" / "ingest-coverage.json").write_text(json.dumps({"files": entries}))
+    second = ok(home, "file", {"source": str(inbox / "week1.pdf"), **COURSE, "role": "slides"})
+    entries = checkpoint(home)["files"]
+    assert [e["path"] for e in entries] == [first["dest"], second["dest"]]
+    assert entries[0]["completed"] == ["1-20"] and entries[0]["observations"] == ["professor: Ada Lovelace"]
+    assert entries[1]["completed"] == [] and entries[1]["scope"] == "full"
+
+
+@pytest.mark.parametrize("content", ["not json", "[]", '{"files": {}}', '{"files": [{"size": 1}]}'])
+def test_filing_refuses_a_malformed_reading_checkpoint_and_moves_nothing(home, content):
+    ok(home, "course", COURSE)
+    path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / "ingest-coverage.json"
+    path.write_text(content)
+    src = home / "learning" / "_inbox" / "a.pdf"
+    src.write_text("x")
+    fails(home, "file", {"source": str(src), **COURSE, "role": "notes"}, "reading checkpoint")
+    assert src.exists() and path.read_text() == content
+    assert list((path.parent.parent / "notes").iterdir()) == []
+
+
 def test_file_creates_workspace_and_course_when_new(home, tmp_path):
     src = tmp_path / "Downloads" / "outline.pdf"
     src.parent.mkdir()

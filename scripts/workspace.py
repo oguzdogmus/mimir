@@ -449,12 +449,32 @@ def _write_json(path: Path, data: dict) -> None:
         raise
 
 
-def _add_pending_entry(checkpoint: Path, dest: Path) -> None:
-    """Add a pending reading checkpoint entry for the filed ``dest``: nothing read yet, scope ``full``."""
+def _read_checkpoint(checkpoint: Path) -> dict:
+    """The course's reading checkpoint, ``{"files": [entry, ...]}``; empty when the file does not exist yet."""
+    if not checkpoint.exists():
+        return {"files": []}
+    try:
+        data = json.loads(checkpoint.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        data = None
+    if (not isinstance(data, dict) or not isinstance(data.get("files"), list)
+            or not all(isinstance(e, dict) and isinstance(e.get("path"), str) for e in data["files"])):
+        raise InputError(f"reading checkpoint {checkpoint} is not a JSON object with a \"files\" list of "
+                         "entries; nothing was moved")
+    return data
+
+
+def _add_pending_entry(checkpoint: Path, data: dict, dest: Path) -> None:
+    """Add a pending entry for the filed ``dest`` to ``data`` (nothing read yet, scope ``full``) and write it.
+
+    Every other entry is kept; a stale entry for the same path (its file is gone, or filing would have collided)
+    is replaced.
+    """
     stat = dest.stat()
     entry = {"path": str(dest), "size": stat.st_size, "mtime": int(stat.st_mtime),
              "completed": [], "observations": [], "scope": "full"}
-    _write_json(checkpoint, {"files": [entry]})
+    files = [e for e in data["files"] if e["path"] != str(dest)] + [entry]
+    _write_json(checkpoint, {**data, "files": files})
 
 
 # --- Subcommands -------------------------------------------------------------------
@@ -525,6 +545,8 @@ def cmd_file(data: dict) -> dict:
         raise InputError(f"{dest} already exists; nothing was moved")
     created: list[str] = []
     course_dir = build_course(root, term, course, created)
+    checkpoint = course_dir / ".state" / READING_CHECKPOINT
+    pending = _read_checkpoint(checkpoint)
     # Exclusive creation preserves an existing destination, even in a race.
     writer = dest.open("xb")
     try:
@@ -538,7 +560,7 @@ def cmd_file(data: dict) -> dict:
         source.unlink()
     except OSError:
         action = "copied"
-    _add_pending_entry(course_dir / ".state" / READING_CHECKPOINT, dest)
+    _add_pending_entry(checkpoint, pending, dest)
     verb = "Moved" if action == "moved" else "Copied"
     line = f"{verb} {source.name} to {dest_dir}/"
     if action == "copied":
