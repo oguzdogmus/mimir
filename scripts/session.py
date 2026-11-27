@@ -358,7 +358,7 @@ progress -- what Mimir believes the student knows. Read-only; never calls plan.p
 
 record -- persist an eligible answer or a frustration override.
     Required: term, course, topic, item (stable identity: the ``item`` the
-    question had in ``verify.py submit``), outcome (unassisted|assisted|wrong),
+    question had in ``verify.py submit``), outcome (unassisted|assisted|partial|wrong),
     session (unique identity, the same as in ``verify.py submit``), date
     (YYYY-MM-DD), log (this session's log name from ``session.py now``; the
     log must exist). Optional override and explanation_only booleans
@@ -370,12 +370,17 @@ record -- persist an eligible answer or a frustration override.
     records nothing. The label and the real-paper flag come from the ledger
     (a real question counts as a real past-paper solve). A frustration
     override (with or without explanation_only) needs no ledger entry.
-    Per session, item and event, the first wrong answer records once (later
-    misses return duplicate) and a right answer after it records as assisted.
+    A partial answer (some required parts right, some wrong or missing) is
+    never a solve: it moves unseen and mastered to shaky, leaves shaky and gap
+    as they are, clears the topic's solves as a wrong answer does, adds to no
+    counter and lifts no frustration-override block.
+    Per session, item and event, the first miss (wrong or partial) records
+    once (later misses return duplicate) and a right answer after it records
+    as assisted.
     Each recorded answer adds one line under ``## Results`` in the log's last
     session block (from its last ``started:`` line; the section is created at
     the end when that block has none): ``- <item> <label> (<topic>):
-    <unassisted solve|assisted solve|wrong>``, ``- <topic> frustration
+    <unassisted solve|assisted solve|partial|wrong>``, ``- <topic> frustration
     override: answer given`` for an override, and ``- <item> <label>
     (<topic>): after frustration override, not counted`` for an answer the
     override blocks. A duplicate, a retried call and an item without a correct
@@ -1853,6 +1858,10 @@ def _log_result(path: Path, line: str) -> None:
     ingest._write_atomic(path, "\n".join(lines) + "\n")
 
 
+# The answer outcomes ``record`` accepts; its error message lists them from here.
+OUTCOMES = ("unassisted", "assisted", "partial", "wrong")
+
+
 def cmd_record(data: dict) -> dict:
     """Record an idempotent attempt and its line in the session log; retain legacy text and atomic
     authoritative state."""
@@ -1890,8 +1899,8 @@ def cmd_record(data: dict) -> dict:
     day = _valid_date(data["date"])
     if day is None:
         raise InputError("date must be YYYY-MM-DD")
-    if data.get("outcome") not in ("unassisted", "assisted", "wrong"):
-        raise InputError("outcome must be unassisted, assisted or wrong")
+    if data.get("outcome") not in OUTCOMES:
+        raise InputError(f"outcome must be {', '.join(OUTCOMES[:-1])} or {OUTCOMES[-1]}")
     for field in ("override", "explanation_only"):
         if type(data.get(field, False)) is not bool:
             raise InputError(f"{field} must be boolean")
@@ -1914,7 +1923,8 @@ def cmd_record(data: dict) -> dict:
     # Three-element identities predate this split and block both.
     base = [data["session"], data["item"], bool(data.get("override"))]
     outcome = data["outcome"]
-    kind = "wrong" if outcome == "wrong" else "right"
+    # A partial answer is a miss: it shares the wrong answer's identity.
+    kind = "wrong" if outcome in ("wrong", "partial") else "right"
     blocking = [base, base + ["right"]] + ([base + ["wrong"]] if kind == "wrong" else [])
     if any(identity in entry["attempts"] for identity in blocking):
         return {**result, "duplicate": True, "line": "Attempt already recorded."}
@@ -1946,6 +1956,9 @@ def cmd_record(data: dict) -> dict:
         if outcome == "wrong":
             row["status"] = "shaky" if row["status"] == "mastered" else "gap"
             entry["solves"] = []
+        elif outcome == "partial":
+            row["status"] = "gap" if row["status"] == "gap" else "shaky"
+            entry["solves"] = []
         elif outcome == "assisted":
             row["assisted"] += 1
             if not entry["blocked_session"] and row["status"] != "mastered":
@@ -1967,7 +1980,7 @@ def cmd_record(data: dict) -> dict:
     # Mastery first: a failed write leaves no log line claiming an attempt that was never recorded.
     _save_record(path, text, state)
     _log_result(log_path, f'- {data["topic"]} frustration override: answer given' if override else
-                f'{shown}: {outcome if outcome == "wrong" else outcome + " solve"}')
+                f'{shown}: {outcome if kind == "wrong" else outcome + " solve"}')
     return {"status": row["status"], "duplicate": False, "recorded": True,
             "line": f'{row["name"]}: {row["status"]}.'}
 

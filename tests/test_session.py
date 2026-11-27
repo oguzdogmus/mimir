@@ -1583,6 +1583,76 @@ def test_record_invalid(home, root, change, field):
     fails(home, "record", {**attempt(item="a"), **change}, field)
 
 
+def test_record_rejects_an_unknown_outcome_and_names_all_four(home, root):
+    record_course(home)
+    fails(home, "record", attempt(item="a", outcome="half"),
+          "outcome must be unassisted, assisted, partial or wrong")
+
+
+@pytest.mark.parametrize("before,after", [
+    (None, "shaky"), ("shaky", "shaky"), ("gap", "gap"), ("mastered", "shaky"),
+])
+def test_record_a_partial_answer_moves_the_topic(home, root, before, after):
+    """A partly right answer: an unseen topic becomes shaky, a gap stays a gap, mastered drops to shaky."""
+    record_course(home, mastery=[("Heaps", before, "2026-10-01", 0, 1)] if before else ())
+    checked(home, "a")
+    out = ok(home, "record", attempt(item="a", outcome="partial"))
+    assert (out["recorded"], out["status"]) == (True, after)
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["status"], row["assisted"], row["unassisted"]) == (after, 0, 0 if before is None else 1)
+
+
+def test_record_a_partial_answer_clears_solves_so_mastered_needs_two_fresh_ones(home, root):
+    record_course(home)
+    for n, session in enumerate(("s1", "s2", "s3", "s4"), start=1):
+        checked(home, f"q{n}", session=session)
+    day = {"s1": "2026-10-17", "s2": "2026-10-18", "s3": "2026-10-19", "s4": "2026-10-20"}
+    def rec(n: int, session: str, outcome: str) -> str:
+        return ok(home, "record", attempt(item=f"q{n}", session=session, date=day[session],
+                                          outcome=outcome))["status"]
+    assert rec(1, "s1", "unassisted") == "shaky"
+    assert rec(2, "s2", "partial") == "shaky"
+    assert rec(3, "s3", "unassisted") == "shaky"  # the solve before the partial answer no longer counts
+    assert rec(4, "s4", "unassisted") == "mastered"
+
+
+@pytest.mark.parametrize("retry", ["partial", "wrong"])
+def test_record_a_miss_after_a_partial_answer_is_a_duplicate(home, root, retry):
+    record_course(home)
+    checked(home, "a")
+    ok(home, "record", attempt(item="a", outcome="partial"))
+    again = ok(home, "record", attempt(item="a", outcome=retry))
+    assert (again["recorded"], again["duplicate"]) == (False, True)
+
+
+def test_record_a_right_answer_after_a_partial_one_as_assisted(home, root):
+    cdir = record_course(home)
+    checked(home, "a")
+    ok(home, "record", attempt(item="a", outcome="partial"))
+    right = ok(home, "record", attempt(item="a", outcome="unassisted"))
+    assert (right["recorded"], right["status"]) == (True, "shaky")
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert (row["assisted"], row["unassisted"]) == (1, 0)
+    assert results(cdir)[-1] == f"- a {PRACTICE} (Heaps): assisted solve"
+
+
+def test_record_writes_partial_in_the_results_line_and_the_evidence(home, root):
+    cdir = record_course(home)
+    checked(home, "a")
+    ok(home, "record", attempt(item="a", outcome="partial"))
+    assert results(cdir) == [f"- a {PRACTICE} (Heaps): partial"]
+    row = ok(home, "progress", dict(now=NOW, term=TERM, course="CS201 Theory"))["topics"][0]
+    assert row["evidence"] == f"2026-10-17: a {PRACTICE}: partial"
+
+
+def test_record_a_partial_knowledge_gauge_answer(home, root):
+    cdir = record_course(home)
+    checked(home, "gauge:Heaps:1")
+    out = ok(home, "record", attempt(item="gauge:Heaps:1", outcome="partial"))
+    assert (out["recorded"], out["status"]) == (True, "shaky")
+    assert results(cdir) == [f"- gauge:Heaps:1 {PRACTICE} (Heaps): partial"]
+
+
 def test_record_initialization_and_legacy_evidence(home, root):
     record_course(home, mastery=[("Heaps", "shaky", "2026-10-01", 0, 1)])
     init = dict(term=TERM, course="CS201 Theory", topic="Graphs", initialize=True)
