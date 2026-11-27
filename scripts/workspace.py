@@ -82,9 +82,13 @@ file -- file one regular file into ``<course>/<role>/``, same basename.
     10, "mtime": 1793000000, "completed": [], "observations": [], "scope":
     "full"}]}``. ``mtime`` is whole seconds. The optional ``textbook``
     boolean (default false) sets ``scope`` to ``contents``: ingest reads only
-    the book's contents pages. An entry without ``scope`` reads as ``full``. A symlinked checkpoint, or one that is not an object with a
-    ``files`` list of entries that each have a ``path``, refuses filing
-    before anything moves.
+    the book's contents pages. An entry without ``scope`` reads as ``full``.
+    A legacy checkpoint, written before this shape was fixed, keys its
+    entries by path, under ``files`` or at the top level: filing rewrites it
+    in the list form, ``path`` taken from the key (a relative key is under
+    the course folder) and every other field of every entry kept. A
+    symlinked checkpoint, or one that is not JSON or matches neither shape,
+    refuses filing before anything moves.
 
 relocate -- move the whole tree to a new root, then update the pointer.
     in : {"to": "~/Documents/uni"}
@@ -460,7 +464,12 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 def _read_checkpoint(checkpoint: Path) -> dict:
-    """The course's reading checkpoint, ``{"files": [entry, ...]}``; empty when the file does not exist yet."""
+    """The course's reading checkpoint, ``{"files": [entry, ...]}``; empty when the file does not exist yet.
+
+    A legacy checkpoint keys its entries by path, under ``files`` or at the top level; its entries come back in
+    the list form with ``path`` taken from the key (a relative key is under the course folder) and every other
+    field untouched.
+    """
     refuse_symlinks(checkpoint, field="reading checkpoint", reason="refusing to write through it; nothing was moved")
     if not checkpoint.exists():
         return {"files": []}
@@ -468,6 +477,13 @@ def _read_checkpoint(checkpoint: Path) -> dict:
         data = json.loads(checkpoint.read_text(encoding="utf-8"))
     except (UnicodeDecodeError, ValueError, RecursionError):
         data = None
+    if isinstance(data, dict) and "files" not in data and all(len(Path(key).parts) > 1 for key in data):
+        data = {"files": data}
+    if isinstance(data, dict) and isinstance(data.get("files"), dict):
+        by_path = data["files"]
+        if all(isinstance(entry, dict) for entry in by_path.values()):
+            course_dir = checkpoint.parent.parent
+            data = {**data, "files": [{"path": str(course_dir / key), **entry} for key, entry in by_path.items()]}
     if (not isinstance(data, dict) or not isinstance(data.get("files"), list)
             or not all(isinstance(e, dict) and isinstance(e.get("path"), str) for e in data["files"])):
         raise InputError(f"reading checkpoint {checkpoint} is not a JSON object with a \"files\" list of "

@@ -374,7 +374,44 @@ def test_filing_refuses_a_textbook_flag_that_is_not_a_boolean(home, textbook):
     assert src.exists()
 
 
-@pytest.mark.parametrize("content", ["not json", "[]", '{"files": {}}', '{"files": [{"size": 1}]}'])
+# Legacy entries, keyed by path, as ingest wrote them before the checkpoint shape was fixed: the field
+# test's workspaces hold a relative key with an absolute "dest", an absolute key, "completed": "all",
+# "completed_pages" ranges and free-form "observations".
+LEGACY_ENTRIES = {
+    "past-papers/2019-midterm.pdf": {"dest": "/old/run/past-papers/2019-midterm.pdf", "size": 278448,
+                                     "mtime": 1795694099.1558726, "completed": [[1, 5]], "pending": []},
+    "slides/lec1.pdf": {"size": 966580, "mtime": 1795701069.2308164, "completed": "all",
+                        "observations": ["Vectors, forces and moments|2"]},
+}
+LEGACY_ABSOLUTE = {"size": 383607, "mtime": 1795695958.1750197, "completed_pages": [[1, 2]], "total_pages": 9}
+
+
+@pytest.mark.parametrize("under_files", [True, False], ids=["files-keyed-by-path", "top-level-keyed-by-path"])
+def test_filing_into_a_legacy_checkpoint_keeps_every_entry_and_adds_the_pending_one(home, under_files):
+    ok(home, "course", COURSE)
+    course_dir = home / "learning" / COURSE["term"] / COURSE["course"]
+    absolute_key = str(home / "old-run" / "notes" / "pset1.pdf")
+    entries = {**LEGACY_ENTRIES, absolute_key: LEGACY_ABSOLUTE}
+    legacy = {"files": entries, "observations": {"professor": "Ada"}} if under_files else entries
+    (course_dir / ".state" / ws.READING_CHECKPOINT).write_text(json.dumps(legacy))
+    src = home / "learning" / "_inbox" / "2024-final.pdf"
+    src.write_bytes(b"%PDF paper")
+    out = ok(home, "file", {"source": str(src), **COURSE, "role": "past-papers"})
+    stat = Path(out["dest"]).stat()
+    expected = {"files": [
+        {"path": str(course_dir / "past-papers" / "2019-midterm.pdf"), **LEGACY_ENTRIES["past-papers/2019-midterm.pdf"]},
+        {"path": str(course_dir / "slides" / "lec1.pdf"), **LEGACY_ENTRIES["slides/lec1.pdf"]},
+        {"path": absolute_key, **LEGACY_ABSOLUTE},
+        {"path": out["dest"], "size": 10, "mtime": int(stat.st_mtime), "completed": [], "observations": [],
+         "scope": "full"}]}
+    if under_files:
+        expected["observations"] = {"professor": "Ada"}
+    assert checkpoint(home) == expected
+
+
+@pytest.mark.parametrize("content", [
+    "not json", "[]", '{"files": "all"}', '{"files": [{"size": 1}]}', '{"files": {"notes/a.pdf": "done"}}',
+    '{"notes/a.pdf": [1, 2]}', '{"professor": {"name": "Ada"}}'])
 def test_filing_refuses_a_malformed_reading_checkpoint_and_moves_nothing(home, content):
     ok(home, "course", COURSE)
     path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / "ingest-coverage.json"
