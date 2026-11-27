@@ -597,6 +597,30 @@ def test_close_never_stamps_over_a_later_session(home, root):
     assert out["minutes"] == 59 and out["already_closed"] is False
 
 
+RESULTS_EVERY_KIND = (
+    "## Results\n"
+    "- q1 [from the past paper] (Recursion): unassisted solve\n"
+    "- q2 (Recursion): assisted solve\n"
+    "- q3 (Graphs): partial\n"
+    "- q4 (Graphs): wrong\n"
+    "- q5 (Graphs): wrong\n"
+    "- Graphs frustration override: answer given\n"
+    "- q6 (Graphs): after frustration override, not counted\n"
+    "- item 7 [practice] (Trees): not reached\n"
+    "- Proof past question [2023 final]: not reached\n"
+    "\n## Verifier disagreements\n"
+    "- 2026-10-17 item q4 (Graphs): fixed, checker said: wrong\n"
+)
+
+
+def test_close_counts_every_results_line_kind(home, root):
+    """The counts come from the log's results lines, not from what the tutor remembers."""
+    cdir = course(home)
+    log(cdir, "2026-10-17-0900", session_log(NOW, extra=RESULTS_EVERY_KIND))
+    out = ok(home, "close", close_args(cdir, "2026-10-17T10:47:30+03:00"))
+    assert out["results"] == {"unassisted": 1, "assisted": 1, "partial": 1, "wrong": 2, "not reached": 2}
+
+
 def test_closed_session_counts_in_the_cram_bill(home, root):
     cdir = due_course(home, root)
     started = "2026-11-01T20:00:00+02:00"
