@@ -454,6 +454,28 @@ def test_file_collision_leaves_source(home):
     assert not (dest.parent / "a (1).md").exists()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no POSIX permission bits")
+def test_filing_keeps_the_reading_checkpoints_file_mode(home):
+    ok(home, "course", COURSE)
+    path = home / "learning" / COURSE["term"] / COURSE["course"] / ".state" / ws.READING_CHECKPOINT
+    path.write_text('{"files": []}')
+    path.chmod(0o644)
+    src = home / "learning" / "_inbox" / "a.pdf"
+    src.write_text("x")
+    ok(home, "file", {"source": str(src), **COURSE, "role": "notes"})
+    assert len(checkpoint(home)["files"]) == 1
+    assert path.stat().st_mode & 0o777 == 0o644
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no POSIX permission bits")
+def test_setting_the_root_keeps_the_pointer_files_mode(home, tmp_path):
+    ok(home, "init", {"root": str(tmp_path / "uni")})
+    pointer(home).chmod(0o644)
+    ok(home, "relocate", {"to": str(tmp_path / "uni2")})
+    assert pointer(home).read_text() == f"{tmp_path / 'uni2'}\n"
+    assert pointer(home).stat().st_mode & 0o777 == 0o644
+
+
 def test_filing_collision_writes_no_checkpoint_entry(home):
     ok(home, "course", COURSE)
     inbox = home / "learning" / "_inbox"

@@ -126,6 +126,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import unicodedata
@@ -281,12 +282,22 @@ def set_pointer(root: Path) -> None:
         pointer.unlink(missing_ok=True)  # a concurrent writer may have removed it already
         return
     pointer.parent.mkdir(parents=True, exist_ok=True)
-    # A unique temp file per writer in the pointer's folder, so concurrent writers never share one.
-    fd, tmp = tempfile.mkstemp(prefix=f".{pointer.name}.", suffix=".tmp", dir=pointer.parent)
+    write_atomic(pointer, f"{root}\n")
+
+
+def write_atomic(path: Path, text: str) -> None:
+    """Write ``text`` to ``path`` atomically: a temp file in the same folder, then ``os.replace``.
+
+    Each writer gets its own temp file, so concurrent writers never share one. An existing file keeps its mode; a
+    new file keeps mkstemp's private mode.
+    """
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(f"{root}\n")
-        os.replace(tmp, pointer)
+            handle.write(text)
+        if path.exists():
+            os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
+        os.replace(tmp, path)
     except BaseException:
         try:
             os.unlink(tmp)
@@ -448,22 +459,6 @@ def _is_memory_file(source: Path, root: Path) -> bool:
     return False
 
 
-def _write_json(path: Path, data: dict) -> None:
-    """Write ``data`` to ``path`` atomically: a temp file in the same folder, then ``os.replace``."""
-    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(data, handle, ensure_ascii=False, indent=2)
-            handle.write("\n")
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
-
-
 def _read_checkpoint(checkpoint: Path) -> dict:
     """The course's reading checkpoint, ``{"files": [entry, ...]}``; empty when the file does not exist yet.
 
@@ -498,11 +493,11 @@ def _add_pending_entry(checkpoint: Path, data: dict, dest: Path, scope: str) -> 
     Every other entry is kept; a stale entry for the same path (its file is gone, or filing would have collided)
     is replaced.
     """
-    stat = dest.stat()
-    entry = {"path": str(dest), "size": stat.st_size, "mtime": int(stat.st_mtime),
+    info = dest.stat()
+    entry = {"path": str(dest), "size": info.st_size, "mtime": int(info.st_mtime),
              "completed": [], "observations": [], "scope": scope}
     files = [e for e in data["files"] if e["path"] != str(dest)] + [entry]
-    _write_json(checkpoint, {**data, "files": files})
+    write_atomic(checkpoint, json.dumps({**data, "files": files}, ensure_ascii=False, indent=2) + "\n")
 
 
 # --- Subcommands -------------------------------------------------------------------
